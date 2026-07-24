@@ -60,3 +60,44 @@ returns `"status":"ok"` and `"aiConfigured":true`.
 
 After changing environment variables or deployment settings, use
 **Settings & Redeploy** so the new values take effect.
+
+## Troubleshooting with Runtime Logs
+
+Open the application in hPanel, then select **Runtime logs** from the sidebar.
+AI 360 Lab writes one-line JSON events that are easy to search and correlate.
+
+Every API request has a `requestId`. When an error is shown in the interface,
+copy the reference value and search for it in Runtime logs. A typical request
+produces:
+
+```text
+request.started
+chat.accepted
+provider.request.started
+provider.stream.connected
+request.completed
+```
+
+Failures use events such as:
+
+```text
+provider.request.failed
+chat.stream.failed
+agent.stream.failed
+transcription.failed
+export.failed
+```
+
+Useful fields include the route, selected model, provider status, provider
+error code, duration, token usage, estimated provider cost, attachment types
+and final outcome. Message text, file contents, recordings, API keys,
+authorization headers and cookies are not logged.
+
+The health endpoint is:
+
+```text
+https://lab.aithreesixty.tech/api/health
+```
+
+It confirms whether the service is running and whether an OpenRouter key is
+configured. It never returns the key itself.

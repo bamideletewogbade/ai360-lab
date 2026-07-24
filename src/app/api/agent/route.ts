@@ -1,5 +1,6 @@
 import { isChatMode, routeFor, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
+import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -120,25 +121,50 @@ function actionSuggestions(messages: Msg[], result: string) {
 }
 
 export async function POST(request: Request) {
+  const log = requestLogger(request, '/api/agent')
   const tooLarge = rejectLargeRequest(request, 14_000_000)
-  if (tooLarge) return tooLarge
+  if (tooLarge) {
+    log.finish(tooLarge.status, { outcome: 'request_too_large' })
+    return new Response(tooLarge.body, { status: tooLarge.status, headers: log.headers(tooLarge.headers) })
+  }
   const limited = rateLimit(request, 'agent', { minute: 4, daily: 16 })
-  if (limited) return limited
+  if (limited) {
+    log.finish(limited.status, { outcome: 'rate_limited' })
+    return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })
+  }
 
   let body: { messages?: Msg[]; mode?: ChatMode }
   try {
     body = await request.json()
   } catch {
-    return Response.json({ error: 'Invalid request' }, { status: 400 })
+    log.finish(400, { outcome: 'invalid_json' })
+    return Response.json({ error: 'Invalid request', requestId: log.requestId }, {
+      status: 400,
+      headers: log.headers(),
+    })
   }
 
   const messages = (body.messages ?? [])
     .filter((message) => message && typeof message.content === 'string')
     .slice(-16)
-  if (!messages.length) return Response.json({ error: 'A task is required' }, { status: 400 })
+  if (!messages.length) {
+    log.finish(400, { outcome: 'missing_task' })
+    return Response.json({ error: 'A task is required', requestId: log.requestId }, {
+      status: 400,
+      headers: log.headers(),
+    })
+  }
   const mode: ChatMode = isChatMode(body.mode) ? body.mode : 'auto'
   const key = process.env.OPENROUTER_API_KEY
   const encoder = new TextEncoder()
+  const attachments = messages.flatMap((message) => message.attachments ?? [])
+  log.info('agent.accepted', {
+    mode,
+    messageCount: messages.length,
+    attachmentCount: attachments.length,
+    attachmentKinds: attachments.map((attachment) => attachment.kind),
+    aiConfigured: Boolean(key),
+  })
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -158,6 +184,7 @@ export async function POST(request: Request) {
               '## Agent preview\n\nThe Agent workspace is ready. Add an OpenRouter key to run web research, URL reading and document analysis with bounded tools.',
             sources: [],
           })
+          log.finish(200, { outcome: 'preview_response' })
           controller.close()
           return
         }
@@ -169,6 +196,15 @@ export async function POST(request: Request) {
         const hasPdf = messages.some((message) =>
           message.attachments?.some((attachment) => attachment.kind === 'pdf'),
         )
+        const providerStartedAt = performance.now()
+        log.info('provider.request.started', {
+          provider: 'openrouter',
+          feature: 'agent',
+          model,
+          fallbackModels: models,
+          hasPdf,
+          tools: ['web_search', 'web_fetch', 'datetime'],
+        })
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           signal: AbortSignal.timeout(90_000),
@@ -203,10 +239,23 @@ export async function POST(request: Request) {
         })
 
         if (!response.ok) {
-          const detail = await response.text().catch(() => '')
-          console.error('Agent request failed', response.status, detail.slice(0, 600))
-          throw new Error('Agent request failed')
+          const failure = await providerErrorDetails(response)
+          log.error('provider.request.failed', {
+            provider: 'openrouter',
+            feature: 'agent',
+            model,
+            durationMs: Math.round(performance.now() - providerStartedAt),
+            ...failure,
+          })
+          throw new Error(`Agent provider request failed with status ${response.status}`)
         }
+        log.info('provider.request.completed', {
+          provider: 'openrouter',
+          feature: 'agent',
+          model,
+          providerStatus: response.status,
+          durationMs: Math.round(performance.now() - providerStartedAt),
+        })
         const json = await response.json()
         send({ type: 'step', id: 'tools', label: 'Research and reading complete', status: 'complete' })
         send({ type: 'step', id: 'verify', label: 'Checking the result and sources', status: 'active' })
@@ -241,20 +290,33 @@ export async function POST(request: Request) {
             cost: json.usage?.cost,
           },
         })
+        log.finish(200, {
+          outcome: 'success',
+          provider: 'openrouter',
+          model,
+          sourceCount: sources.length,
+          outputCharacters: resultContent.length,
+          totalTokens: json.usage?.total_tokens,
+          cost: json.usage?.cost,
+        })
         controller.close()
       } catch (error) {
-        console.error('Agent stream failed', error)
-        send({ type: 'error', message: 'The agent could not complete this task. Please try again.' })
+        log.error('agent.stream.failed', errorDetails(error))
+        log.finish(500, { outcome: 'stream_error' })
+        send({
+          type: 'error',
+          message: `The agent could not complete this task. Please try again. Reference: ${log.requestId}`,
+        })
         controller.close()
       }
     },
   })
 
   return new Response(stream, {
-    headers: {
+    headers: log.headers({
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'no-store',
       'X-Accel-Buffering': 'no',
-    },
+    }),
   })
 }

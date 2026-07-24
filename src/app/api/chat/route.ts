@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { isChatMode, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
+import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -54,9 +55,9 @@ async function mockStream(controller: ReadableStreamDefaultController, messages:
     ? ` I can also see your attached ${last.attachments.map((file) => file.name).join(', ')}.`
     : ''
   const reply =
-    `You’re using AI 360 Lab in preview mode.${fileNote} ` +
+    `You are using AI 360 Lab in preview mode.${fileNote} ` +
     `Add an OpenRouter key to switch on live answers and streaming. ` +
-    `For now, the full workspace experience—history, files, voice and model selection—is ready to explore.`
+    `For now, the full workspace experience, including history, files, voice and model selection, is ready to explore.`
 
   for (const word of reply.split(' ')) {
     controller.enqueue(encoder.encode(`${word} `))
@@ -64,17 +65,31 @@ async function mockStream(controller: ReadableStreamDefaultController, messages:
   }
 }
 
+function responseWithRequestId(response: Response, requestId: string) {
+  const headers = new Headers(response.headers)
+  headers.set('X-Request-Id', requestId)
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
+}
+
 export async function POST(req: NextRequest) {
+  const log = requestLogger(req, '/api/chat')
   const tooLarge = rejectLargeRequest(req, 14_000_000)
-  if (tooLarge) return tooLarge
+  if (tooLarge) {
+    log.finish(tooLarge.status, { outcome: 'request_too_large' })
+    return responseWithRequestId(tooLarge, log.requestId)
+  }
   const limited = rateLimit(req, 'chat', { minute: 12, daily: 80 })
-  if (limited) return limited
+  if (limited) {
+    log.finish(limited.status, { outcome: 'rate_limited' })
+    return responseWithRequestId(limited, log.requestId)
+  }
 
   let body: { messages?: Msg[]; mode?: ChatMode }
   try {
     body = await req.json()
   } catch {
-    return new Response('Bad request', { status: 400 })
+    log.finish(400, { outcome: 'invalid_json' })
+    return new Response('Bad request', { status: 400, headers: log.headers() })
   }
 
   const messages = (body.messages ?? [])
@@ -82,6 +97,14 @@ export async function POST(req: NextRequest) {
     .slice(-20)
   const mode: ChatMode = isChatMode(body.mode) ? body.mode : 'auto'
   const key = process.env.OPENROUTER_API_KEY
+  const attachments = messages.flatMap((message) => message.attachments ?? [])
+  log.info('chat.accepted', {
+    mode,
+    messageCount: messages.length,
+    attachmentCount: attachments.length,
+    attachmentKinds: attachments.map((attachment) => attachment.kind),
+    aiConfigured: Boolean(key),
+  })
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -89,6 +112,7 @@ export async function POST(req: NextRequest) {
       try {
         if (!key) {
           await mockStream(controller, messages)
+          log.finish(200, { outcome: 'preview_response' })
           controller.close()
           return
         }
@@ -97,8 +121,16 @@ export async function POST(req: NextRequest) {
         const hasPdf = messages.some((message) =>
           message.attachments?.some((attachment) => attachment.kind === 'pdf'),
         )
+        const providerStartedAt = performance.now()
+        log.info('provider.request.started', {
+          provider: 'openrouter',
+          model,
+          fallbackModels: models,
+          hasPdf,
+        })
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
+          signal: AbortSignal.timeout(90_000),
           headers: {
             Authorization: `Bearer ${key}`,
             'Content-Type': 'application/json',
@@ -110,6 +142,7 @@ export async function POST(req: NextRequest) {
             models,
             messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages.map(toProviderMessage)],
             stream: true,
+            stream_options: { include_usage: true },
             max_tokens: 2_500,
             ...(hasPdf
               ? { plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] }
@@ -118,19 +151,37 @@ export async function POST(req: NextRequest) {
         })
 
         if (!res.ok || !res.body) {
-          const detail = await res.text().catch(() => '')
-          console.error('OpenRouter error', res.status, detail.slice(0, 500))
-          controller.enqueue(encoder.encode('The Lab is busy right now — please try again in a moment.'))
+          const failure = await providerErrorDetails(res)
+          log.error('provider.request.failed', {
+            provider: 'openrouter',
+            model,
+            durationMs: Math.round(performance.now() - providerStartedAt),
+            ...failure,
+          })
+          log.finish(502, { outcome: 'provider_error', providerStatus: res.status })
+          controller.enqueue(
+            encoder.encode(`The Lab could not reach its AI provider. Please try again. Reference: ${log.requestId}`),
+          )
           controller.close()
           return
         }
 
+        log.info('provider.stream.connected', {
+          provider: 'openrouter',
+          model,
+          providerStatus: res.status,
+          durationMs: Math.round(performance.now() - providerStartedAt),
+        })
         const reader = res.body.getReader()
         const decoder = new TextDecoder()
         let buffer = ''
+        let chunkCount = 0
+        let outputCharacters = 0
+        let usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost?: number } | undefined
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
+          chunkCount += 1
           buffer += decoder.decode(value, { stream: true })
           const lines = buffer.split('\n')
           buffer = lines.pop() ?? ''
@@ -139,28 +190,59 @@ export async function POST(req: NextRequest) {
             if (!trimmed.startsWith('data:')) continue
             const data = trimmed.slice(5).trim()
             if (data === '[DONE]') {
+              log.finish(200, {
+                outcome: 'success',
+                provider: 'openrouter',
+                model,
+                chunkCount,
+                outputCharacters,
+                promptTokens: usage?.prompt_tokens,
+                completionTokens: usage?.completion_tokens,
+                totalTokens: usage?.total_tokens,
+                cost: usage?.cost,
+              })
               controller.close()
               return
             }
             try {
               const json = JSON.parse(data)
               const delta: string | undefined = json.choices?.[0]?.delta?.content
-              if (delta) controller.enqueue(encoder.encode(delta))
+              if (delta) {
+                outputCharacters += delta.length
+                controller.enqueue(encoder.encode(delta))
+              }
+              if (json.usage && typeof json.usage === 'object') usage = json.usage
             } catch {
-              // A malformed provider event should not terminate the user's stream.
+              log.warn('provider.stream.event_ignored', { provider: 'openrouter', model })
             }
           }
         }
+        log.finish(200, {
+          outcome: 'success_without_done_event',
+          provider: 'openrouter',
+          model,
+          chunkCount,
+          outputCharacters,
+          totalTokens: usage?.total_tokens,
+          cost: usage?.cost,
+        })
         controller.close()
       } catch (error) {
-        console.error('Chat stream failed', error)
-        controller.enqueue(encoder.encode('Something went wrong. Please try again.'))
+        log.error('chat.stream.failed', errorDetails(error))
+        log.finish(500, { outcome: 'stream_error' })
+        controller.enqueue(
+          encoder.encode(`Something went wrong. Please try again. Reference: ${log.requestId}`),
+        )
         controller.close()
       }
     },
   })
 
   return new Response(stream, {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+    headers: log.headers({
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Accel-Buffering': 'no',
+    }),
   })
 }

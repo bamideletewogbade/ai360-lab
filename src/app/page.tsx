@@ -379,6 +379,7 @@ export default function Lab() {
     setRecordingState('transcribing')
     setFileError('')
     try {
+      const requestId = crypto.randomUUID()
       const dataUrl = await fileToDataUrl(recordingBlob)
       const format = recordingBlob.type.includes('ogg')
         ? 'ogg'
@@ -389,17 +390,25 @@ export default function Lab() {
             : 'webm'
       const response = await fetch('/api/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
         body: JSON.stringify({ data: dataUrl.split(',')[1], format }),
       })
       const result = await response.json()
-      if (!response.ok || typeof result.text !== 'string') throw new Error('Transcription failed')
+      if (!response.ok || typeof result.text !== 'string') {
+        const reference = result.requestId || response.headers.get('X-Request-Id') || requestId
+        throw new Error(`${result.error || 'Transcription failed'} Reference: ${reference}`)
+      }
       setInput((current) => [current.trim(), result.text.trim()].filter(Boolean).join(' '))
       discardRecording()
       taRef.current?.focus()
-    } catch {
+    } catch (error) {
+      console.error('[AI360] Transcription failed', error)
       setRecordingState('recorded')
-      setFileError('I could not transcribe that recording. You can retry or record it again.')
+      setFileError(
+        error instanceof Error
+          ? error.message
+          : 'I could not transcribe that recording. You can retry or record it again.',
+      )
     }
   }
 
@@ -471,9 +480,10 @@ export default function Lab() {
     setActionBusy(true)
     setActionError('')
     try {
+      const requestId = crypto.randomUUID()
       const response = await fetch('/api/action', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
         body: JSON.stringify({
           kind: actionDraft.kind,
           approved: true,
@@ -482,7 +492,10 @@ export default function Lab() {
       })
       if (!response.ok) {
         const error = await response.json().catch(() => ({}))
-        throw new Error(typeof error.error === 'string' ? error.error : 'The action could not be prepared.')
+        const reference = response.headers.get('X-Request-Id') || requestId
+        throw new Error(
+          `${typeof error.error === 'string' ? error.error : 'The action could not be prepared.'} Reference: ${reference}`,
+        )
       }
 
       let result = 'Completed'
@@ -524,12 +537,19 @@ export default function Lab() {
     setExporting(key)
     setFileError('')
     try {
+      const requestId = crypto.randomUUID()
       const response = await fetch('/api/export', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
         body: JSON.stringify({ title: active.title, content: message.content, format }),
       })
-      if (!response.ok) throw new Error('Export failed')
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        const reference = response.headers.get('X-Request-Id') || requestId
+        throw new Error(
+          `${typeof error.error === 'string' ? error.error : 'Export failed'} Reference: ${reference}`,
+        )
+      }
       const blob = await response.blob()
       const disposition = response.headers.get('Content-Disposition') || ''
       const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `ai-360-response.${format}`
@@ -541,8 +561,13 @@ export default function Lab() {
       link.click()
       link.remove()
       URL.revokeObjectURL(url)
-    } catch {
-      setFileError(`The ${format === 'pdf' ? 'PDF' : 'Word document'} could not be created. Please try again.`)
+    } catch (error) {
+      console.error('[AI360] Export failed', error)
+      setFileError(
+        error instanceof Error
+          ? error.message
+          : `The ${format === 'pdf' ? 'PDF' : 'Word document'} could not be created. Please try again.`,
+      )
     } finally {
       setExporting('')
     }
@@ -592,9 +617,10 @@ export default function Lab() {
     if (taRef.current) taRef.current.style.height = 'auto'
 
     try {
+      const requestId = crypto.randomUUID()
       const res = await fetch(currentExperience === 'agent' ? '/api/agent' : '/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
         body: JSON.stringify({
           messages: next.map(({ role, content: messageContent, attachments }) => ({
             role,
@@ -604,7 +630,13 @@ export default function Lab() {
           mode,
         }),
       })
-      if (!res.ok) throw new Error('No response stream')
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}))
+        const reference = res.headers.get('X-Request-Id') || requestId
+        throw new Error(
+          `${typeof detail.error === 'string' ? detail.error : 'The request could not be completed.'} Reference: ${reference}`,
+        )
+      }
       if (currentExperience === 'agent') {
         await readAgentStream(res, (event) => {
           setConversations((items) =>
@@ -662,7 +694,8 @@ export default function Lab() {
           )
         })
       }
-    } catch {
+    } catch (error) {
+      console.error('[AI360] AI request failed', error)
       setConversations((items) =>
         items.map((item) =>
           item.id === requestConversationId
@@ -670,7 +703,12 @@ export default function Lab() {
                 ...item,
                 messages: item.messages.map((message) =>
                   message.id === placeholder.id
-                    ? { ...message, content: 'Something went wrong. Please try again.' }
+                    ? {
+                        ...message,
+                        content: error instanceof Error
+                          ? error.message
+                          : 'Something went wrong. Please try again.',
+                      }
                     : message,
                 ),
               }

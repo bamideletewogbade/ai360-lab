@@ -1,13 +1,18 @@
 export const dynamic = 'force-dynamic'
 
-export function GET() {
+export function GET(request: Request) {
+  const requestId = request.headers.get('x-request-id')?.replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 80)
+    || crypto.randomUUID()
   return Response.json(
     {
       status: 'ok',
       service: 'AI 360 Lab',
       aiConfigured: Boolean(process.env.OPENROUTER_API_KEY),
+      environment: process.env.NODE_ENV,
+      uptimeSeconds: Math.round(process.uptime()),
+      requestId,
       time: new Date().toISOString(),
     },
-    { headers: { 'Cache-Control': 'no-store' } },
+    { headers: { 'Cache-Control': 'no-store', 'X-Request-Id': requestId } },
   )
 }

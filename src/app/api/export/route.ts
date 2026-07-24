@@ -19,6 +19,7 @@ import {
   WidthType,
 } from 'docx'
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
+import { errorDetails, requestLogger } from '@/lib/observability'
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 
 export const runtime = 'nodejs'
@@ -460,41 +461,78 @@ async function buildPdf(title: string, blocks: ExportBlock[]) {
 }
 
 export async function POST(request: Request) {
+  const log = requestLogger(request, '/api/export')
   const tooLarge = rejectLargeRequest(request, 250_000)
-  if (tooLarge) return tooLarge
+  if (tooLarge) {
+    log.finish(tooLarge.status, { outcome: 'request_too_large' })
+    return new Response(tooLarge.body, { status: tooLarge.status, headers: log.headers(tooLarge.headers) })
+  }
   const limited = rateLimit(request, 'export', { minute: 15, daily: 80 })
-  if (limited) return limited
+  if (limited) {
+    log.finish(limited.status, { outcome: 'rate_limited' })
+    return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })
+  }
 
   let body: { title?: string; content?: string; format?: string }
   try {
     body = await request.json()
   } catch {
-    return Response.json({ error: 'Invalid request' }, { status: 400 })
+    log.finish(400, { outcome: 'invalid_json' })
+    return Response.json({ error: 'Invalid request', requestId: log.requestId }, {
+      status: 400,
+      headers: log.headers(),
+    })
   }
   const title = cleanText(body.title || 'AI 360 Lab response').slice(0, 140)
   const content = typeof body.content === 'string' ? body.content.slice(0, 100_000) : ''
-  if (!content) return Response.json({ error: 'Nothing to export' }, { status: 400 })
+  if (!content) {
+    log.finish(400, { outcome: 'missing_content' })
+    return Response.json({ error: 'Nothing to export', requestId: log.requestId }, {
+      status: 400,
+      headers: log.headers(),
+    })
+  }
   const blocks = parseMarkdown(content)
 
-  if (body.format === 'docx') {
-    const file = await buildDocx(title, blocks)
-    return new Response(new Uint8Array(file), {
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename="${safeFilename(title, 'docx')}"`,
-        'Cache-Control': 'no-store',
-      },
+  try {
+    log.info('export.started', {
+      format: body.format,
+      inputCharacters: content.length,
+      blockCount: blocks.length,
     })
-  }
-  if (body.format === 'pdf') {
-    const file = await buildPdf(title, blocks)
-    return new Response(new Uint8Array(file), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${safeFilename(title, 'pdf')}"`,
-        'Cache-Control': 'no-store',
-      },
+    if (body.format === 'docx') {
+      const file = await buildDocx(title, blocks)
+      log.finish(200, { outcome: 'success', format: 'docx', outputBytes: file.byteLength })
+      return new Response(new Uint8Array(file), {
+        headers: log.headers({
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'Content-Disposition': `attachment; filename="${safeFilename(title, 'docx')}"`,
+          'Cache-Control': 'no-store',
+        }),
+      })
+    }
+    if (body.format === 'pdf') {
+      const file = await buildPdf(title, blocks)
+      log.finish(200, { outcome: 'success', format: 'pdf', outputBytes: file.byteLength })
+      return new Response(new Uint8Array(file), {
+        headers: log.headers({
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${safeFilename(title, 'pdf')}"`,
+          'Cache-Control': 'no-store',
+        }),
+      })
+    }
+    log.finish(400, { outcome: 'unsupported_format', format: body.format })
+    return Response.json({ error: 'Unsupported format', requestId: log.requestId }, {
+      status: 400,
+      headers: log.headers(),
     })
+  } catch (error) {
+    log.error('export.failed', { format: body.format, ...errorDetails(error) })
+    log.finish(500, { outcome: 'generation_error', format: body.format })
+    return Response.json({
+      error: 'The document could not be created',
+      requestId: log.requestId,
+    }, { status: 500, headers: log.headers() })
   }
-  return Response.json({ error: 'Unsupported format' }, { status: 400 })
 }
