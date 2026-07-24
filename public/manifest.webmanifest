@@ -1,0 +1,17 @@
+{
+  "name": "AI 360 Lab",
+  "short_name": "AI 360 Lab",
+  "description": "Open AI practice from AI 360.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f6f2",
+  "theme_color": "#101112",
+  "icons": [
+    {
+      "src": "/icon-mark-black.png",
+      "sizes": "256x293",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

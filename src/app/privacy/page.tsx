@@ -1,0 +1,60 @@
+import type { Metadata } from 'next'
+import Image from 'next/image'
+import Link from 'next/link'
+import styles from '../legal.module.css'
+
+export const metadata: Metadata = {
+  title: 'Privacy',
+  description: 'How AI 360 Lab handles conversations, files and voice recordings.',
+}
+
+export default function PrivacyPage() {
+  return (
+    <main className={styles.page}>
+      <div className={styles.shell}>
+        <header className={styles.top}>
+          <Link href="/" className={styles.brand}>
+            <Image src="/icon-mark-black.png" alt="" width={34} height={34} />
+            <b>AI 360 LAB</b>
+          </Link>
+          <Link href="/" className={styles.back}>Return to the Lab</Link>
+        </header>
+        <article className={styles.article}>
+          <p className={styles.eyebrow}>Plain-language policy</p>
+          <h1>Privacy</h1>
+          <p className={styles.updated}>Last updated July 24, 2026</p>
+
+          <section>
+            <h2>What the Lab handles</h2>
+            <p>AI 360 Lab processes the prompts, files and recordings you choose to provide so it can answer questions, research topics, analyze materials and prepare exports.</p>
+            <ul>
+              <li>Conversation history is saved in your browser on your current device.</li>
+              <li>Prompts and supported attachments are sent through our server to the configured AI provider.</li>
+              <li>Voice recordings are sent for transcription only after you select Use transcript.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>What we do not do</h2>
+            <p>We do not sell your prompts, use advertising trackers, or expose the service API key to your browser. AI 360 Lab does not silently send emails or change external systems.</p>
+          </section>
+
+          <section>
+            <h2>Operational information</h2>
+            <p>Our hosting and AI service providers may process technical information such as IP address, browser type, request timing and usage metadata for security, reliability and abuse prevention. Their handling is governed by their own service terms.</p>
+          </section>
+
+          <section>
+            <h2>Your choices</h2>
+            <p>You can delete individual conversations in the Lab. You can also clear this site&apos;s browser data to remove all locally saved conversation history. Avoid submitting passwords, payment credentials, private identification numbers, health records or other highly sensitive information.</p>
+          </section>
+
+          <section>
+            <h2>Questions</h2>
+            <p className={styles.note}>For privacy questions, contact AI 360 through <a href="https://aithreesixty.tech">aithreesixty.tech</a>.</p>
+          </section>
+        </article>
+      </div>
+    </main>
+  )
+}

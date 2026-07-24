@@ -1,0 +1,44 @@
+{
+  "name": "ai360-lab",
+  "version": "0.1.0",
+  "description": "AI 360 Lab — open AI practice. A clean, streaming chat over OpenRouter with primary + fallback routing (the AI gateway pattern). Standalone, deployable to lab.aithreesixty.tech.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cross-env NODE_OPTIONS=--no-deprecation vinext dev",
+    "build": "cross-env NODE_OPTIONS=--no-deprecation vinext build",
+    "build:next": "cross-env NODE_OPTIONS=--no-deprecation next build",
+    "start": "cross-env NODE_OPTIONS=--no-deprecation vinext start",
+    "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint ."
+  },
+  "dependencies": {
+    "cross-env": "^7.0.3",
+    "docx": "^9.7.1",
+    "next": "^16.2.11",
+    "pdf-lib": "^1.17.1",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
+    "@types/node": "22.19.9",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "@vitejs/plugin-rsc": "^0.5.26",
+    "eslint": "^9.16.0",
+    "eslint-config-next": "^16.2.11",
+    "prettier": "^3.4.2",
+    "react-server-dom-webpack": "^19.2.6",
+    "typescript": "5.7.3",
+    "vinext": "^0.0.50",
+    "vite": "^8.0.13",
+    "wrangler": "^4.92.0"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}
