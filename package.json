@@ -5,10 +5,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=--no-deprecation vinext dev",
-    "build": "cross-env NODE_OPTIONS=--no-deprecation vinext build",
-    "build:next": "cross-env NODE_OPTIONS=--no-deprecation next build",
-    "start": "cross-env NODE_OPTIONS=--no-deprecation vinext start",
+    "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
+    "build": "cross-env NODE_OPTIONS=--no-deprecation next build",
+    "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint ."
   },
   "dependencies": {
@@ -23,22 +22,15 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.37.1",
     "@types/node": "22.19.9",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "^6.0.2",
-    "@vitejs/plugin-rsc": "^0.5.26",
     "eslint": "^9.16.0",
     "eslint-config-next": "^16.2.11",
     "prettier": "^3.4.2",
-    "react-server-dom-webpack": "^19.2.6",
-    "typescript": "5.7.3",
-    "vinext": "^0.0.50",
-    "vite": "^8.0.13",
-    "wrangler": "^4.92.0"
+    "typescript": "5.7.3"
   },
   "engines": {
-    "node": ">=22.13.0"
+    "node": "22.x"
   }
 }

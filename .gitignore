@@ -2,7 +2,9 @@
 /.next
 /dist
 /.wrangler
+/.vinext
 /out
+/build
 /tmp
 .env
 .env*.local
