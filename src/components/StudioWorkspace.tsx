@@ -78,6 +78,15 @@ type ExecutionApproval = {
   estimateLabel: string
 }
 
+type BuildAgent = {
+  id: string
+  mark: string
+  name: string
+  role: string
+  working: string
+  handoff: string
+}
+
 const STORAGE_KEY = 'ai360-studio-project-v1'
 const CHANNELS = ['WhatsApp', 'Instagram', 'Facebook', 'TikTok', 'SMS', 'Email', 'Google Business', 'Print']
 const GOALS = [
@@ -108,6 +117,48 @@ const EMPTY_INTAKE: Intake = {
   channels: ['WhatsApp', 'Instagram'],
   notes: '',
 }
+const BUILD_AGENTS: BuildAgent[] = [
+  {
+    id: 'scout',
+    mark: '01',
+    name: 'Brief Scout',
+    role: 'Maps the business, audience and desired outcome.',
+    working: 'Reading the brief and finding the strongest starting point',
+    handoff: 'brief map',
+  },
+  {
+    id: 'brand',
+    mark: 'Aa',
+    name: 'Brand Architect',
+    role: 'Shapes the voice, personality, palette and positioning.',
+    working: 'Turning business signals into a coherent brand foundation',
+    handoff: 'brand system',
+  },
+  {
+    id: 'campaign',
+    mark: '↗',
+    name: 'Campaign Strategist',
+    role: 'Connects the goal, big idea, channels and measures.',
+    working: 'Designing the campaign route and primary call to action',
+    handoff: 'campaign route',
+  },
+  {
+    id: 'production',
+    mark: '08',
+    name: 'Asset Crew',
+    role: 'Produces eight coordinated, practical deliverables.',
+    working: 'Writing and coordinating every campaign asset',
+    handoff: 'asset pack',
+  },
+  {
+    id: 'quality',
+    mark: '✓',
+    name: 'Quality Lead',
+    role: 'Checks clarity, consistency, claims and usability.',
+    working: 'Reviewing the complete pack before the final handoff',
+    handoff: 'approved draft',
+  },
+]
 
 function requestId() {
   return crypto.randomUUID()
@@ -171,6 +222,79 @@ function projectMarkdown(project: StudioProject) {
   ].join('\n')
 }
 
+function StudioBuildRoom({
+  intake,
+  stage,
+  elapsed,
+}: {
+  intake: Intake
+  stage: number
+  elapsed: number
+}) {
+  const complete = stage >= BUILD_AGENTS.length
+  const activeAgent = BUILD_AGENTS[Math.min(stage, BUILD_AGENTS.length - 1)]
+  const progress = complete ? 100 : [12, 30, 51, 73, 91][stage] ?? 91
+  const context = [
+    intake.businessName,
+    intake.goal,
+    intake.channels.slice(0, 3).join(' + '),
+  ].filter(Boolean)
+
+  return (
+    <section className={`studio-build-room${complete ? ' complete' : ''}`} aria-live="polite" aria-busy={!complete}>
+      <header className="build-room-head">
+        <div className="build-orbit" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+          <strong>AI</strong>
+        </div>
+        <span>
+          <span className="studio-kicker">{complete ? 'Handoff complete' : 'Agent room live'}</span>
+          <h2>{complete ? 'Your launch pack is ready.' : 'Building together, in real time.'}</h2>
+          <p>{complete ? 'Opening the completed project for your review.' : activeAgent.working}.</p>
+        </span>
+      </header>
+
+      <div className="build-context">
+        {context.map((item) => <span key={item}>{item}</span>)}
+      </div>
+
+      <div className="build-progress" aria-label={`${progress}% complete`}>
+        <i style={{ width: `${progress}%` }} />
+        <span>{progress}%</span>
+      </div>
+
+      <div className="agent-relay">
+        {BUILD_AGENTS.map((agent, index) => {
+          const status = complete || index < stage ? 'complete' : index === stage ? 'active' : 'queued'
+          return (
+            <div className={`relay-step ${status}`} key={agent.id}>
+              <span className="relay-line" aria-hidden="true"><i /></span>
+              <span className="relay-avatar">{status === 'complete' ? '✓' : agent.mark}</span>
+              <span className="relay-copy">
+                <span><b>{agent.name}</b><em>{status === 'active' ? 'Working' : status === 'complete' ? 'Passed' : 'Waiting'}</em></span>
+                <small>{agent.role}</small>
+              </span>
+              <span className="relay-handoff">
+                {status === 'complete' ? <><i>→</i>{agent.handoff}</> : status === 'active' ? <span className="relay-dots"><i /><i /><i /></span> : 'queued'}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      <footer className="build-room-foot">
+        <span className="studio-spinner">✦</span>
+        <span>
+          <b>{complete ? 'Pack assembled and checked' : `${activeAgent.name} is on it`}</b>
+          <small>{complete ? 'One moment while Studio prepares your workspace.' : `Elapsed ${elapsed}s. You can leave this tab open while the team works.`}</small>
+        </span>
+      </footer>
+    </section>
+  )
+}
+
 export function StudioWorkspace() {
   const [hydrated, setHydrated] = useState(false)
   const [intake, setIntake] = useState<Intake>(EMPTY_INTAKE)
@@ -186,6 +310,10 @@ export function StudioWorkspace() {
   const [mediaBusy, setMediaBusy] = useState('')
   const [generatedMedia, setGeneratedMedia] = useState<Record<string, GeneratedMedia>>({})
   const [executionApproval, setExecutionApproval] = useState<ExecutionApproval | null>(null)
+  const [buildingProject, setBuildingProject] = useState(false)
+  const [buildComplete, setBuildComplete] = useState(false)
+  const [buildStage, setBuildStage] = useState(0)
+  const [buildElapsed, setBuildElapsed] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
   const mainRef = useRef<HTMLElement>(null)
 
@@ -215,6 +343,19 @@ export function StudioWorkspace() {
       console.warn('[AI360] Studio project could not be saved locally.')
     }
   }, [hydrated, project])
+
+  useEffect(() => {
+    if (!buildingProject || buildComplete) return
+    const startedAt = Date.now()
+    const update = () => {
+      const seconds = Math.floor((Date.now() - startedAt) / 1_000)
+      setBuildElapsed(seconds)
+      setBuildStage(seconds < 4 ? 0 : seconds < 9 ? 1 : seconds < 16 ? 2 : seconds < 25 ? 3 : 4)
+    }
+    update()
+    const timer = window.setInterval(update, 1_000)
+    return () => window.clearInterval(timer)
+  }, [buildingProject, buildComplete])
 
   const approvedCount = project?.assets.filter((asset) => asset.status === 'approved').length ?? 0
   const progress = project?.assets.length ? Math.round((approvedCount / project.assets.length) * 100) : 0
@@ -278,6 +419,10 @@ export function StudioWorkspace() {
       return
     }
     setBusy(true)
+    setBuildingProject(true)
+    setBuildComplete(false)
+    setBuildStage(0)
+    setBuildElapsed(0)
     const id = requestId()
     try {
       const response = await fetch('/api/studio', {
@@ -290,6 +435,9 @@ export function StudioWorkspace() {
         const reference = data.requestId || response.headers.get('X-Request-Id') || id
         throw new Error(`${data.error || 'Studio could not create this campaign.'} Reference: ${reference}`)
       }
+      setBuildStage(BUILD_AGENTS.length)
+      setBuildComplete(true)
+      await new Promise((resolve) => window.setTimeout(resolve, 900))
       const result = data.result as {
         brand: BrandProfile
         campaign: Campaign
@@ -319,6 +467,7 @@ export function StudioWorkspace() {
       setError(cause instanceof Error ? cause.message : 'Studio could not create this campaign.')
     } finally {
       setBusy(false)
+      setBuildingProject(false)
     }
   }
 
@@ -618,6 +767,30 @@ export function StudioWorkspace() {
 
   if (!hydrated) {
     return <main className="studio-main" ref={mainRef}><div className="studio-loading">Opening Studio…</div></main>
+  }
+
+  if (!project && buildingProject) {
+    return (
+      <main className="studio-main" ref={mainRef}>
+        <div className="studio-intake build-active">
+          <section className="studio-intro build-intro">
+            <span className="studio-kicker">AI 360 Studio · Coordinated build</span>
+            <h1>A small team.<br />One complete outcome.</h1>
+            <p>
+              Each specialist works on one part of the launch pack, then passes
+              structured output to the next. The final review keeps everything coherent.
+            </p>
+            <div className="studio-outcomes">
+              <span><b>01</b> Understand</span>
+              <span><b>02</b> Shape</span>
+              <span><b>03</b> Produce</span>
+              <span><b>04</b> Check</span>
+            </div>
+          </section>
+          <StudioBuildRoom intake={intake} stage={buildStage} elapsed={buildElapsed} />
+        </div>
+      </main>
+    )
   }
 
   if (!project) {
