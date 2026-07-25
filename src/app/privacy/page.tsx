@@ -32,6 +32,7 @@ export default function PrivacyPage() {
               <li>Prompts and supported attachments are sent through our server to the configured AI provider.</li>
               <li>Voice recordings are sent for transcription only after you select Use transcript.</li>
               <li>Studio projects and approval progress are saved in your browser on your current device.</li>
+              <li>When you approve media production, the approved brand direction is sent to the configured image or video provider. Generated video is temporarily retained by the provider so it can be processed and downloaded.</li>
             </ul>
           </section>
 
@@ -42,7 +43,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2>What we do not do</h2>
-            <p>We do not sell your prompts, use advertising trackers, or expose the service API key to your browser. AI 360 Lab does not silently send emails or change external systems.</p>
+            <p>We do not sell your prompts, use advertising trackers, or expose the service API key to your browser. AI 360 Lab does not silently generate paid media, send messages, publish posts or change external systems.</p>
           </section>
 
           <section>

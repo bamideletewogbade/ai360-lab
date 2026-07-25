@@ -22,7 +22,7 @@ export default function TermsPage() {
         <article className={styles.article}>
           <p className={styles.eyebrow}>Responsible use</p>
           <h1>Terms</h1>
-          <p className={styles.updated}>Last updated July 24, 2026</p>
+          <p className={styles.updated}>Last updated July 25, 2026</p>
 
           <section>
             <h2>Using AI 360 Lab</h2>
@@ -47,7 +47,7 @@ export default function TermsPage() {
 
           <section>
             <h2>Approval-gated actions</h2>
-            <p className={styles.note}>The Agent may prepare suggested actions, but it will not silently send or publish them. You must review and explicitly approve each supported action.</p>
+            <p className={styles.note}>The Agent may prepare suggested actions, but it will not silently send or publish them. Studio media generation uses provider credits and requires explicit approval after the estimated cost is shown. Provider pricing can change, and final image cost can vary with generated output. You must review generated media and confirm that you have the rights to use all submitted brand materials.</p>
           </section>
         </article>
       </div>

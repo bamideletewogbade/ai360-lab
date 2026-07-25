@@ -36,12 +36,18 @@ Add these in hPanel. Never prefix the OpenRouter key with `NEXT_PUBLIC_`.
 OPENROUTER_API_KEY=<newly rotated key>
 OPENROUTER_SITE_URL=https://lab.aithreesixty.tech
 OPENROUTER_SITE_NAME=AI 360 Lab
+OPENROUTER_IMAGE_MODEL=openai/gpt-image-1-mini
+OPENROUTER_VIDEO_MODEL=google/veo-3.1-lite
 AI360_RATE_CHAT_PER_MINUTE=12
 AI360_RATE_CHAT_PER_DAY=80
 AI360_RATE_AGENT_PER_MINUTE=4
 AI360_RATE_AGENT_PER_DAY=16
 AI360_RATE_STUDIO_PER_MINUTE=5
 AI360_RATE_STUDIO_PER_DAY=24
+AI360_RATE_STUDIO_IMAGE_PER_MINUTE=2
+AI360_RATE_STUDIO_IMAGE_PER_DAY=8
+AI360_RATE_STUDIO_VIDEO_PER_MINUTE=1
+AI360_RATE_STUDIO_VIDEO_PER_DAY=3
 AI360_RATE_VOICE_PER_MINUTE=5
 AI360_RATE_VOICE_PER_DAY=24
 ```
@@ -88,6 +94,9 @@ chat.stream.failed
 agent.stream.failed
 studio.provider.retrying
 studio.generation.failed
+studio.image.failed
+studio.video.failed
+studio.video.download_failed
 transcription.failed
 export.failed
 ```
@@ -105,3 +114,8 @@ https://lab.aithreesixty.tech/api/health
 
 It confirms whether the service is running and whether an OpenRouter key is
 configured. It never returns the key itself.
+
+Studio image and video generation are disabled unless the user first approves
+the asset and then confirms the provider-cost dialog. Video quotes are read from
+OpenRouter immediately before submission. Finished media, prompts and base64
+file data are excluded from application logs.

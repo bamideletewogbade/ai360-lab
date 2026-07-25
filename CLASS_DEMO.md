@@ -5,6 +5,8 @@
 - Confirm `https://lab.aithreesixty.tech/api/health` reports `aiConfigured: true`.
 - Confirm the OpenRouter account has sufficient credit.
 - Test one Chat response, one Agent response and one Studio launch pack.
+- Decide whether to demonstrate paid media generation. A four-second 720p
+  vertical video currently shows its live provider quote before submission.
 - Open Hostinger Runtime logs in a separate tab.
 - Keep one completed Studio project available as a fallback.
 - Ask learners to use PDF or image uploads smaller than 4 MB.
@@ -16,7 +18,8 @@
 3. **Ten minutes:** Learners create a business brief in Build.
 4. **Ten minutes:** Generate a Marketing Launch Pack.
 5. **Ten minutes:** Edit, improve and approve one asset.
-6. **Five minutes:** Export the pack and share observations.
+6. **Five minutes:** Produce one approved social graphic, download it and share
+   the approved copy.
 
 ## Demonstration business
 
@@ -39,8 +42,12 @@ Direction: Warm, energetic and trustworthy. Avoid exaggerated health claims.
 - Every deliverable can be edited, improved, approved and exported.
 - Ask and Build can search for current public information automatically when it is relevant.
 - Responses that use live research show links to the supporting pages.
-- Logo and video items currently provide production-ready creative direction and scripts.
-- The next product phase will render visual files and connect publishing channels.
+- Approved logo, social and flyer directions can produce downloadable image files.
+- Approved video plans can produce a short vertical MP4 after the user accepts
+  the live cost quote.
+- Approved copy can open the device share sheet or WhatsApp fallback.
+- Direct account publishing remains a later connector phase because it requires
+  each business to authorize its own social or email account.
 
 ## If something fails
 

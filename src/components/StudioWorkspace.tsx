@@ -61,6 +61,23 @@ type StudioProject = {
   sources?: Array<{ title: string; url: string }>
 }
 
+type GeneratedMedia = {
+  kind: 'image' | 'video'
+  status: 'generating' | 'pending' | 'in_progress' | 'completed' | 'failed'
+  url?: string
+  token?: string
+  costUsd?: number
+  model?: string
+  error?: string
+}
+
+type ExecutionApproval = {
+  asset: StudioAsset
+  kind: 'logo' | 'social' | 'flyer' | 'video'
+  estimatedCostUsd: number
+  estimateLabel: string
+}
+
 const STORAGE_KEY = 'ai360-studio-project-v1'
 const CHANNELS = ['WhatsApp', 'Instagram', 'Facebook', 'TikTok', 'SMS', 'Email', 'Google Business', 'Print']
 const GOALS = [
@@ -166,6 +183,9 @@ export function StudioWorkspace() {
   const [revisionId, setRevisionId] = useState('')
   const [revisionInstruction, setRevisionInstruction] = useState('')
   const [exporting, setExporting] = useState('')
+  const [mediaBusy, setMediaBusy] = useState('')
+  const [generatedMedia, setGeneratedMedia] = useState<Record<string, GeneratedMedia>>({})
+  const [executionApproval, setExecutionApproval] = useState<ExecutionApproval | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const mainRef = useRef<HTMLElement>(null)
 
@@ -385,6 +405,205 @@ export function StudioWorkspace() {
     }
   }
 
+  async function prepareExecution(asset: StudioAsset) {
+    if (asset.status !== 'approved') {
+      setError('Approve this asset before producing or sharing it.')
+      return
+    }
+    setError('')
+    if (asset.type === 'video') {
+      setMediaBusy(asset.id)
+      const id = requestId()
+      try {
+        const response = await fetch('/api/studio/video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
+          body: JSON.stringify({ action: 'quote' }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok || typeof data.costUsd !== 'number') {
+          const reference = data.requestId || response.headers.get('X-Request-Id') || id
+          throw new Error(`${data.error || 'The current video price is unavailable.'} Reference: ${reference}`)
+        }
+        setExecutionApproval({
+          asset,
+          kind: 'video',
+          estimatedCostUsd: data.costUsd,
+          estimateLabel: `${data.duration}-second ${data.aspectRatio} ${data.resolution} video without audio`,
+        })
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'The current video price is unavailable.')
+      } finally {
+        setMediaBusy('')
+      }
+      return
+    }
+    if (asset.type === 'logo' || asset.type === 'social' || asset.type === 'flyer') {
+      setExecutionApproval({
+        asset,
+        kind: asset.type,
+        estimatedCostUsd: 0.05,
+        estimateLabel: 'one low-quality draft image, billed at actual provider usage',
+      })
+    }
+  }
+
+  async function confirmExecution() {
+    if (!project || !executionApproval) return
+    const approval = executionApproval
+    setExecutionApproval(null)
+    setMediaBusy(approval.asset.id)
+    setError('')
+    const id = requestId()
+    try {
+      if (approval.kind === 'video') {
+        setGeneratedMedia((current) => ({
+          ...current,
+          [approval.asset.id]: { kind: 'video', status: 'pending', costUsd: approval.estimatedCostUsd },
+        }))
+        const response = await fetch('/api/studio/video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
+          body: JSON.stringify({
+            action: 'submit',
+            approved: true,
+            acceptedCostUsd: approval.estimatedCostUsd,
+            businessName: project.intake.businessName,
+            brand: project.brand,
+            campaign: project.campaign,
+            asset: approval.asset,
+          }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok || !data.token) {
+          const reference = data.requestId || response.headers.get('X-Request-Id') || id
+          throw new Error(`${data.error || 'The video could not be started.'} Reference: ${reference}`)
+        }
+        setGeneratedMedia((current) => ({
+          ...current,
+          [approval.asset.id]: {
+            kind: 'video',
+            status: data.status || 'pending',
+            token: data.token,
+            costUsd: data.estimatedCostUsd,
+            model: data.model,
+          },
+        }))
+        window.setTimeout(() => pollVideo(approval.asset.id, data.token), 30_000)
+      } else {
+        setGeneratedMedia((current) => ({
+          ...current,
+          [approval.asset.id]: { kind: 'image', status: 'generating' },
+        }))
+        const response = await fetch('/api/studio/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
+          body: JSON.stringify({
+            approved: true,
+            kind: approval.kind,
+            businessName: project.intake.businessName,
+            brand: project.brand,
+            campaign: project.campaign,
+            asset: approval.asset,
+          }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok || !data.image) {
+          const reference = data.requestId || response.headers.get('X-Request-Id') || id
+          throw new Error(`${data.error || 'The image could not be generated.'} Reference: ${reference}`)
+        }
+        setGeneratedMedia((current) => ({
+          ...current,
+          [approval.asset.id]: {
+            kind: 'image',
+            status: 'completed',
+            url: data.image,
+            costUsd: data.costUsd,
+            model: data.model,
+          },
+        }))
+      }
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Media generation failed.'
+      setGeneratedMedia((current) => ({
+        ...current,
+        [approval.asset.id]: {
+          kind: approval.kind === 'video' ? 'video' : 'image',
+          status: 'failed',
+          error: message,
+        },
+      }))
+      setError(message)
+    } finally {
+      setMediaBusy('')
+    }
+  }
+
+  async function pollVideo(assetId: string, token: string) {
+    const id = requestId()
+    try {
+      const response = await fetch('/api/studio/video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
+        body: JSON.stringify({ action: 'status', token }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Video status could not be checked.')
+      const status = data.status as GeneratedMedia['status']
+      setGeneratedMedia((current) => ({
+        ...current,
+        [assetId]: {
+          ...current[assetId],
+          kind: 'video',
+          status,
+          token,
+          url: data.downloadUrl,
+          costUsd: data.costUsd ?? current[assetId]?.costUsd,
+          error: data.error,
+        },
+      }))
+      if (status === 'pending' || status === 'in_progress') {
+        window.setTimeout(() => pollVideo(assetId, token), 30_000)
+      }
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Video status could not be checked.'
+      setGeneratedMedia((current) => ({
+        ...current,
+        [assetId]: { ...current[assetId], kind: 'video', status: 'failed', error: message },
+      }))
+      setError(message)
+    }
+  }
+
+  async function shareAsset(asset: StudioAsset) {
+    if (asset.status !== 'approved') {
+      setError('Approve this asset before sharing it.')
+      return
+    }
+    const shareData = {
+      title: `${project?.intake.businessName || 'AI 360 Studio'}: ${asset.title}`,
+      text: asset.content,
+    }
+    try {
+      if (navigator.share) await navigator.share(shareData)
+      else window.open(`https://wa.me/?text=${encodeURIComponent(`${shareData.title}\n\n${shareData.text}`)}`, '_blank', 'noopener,noreferrer')
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return
+      setError('Sharing could not be opened on this device. Copy the asset instead.')
+    }
+  }
+
+  function downloadGenerated(asset: StudioAsset, media: GeneratedMedia) {
+    if (!media.url) return
+    const link = document.createElement('a')
+    link.href = media.url
+    link.download = `${project?.intake.businessName || 'ai360'}-${asset.type}.${media.kind === 'video' ? 'mp4' : 'png'}`
+    if (media.kind === 'video') link.target = '_blank'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  }
+
   function newProject() {
     if (project && !window.confirm('Start a new Studio project? Your current local project will be replaced.')) return
     setProject(null)
@@ -565,6 +784,8 @@ export function StudioWorkspace() {
             <div className="asset-list">
               {project.assets.map((asset) => {
                 const expanded = expandedId === asset.id
+                const media = generatedMedia[asset.id]
+                const canRender = asset.type === 'logo' || asset.type === 'social' || asset.type === 'flyer' || asset.type === 'video'
                 return (
                   <article className={`asset-card${expanded ? ' expanded' : ''}${asset.status === 'approved' ? ' approved' : ''}`} key={asset.id}>
                     <button className="asset-summary" onClick={() => setExpandedId(expanded ? '' : asset.id)}>
@@ -584,6 +805,31 @@ export function StudioWorkspace() {
                         ) : (
                           <ResponseContent content={asset.content} />
                         )}
+                        {media ? (
+                          <div className={`generated-media ${media.status}`}>
+                            {media.kind === 'image' && media.url ? (
+                              // Generated data URLs cannot use the Next.js image optimizer.
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={media.url} alt={`Generated ${asset.title}`} />
+                            ) : media.kind === 'video' && media.status === 'completed' && media.url ? (
+                              <video src={media.url} controls playsInline />
+                            ) : (
+                              <div className="media-progress">
+                                <span className="studio-spinner">{media.status === 'failed' ? '!' : '✦'}</span>
+                                <span>
+                                  <b>{media.status === 'failed' ? 'Production stopped' : media.kind === 'video' ? 'Producing your video' : 'Designing your visual'}</b>
+                                  <small>{media.error || (media.kind === 'video' ? 'This can take a few minutes. You can keep working while Studio checks progress.' : 'Creating one downloadable draft from the approved direction.')}</small>
+                                </span>
+                              </div>
+                            )}
+                            {media.status === 'completed' && media.url ? (
+                              <div className="media-meta">
+                                <span>Download now. Generated files are not saved to this browser automatically.{typeof media.costUsd === 'number' ? ` Actual cost: $${media.costUsd.toFixed(3)}.` : ''}</span>
+                                <button onClick={() => downloadGenerated(asset, media)}>Download {media.kind === 'video' ? 'MP4' : 'PNG'}</button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {revisionId === asset.id && (
                           <div className="asset-revision">
                             <label>
@@ -605,10 +851,26 @@ export function StudioWorkspace() {
                         )}
                         <div className="asset-actions">
                           <button onClick={() => navigator.clipboard.writeText(asset.content)}>Copy</button>
+                          <button onClick={() => shareAsset(asset)}>Share</button>
                           <button onClick={() => setEditingId(editingId === asset.id ? '' : asset.id)}>
                             {editingId === asset.id ? 'Finish editing' : 'Edit'}
                           </button>
                           <button onClick={() => { setRevisionId(asset.id); setRevisionInstruction('') }}>Improve with AI</button>
+                          {canRender ? (
+                            <button
+                              className="execute"
+                              onClick={() => prepareExecution(asset)}
+                              disabled={mediaBusy === asset.id || media?.status === 'generating' || media?.status === 'pending' || media?.status === 'in_progress'}
+                            >
+                              {mediaBusy === asset.id
+                                ? 'Checking…'
+                                : media?.status === 'completed'
+                                  ? `Create another ${asset.type === 'video' ? 'video' : 'design'}`
+                                  : asset.type === 'video'
+                                    ? 'Produce video'
+                                    : 'Create design'}
+                            </button>
+                          ) : null}
                           <button
                             className={asset.status === 'approved' ? 'approved' : 'approve'}
                             onClick={() => updateAsset(asset.id, { status: asset.status === 'approved' ? 'draft' : 'approved' })}
@@ -623,13 +885,13 @@ export function StudioWorkspace() {
               })}
             </div>
 
-            <section className="execution-next">
+            <section className="execution-next live">
               <span className="execution-mark">✦</span>
               <span>
-                <b>Next execution layer</b>
-                <small>Visual logo files, designed campaign graphics, rendered promotional video and publishing connections.</small>
+                <b>Studio production is live</b>
+                <small>Approve an asset, then create its design or video. Approved copy can be shared from any device.</small>
               </span>
-              <span>Coming next</span>
+              <span>Ready</span>
             </section>
             {project.sources?.length ? (
               <section className="studio-sources">
@@ -652,6 +914,32 @@ export function StudioWorkspace() {
         </div>
       </div>
       {activeAsset ? <span className="sr-only">Selected asset: {activeAsset.title}</span> : null}
+      {executionApproval ? (
+        <div className="approval-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setExecutionApproval(null)
+        }}>
+          <section className="approval-dialog studio-execution-dialog" role="dialog" aria-modal="true" aria-labelledby="execution-title">
+            <span className="studio-kicker">Final approval</span>
+            <h2 id="execution-title">Produce {executionApproval.asset.title}?</h2>
+            <p>
+              Studio will send the approved creative direction and brand details to the media provider.
+              This action uses your OpenRouter credits.
+            </p>
+            <div className="execution-quote">
+              <span><b>{executionApproval.estimateLabel}</b><small>Nothing is posted or shared automatically.</small></span>
+              <strong>
+                {executionApproval.kind === 'video'
+                  ? `$${executionApproval.estimatedCostUsd.toFixed(2)}`
+                  : `up to $${executionApproval.estimatedCostUsd.toFixed(2)}`}
+              </strong>
+            </div>
+            <div className="approval-foot">
+              <button onClick={() => setExecutionApproval(null)}>Cancel</button>
+              <button className="approve-action" onClick={confirmExecution}>Approve and produce</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   )
 }
