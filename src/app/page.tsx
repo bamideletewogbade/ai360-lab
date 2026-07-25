@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { MODEL_OPTIONS, type ChatMode } from '@/lib/models'
 import { ResponseContent } from '@/components/ResponseContent'
+import { StudioWorkspace } from '@/components/StudioWorkspace'
 
 type Attachment = {
   name: string
@@ -23,7 +24,7 @@ type Msg = {
   usage?: { totalTokens?: number; cost?: number }
   actions?: AgentAction[]
 }
-type Experience = 'chat' | 'agent'
+type Experience = 'chat' | 'agent' | 'studio'
 type AgentStep = { id: string; label: string; status: 'active' | 'complete' }
 type SourceLink = { title: string; url: string }
 type ActionKind = 'email' | 'calendar' | 'task'
@@ -799,9 +800,16 @@ export default function Lab() {
             >
               <span>✦</span> Agent
             </button>
+            <button
+              className={experience === 'studio' ? 'active studio' : 'studio'}
+              onClick={() => selectExperience('studio')}
+              aria-pressed={experience === 'studio'}
+            >
+              <span>◆</span> Build
+            </button>
           </div>
           <span className="spacer" />
-          <div className="model-picker">
+          {experience !== 'studio' && <div className="model-picker">
             <button className="model-trigger" onClick={() => setModelOpen((open) => !open)} aria-expanded={modelOpen}>
               <span className="status-dot" />
               {MODEL_OPTIONS[selectedModel].shortLabel}
@@ -818,11 +826,15 @@ export default function Lab() {
                 ))}
               </div>
             )}
-          </div>
-          <button className="new-top" onClick={newChat}><span>＋</span><span className="hide-mobile">New chat</span></button>
+          </div>}
+          {experience !== 'studio' && (
+            <button className="new-top" onClick={newChat}><span>＋</span><span className="hide-mobile">New chat</span></button>
+          )}
         </header>
 
-        <main className="lab-main" ref={scrollRef}>
+        {experience === 'studio' ? <StudioWorkspace /> : (
+          <>
+          <main className="lab-main" ref={scrollRef}>
           {messages.length === 0 ? (
             <div className="lab-empty">
               <div className="sparkle-field" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i></div>
@@ -967,9 +979,9 @@ export default function Lab() {
               ))}
             </div>
           )}
-        </main>
+          </main>
 
-        <div className="composer-zone">
+          <div className="composer-zone">
           <div className={`composer${recordingState === 'recording' ? ' recording' : ''}`}>
             {recordingState !== 'idle' && (
               <div className={`voice-capture ${recordingState}`}>
@@ -1066,7 +1078,9 @@ export default function Lab() {
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
           </div>
-        </div>
+          </div>
+          </>
+        )}
       </section>
       {actionDraft && (
         <div className="approval-backdrop" role="presentation">

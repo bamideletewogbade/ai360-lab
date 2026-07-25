@@ -33,7 +33,7 @@ function configuredLimit(key: string, fallback: number) {
 
 export function rateLimit(
   request: Request,
-  scope: 'chat' | 'agent' | 'voice' | 'export' | 'action',
+  scope: 'chat' | 'agent' | 'studio' | 'voice' | 'export' | 'action',
   defaults: { minute: number; daily: number },
 ) {
   const requester = requesterId(request)

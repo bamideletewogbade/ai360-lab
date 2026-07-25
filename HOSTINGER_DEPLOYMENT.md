@@ -40,6 +40,8 @@ AI360_RATE_CHAT_PER_MINUTE=12
 AI360_RATE_CHAT_PER_DAY=80
 AI360_RATE_AGENT_PER_MINUTE=4
 AI360_RATE_AGENT_PER_DAY=16
+AI360_RATE_STUDIO_PER_MINUTE=5
+AI360_RATE_STUDIO_PER_DAY=24
 AI360_RATE_VOICE_PER_MINUTE=5
 AI360_RATE_VOICE_PER_DAY=24
 ```
@@ -84,6 +86,8 @@ Failures use events such as:
 provider.request.failed
 chat.stream.failed
 agent.stream.failed
+studio.provider.retrying
+studio.generation.failed
 transcription.failed
 export.failed
 ```
