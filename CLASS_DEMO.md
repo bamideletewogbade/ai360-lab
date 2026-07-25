@@ -37,6 +37,8 @@ Direction: Warm, energetic and trustworthy. Avoid exaggerated health claims.
 - One business brief becomes a reusable brand foundation.
 - The campaign is separated into individual deliverables instead of one long answer.
 - Every deliverable can be edited, improved, approved and exported.
+- Ask and Build can search for current public information automatically when it is relevant.
+- Responses that use live research show links to the supporting pages.
 - Logo and video items currently provide production-ready creative direction and scripts.
 - The next product phase will render visual files and connect publishing channels.
 

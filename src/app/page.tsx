@@ -808,6 +808,9 @@ export default function Lab() {
               <span>◆</span> Build
             </button>
           </div>
+          <span className="web-ready" title="AI 360 can search and read current web information when needed">
+            <i /> Web ready
+          </span>
           <span className="spacer" />
           {experience !== 'studio' && <div className="model-picker">
             <button className="model-trigger" onClick={() => setModelOpen((open) => !open)} aria-expanded={modelOpen}>

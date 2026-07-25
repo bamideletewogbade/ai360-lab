@@ -19,6 +19,7 @@ function redact(value: string) {
 }
 
 function safeValue(value: unknown): unknown {
+  if (typeof value === 'undefined') return undefined
   if (typeof value === 'string') return redact(value)
   if (typeof value === 'number' || typeof value === 'boolean' || value === null) return value
   if (Array.isArray(value)) return value.slice(0, 20).map(safeValue)

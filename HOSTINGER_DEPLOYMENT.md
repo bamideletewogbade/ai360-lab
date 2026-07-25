@@ -94,7 +94,7 @@ export.failed
 
 Useful fields include the route, selected model, provider status, provider
 error code, duration, token usage, estimated provider cost, attachment types
-and final outcome. Message text, file contents, recordings, API keys,
+web-search usage, source count and final outcome. Message text, file contents, recordings, API keys,
 authorization headers and cookies are not logged.
 
 The health endpoint is:

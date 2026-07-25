@@ -58,6 +58,7 @@ type StudioProject = {
   brand: BrandProfile
   campaign: Campaign
   assets: StudioAsset[]
+  sources?: Array<{ title: string; url: string }>
 }
 
 const STORAGE_KEY = 'ai360-studio-project-v1'
@@ -134,6 +135,14 @@ function projectMarkdown(project: StudioProject) {
     '',
     ...project.campaign.successMeasures.map((measure) => `- ${measure}`),
     '',
+    ...(project.sources?.length
+      ? [
+          '## Live sources',
+          '',
+          ...project.sources.map((source) => `- [${source.title}](${source.url})`),
+          '',
+        ]
+      : []),
     ...project.assets.flatMap((asset) => [
       `## ${asset.title}`,
       '',
@@ -261,7 +270,12 @@ export function StudioWorkspace() {
         const reference = data.requestId || response.headers.get('X-Request-Id') || id
         throw new Error(`${data.error || 'Studio could not create this campaign.'} Reference: ${reference}`)
       }
-      const result = data.result as { brand: BrandProfile; campaign: Campaign; assets: StudioAsset[] }
+      const result = data.result as {
+        brand: BrandProfile
+        campaign: Campaign
+        assets: StudioAsset[]
+        sources?: Array<{ title: string; url: string }>
+      }
       const next: StudioProject = {
         id: requestId(),
         createdAt: Date.now(),
@@ -269,6 +283,7 @@ export function StudioWorkspace() {
         intake,
         brand: result.brand,
         campaign: result.campaign,
+        sources: result.sources ?? [],
         assets: result.assets.map((asset, index) => ({
           ...asset,
           id: asset.id || `asset-${index + 1}`,
@@ -616,6 +631,23 @@ export function StudioWorkspace() {
               </span>
               <span>Coming next</span>
             </section>
+            {project.sources?.length ? (
+              <section className="studio-sources">
+                <div>
+                  <span className="execution-mark">↗</span>
+                  <span><b>Live research used</b><small>Current information was checked while building this campaign.</small></span>
+                </div>
+                <div>
+                  {project.sources.map((source, index) => (
+                    <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>
+                      <span>{String(index + 1).padStart(2, '0')}</span>
+                      <span>{source.title}</span>
+                      <span>↗</span>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </section>
         </div>
       </div>

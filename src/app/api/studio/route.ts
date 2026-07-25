@@ -1,6 +1,7 @@
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { routeFor } from '@/lib/models'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
+import { citationSources, LIVE_INFORMATION_TOOLS } from '@/lib/live-tools'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -50,13 +51,16 @@ Rules:
 - Do not use Markdown bold markers inside short social or SMS copy.
 - Do not promise that visual or video files were rendered. A logo item must be a detailed creative direction. A video item must include a production-ready script and scene plan.
 - Give every asset a distinct purpose, channel and call to action.
-- Include exactly eight assets covering strategy, messaging, WhatsApp, social, flyer, email or SMS, logo direction and promotional video.
+- For a full launch pack, include exactly eight assets covering strategy, messaging, WhatsApp, social, flyer, email or SMS, logo direction and promotional video.
+- For a single-asset revision, return only the requested asset object.
+- Use live web tools automatically when current market, platform, competitor or public information would materially improve the work.
+- When live information is used, include the supporting page title and URL in sources. Otherwise return an empty sources array.
 - Output must match the requested JSON structure.`
 
 const PACK_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['brand', 'campaign', 'assets'],
+  required: ['brand', 'campaign', 'assets', 'sources'],
   properties: {
     brand: {
       type: 'object',
@@ -120,6 +124,19 @@ const PACK_SCHEMA = {
         },
       },
     },
+    sources: {
+      type: 'array',
+      maxItems: 8,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'url'],
+        properties: {
+          title: { type: 'string' },
+          url: { type: 'string' },
+        },
+      },
+    },
   },
 } as const
 
@@ -150,8 +167,11 @@ function parseJson(value: string) {
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
 
-function providerContent(body: StudioRequest) {
+function providerContent(body: StudioRequest, research = '') {
   const intake = cleanIntake(body.intake)
+  const researchBlock = research
+    ? `\n\nVerified live research for context:\n${research.slice(0, 12_000)}`
+    : ''
   const text = body.action === 'regenerate'
     ? `Improve one asset in an existing campaign.
 
@@ -166,13 +186,14 @@ ${JSON.stringify(body.asset)}
 
 User direction:
 ${clean(body.instruction, 1_000) || 'Make it more specific, polished and ready to use.'}
+${researchBlock}
 
 Return JSON with exactly these fields: id, type, title, channel, purpose, content.`
     : `Create a complete Marketing Launch Pack from this business intake:
 
 ${JSON.stringify(intake, null, 2)}
 
-If the brand material is incomplete, propose a coherent starting direction and make that clear in the content.`
+If the brand material is incomplete, propose a coherent starting direction and make that clear in the content.${researchBlock}`
 
   const content: ContentPart[] = [{ type: 'text', text }]
   const file = body.brandFile
@@ -187,6 +208,43 @@ If the brand material is incomplete, propose a coherent starting direction and m
     content.push({ type: 'text', text: `\n\nBrand material:\n${clean(file.text, 60_000)}` })
   }
   return content
+}
+
+function needsLiveResearch(body: StudioRequest, intake: Intake) {
+  const context = [
+    intake.industry,
+    intake.offer,
+    intake.audience,
+    intake.goal,
+    intake.notes,
+    body.instruction,
+  ].join(' ').toLowerCase()
+  return /\b(current|currently|latest|recent|today|tonight|this week|this month|up[- ]to[- ]date|news|event|festival|price|rate|trend|competitor|regulation|law|policy|election|travel|tourism|things to do|market data|statistics)\b/.test(context)
+}
+
+function readableContent(value: unknown) {
+  if (typeof value === 'string') return value
+  if (!Array.isArray(value)) return ''
+  return value
+    .map((part) =>
+      part && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string'
+        ? (part as { text: string }).text
+        : '',
+    )
+    .join('')
+}
+
+function validPack(value: unknown) {
+  if (!value || typeof value !== 'object') return false
+  const pack = value as { brand?: unknown; campaign?: unknown; assets?: unknown }
+  return Boolean(
+    pack.brand &&
+    typeof pack.brand === 'object' &&
+    pack.campaign &&
+    typeof pack.campaign === 'object' &&
+    Array.isArray(pack.assets) &&
+    pack.assets.length === 8,
+  )
 }
 
 export async function POST(request: Request) {
@@ -235,6 +293,13 @@ export async function POST(request: Request) {
   const { model, models } = routeFor('auto')
   const hasPdf = body.brandFile?.kind === 'pdf'
   const startedAt = performance.now()
+  let research = ''
+  let researchSources: Array<{ title: string; url: string }> = []
+  let researchUsage: {
+    total_tokens?: number
+    cost?: number
+    server_tool_use?: { web_search_requests?: number }
+  } | undefined
   log.info('studio.generation.started', {
     action,
     model,
@@ -245,12 +310,64 @@ export async function POST(request: Request) {
   })
 
   try {
+    if (needsLiveResearch(body, intake)) {
+      const researchStartedAt = performance.now()
+      log.info('studio.research.started', { action, model })
+      try {
+        const researchResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          signal: AbortSignal.timeout(90_000),
+          headers: {
+            Authorization: `Bearer ${key}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
+            'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI 360 Lab',
+          },
+          body: JSON.stringify({
+            model,
+            models,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You are the research scout for AI 360 Studio. Use live tools only when useful. Find a small number of current public facts that materially improve this business campaign. Prefer authoritative or primary sources. Summarize findings concisely with descriptive Markdown links. Never invent a source.',
+              },
+              {
+                role: 'user',
+                content: `Research the current context relevant to this campaign brief:\n${JSON.stringify(intake, null, 2)}`,
+              },
+            ],
+            tools: LIVE_INFORMATION_TOOLS,
+            max_tokens: 1_200,
+          }),
+        })
+        if (researchResponse.ok) {
+          const researchJson = await researchResponse.json()
+          research = readableContent(researchJson.choices?.[0]?.message?.content)
+          researchSources = citationSources(researchJson.choices?.[0]?.message?.annotations)
+          researchUsage = researchJson.usage
+          log.info('studio.research.completed', {
+            action,
+            model,
+            durationMs: Math.round(performance.now() - researchStartedAt),
+            sourceCount: researchSources.length,
+            webSearchRequests: researchJson.usage?.server_tool_use?.web_search_requests,
+          })
+        } else {
+          const failure = await providerErrorDetails(researchResponse)
+          log.warn('studio.research.skipped', { action, model, ...failure })
+        }
+      } catch (error) {
+        log.warn('studio.research.skipped', { action, model, ...errorDetails(error) })
+      }
+    }
+
     const providerPayload = JSON.stringify({
         model,
         models,
         messages: [
           { role: 'system', content: STUDIO_PROMPT },
-          { role: 'user', content: providerContent(body) },
+          { role: 'user', content: providerContent(body, research) },
         ],
         response_format: action === 'create'
           ? {
@@ -260,9 +377,10 @@ export async function POST(request: Request) {
           : { type: 'json_object' },
         max_tokens: action === 'create' ? 6_000 : 1_800,
         temperature: 0.6,
-        ...(hasPdf
-          ? { plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] }
-          : {}),
+        plugins: [
+          { id: 'response-healing' },
+          ...(hasPdf ? [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] : []),
+        ],
       })
     let response: Response | undefined
     for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -327,6 +445,27 @@ export async function POST(request: Request) {
         ? message.map((part: { text?: unknown }) => typeof part?.text === 'string' ? part.text : '').join('')
         : ''
     const result = parseJson(text)
+    if (action === 'create' && !validPack(result)) {
+      throw new Error('Studio provider returned an incomplete campaign structure')
+    }
+    if (action === 'create') {
+      const annotationSources = citationSources(json.choices?.[0]?.message?.annotations)
+      const suppliedSources = Array.isArray(result.sources)
+        ? result.sources.filter(
+            (source: unknown): source is { title: string; url: string } =>
+              Boolean(source) &&
+              typeof source === 'object' &&
+              typeof (source as { title?: unknown }).title === 'string' &&
+              typeof (source as { url?: unknown }).url === 'string',
+          )
+        : []
+      result.sources = [...suppliedSources, ...researchSources, ...annotationSources]
+        .filter(
+          (source, index, sources) =>
+            sources.findIndex((candidate) => candidate.url === source.url) === index,
+        )
+        .slice(0, 8)
+    }
     log.finish(200, {
       outcome: 'success',
       action,
@@ -335,8 +474,22 @@ export async function POST(request: Request) {
       assetCount: Array.isArray(result.assets) ? result.assets.length : action === 'regenerate' ? 1 : 0,
       totalTokens: json.usage?.total_tokens,
       cost: json.usage?.cost,
+      researchTokens: researchUsage?.total_tokens,
+      researchCost: researchUsage?.cost,
+      webSearchRequests: researchUsage?.server_tool_use?.web_search_requests,
+      liveWebUsed: Array.isArray(result.sources) && result.sources.length > 0,
+      sourceCount: Array.isArray(result.sources) ? result.sources.length : 0,
     })
-    return Response.json({ result, usage: json.usage, requestId: log.requestId }, {
+    return Response.json({
+      result,
+      usage: {
+        ...json.usage,
+        total_tokens: Number(json.usage?.total_tokens || 0) + Number(researchUsage?.total_tokens || 0),
+        cost: Number(json.usage?.cost || 0) + Number(researchUsage?.cost || 0),
+        server_tool_use: researchUsage?.server_tool_use,
+      },
+      requestId: log.requestId,
+    }, {
       headers: log.headers({ 'Cache-Control': 'no-store' }),
     })
   } catch (error) {

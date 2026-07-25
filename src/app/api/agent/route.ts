@@ -1,6 +1,7 @@
 import { isChatMode, routeFor, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
+import { citationSources, RESEARCH_TOOLS } from '@/lib/live-tools'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -218,19 +219,7 @@ export async function POST(request: Request) {
             model,
             models,
             messages: [{ role: 'system', content: AGENT_PROMPT }, ...messages.map(providerMessage)],
-            tools: [
-              {
-                type: 'openrouter:web_search',
-                parameters: {
-                  engine: 'auto',
-                  max_results: 4,
-                  max_total_results: 8,
-                  search_context_size: 'medium',
-                },
-              },
-              { type: 'openrouter:web_fetch' },
-              { type: 'openrouter:datetime' },
-            ],
+            tools: RESEARCH_TOOLS,
             max_tokens: 3_500,
             ...(hasPdf
               ? { plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] }
@@ -261,22 +250,7 @@ export async function POST(request: Request) {
         send({ type: 'step', id: 'verify', label: 'Checking the result and sources', status: 'active' })
 
         const message = json.choices?.[0]?.message
-        const annotations = Array.isArray(message?.annotations) ? message.annotations : []
-        const sources = annotations
-          .filter((annotation: unknown) => {
-            if (!annotation || typeof annotation !== 'object') return false
-            const value = annotation as { type?: string; url_citation?: { url?: string } }
-            return value.type === 'url_citation' && typeof value.url_citation?.url === 'string'
-          })
-          .map((annotation: { url_citation: { url: string; title?: string } }) => ({
-            url: annotation.url_citation.url,
-            title: annotation.url_citation.title || annotation.url_citation.url,
-          }))
-          .filter(
-            (source: { url: string }, index: number, items: Array<{ url: string }>) =>
-              items.findIndex((item) => item.url === source.url) === index,
-          )
-          .slice(0, 8)
+        const sources = citationSources(message?.annotations)
 
         send({ type: 'step', id: 'verify', label: 'Result checked', status: 'complete' })
         const resultContent = textContent(message?.content) || 'The agent completed its work but returned no readable result.'

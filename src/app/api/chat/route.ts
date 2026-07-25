@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { isChatMode, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
+import { citationSources, LIVE_INFORMATION_TOOLS } from '@/lib/live-tools'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -141,6 +142,7 @@ export async function POST(req: NextRequest) {
             model,
             models,
             messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages.map(toProviderMessage)],
+            tools: LIVE_INFORMATION_TOOLS,
             stream: true,
             stream_options: { include_usage: true },
             max_tokens: 2_500,
@@ -177,7 +179,23 @@ export async function POST(req: NextRequest) {
         let buffer = ''
         let chunkCount = 0
         let outputCharacters = 0
-        let usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost?: number } | undefined
+        let outputText = ''
+        const sources = new Map<string, string>()
+        let usage: {
+          prompt_tokens?: number
+          completion_tokens?: number
+          total_tokens?: number
+          cost?: number
+          server_tool_use?: { web_search_requests?: number }
+        } | undefined
+        const appendLiveSources = () => {
+          const missing = [...sources.entries()].filter(([url]) => !outputText.includes(url))
+          if (!missing.length) return
+          const block = `\n\n### Live sources\n\n${missing.map(([url, title]) => `- [${title}](${url})`).join('\n')}`
+          outputText += block
+          outputCharacters += block.length
+          controller.enqueue(encoder.encode(block))
+        }
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -190,6 +208,7 @@ export async function POST(req: NextRequest) {
             if (!trimmed.startsWith('data:')) continue
             const data = trimmed.slice(5).trim()
             if (data === '[DONE]') {
+              appendLiveSources()
               log.finish(200, {
                 outcome: 'success',
                 provider: 'openrouter',
@@ -200,6 +219,9 @@ export async function POST(req: NextRequest) {
                 completionTokens: usage?.completion_tokens,
                 totalTokens: usage?.total_tokens,
                 cost: usage?.cost,
+                webSearchRequests: usage?.server_tool_use?.web_search_requests,
+                liveWebUsed: sources.size > 0,
+                sourceCount: sources.size,
               })
               controller.close()
               return
@@ -209,14 +231,21 @@ export async function POST(req: NextRequest) {
               const delta: string | undefined = json.choices?.[0]?.delta?.content
               if (delta) {
                 outputCharacters += delta.length
+                outputText += delta
                 controller.enqueue(encoder.encode(delta))
               }
+              const annotations =
+                json.choices?.[0]?.delta?.annotations ||
+                json.choices?.[0]?.message?.annotations ||
+                json.choices?.[0]?.annotations
+              for (const source of citationSources(annotations)) sources.set(source.url, source.title)
               if (json.usage && typeof json.usage === 'object') usage = json.usage
             } catch {
               log.warn('provider.stream.event_ignored', { provider: 'openrouter', model })
             }
           }
         }
+        appendLiveSources()
         log.finish(200, {
           outcome: 'success_without_done_event',
           provider: 'openrouter',
@@ -225,6 +254,9 @@ export async function POST(req: NextRequest) {
           outputCharacters,
           totalTokens: usage?.total_tokens,
           cost: usage?.cost,
+          webSearchRequests: usage?.server_tool_use?.web_search_requests,
+          liveWebUsed: sources.size > 0,
+          sourceCount: sources.size,
         })
         controller.close()
       } catch (error) {

@@ -22,7 +22,7 @@ export default function PrivacyPage() {
         <article className={styles.article}>
           <p className={styles.eyebrow}>Plain-language policy</p>
           <h1>Privacy</h1>
-          <p className={styles.updated}>Last updated July 24, 2026</p>
+          <p className={styles.updated}>Last updated July 25, 2026</p>
 
           <section>
             <h2>What the Lab handles</h2>
@@ -31,7 +31,13 @@ export default function PrivacyPage() {
               <li>Conversation history is saved in your browser on your current device.</li>
               <li>Prompts and supported attachments are sent through our server to the configured AI provider.</li>
               <li>Voice recordings are sent for transcription only after you select Use transcript.</li>
+              <li>Studio projects and approval progress are saved in your browser on your current device.</li>
             </ul>
+          </section>
+
+          <section>
+            <h2>Live web research</h2>
+            <p>When a question or project depends on current public information, AI 360 Lab may automatically create a search query and retrieve relevant public webpages through the configured AI and search providers. Search queries can be derived from what you ask, so do not include confidential or sensitive information in requests that may require web research.</p>
           </section>
 
           <section>
