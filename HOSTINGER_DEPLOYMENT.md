@@ -69,6 +69,11 @@ returns `"status":"ok"` and `"aiConfigured":true`.
 After changing environment variables or deployment settings, use
 **Settings & Redeploy** so the new values take effect.
 
+The homepage sends `Cache-Control: no-store` because it is the application
+shell. This prevents Hostinger CDN from keeping an older interface after a Git
+deployment. If the dashboard still shows a stale version immediately after
+deploying, use **Cache → Clear cache** once, then reload the site.
+
 ## Troubleshooting with Runtime Logs
 
 Open the application in hPanel, then select **Runtime logs** from the sidebar.
