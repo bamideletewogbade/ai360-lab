@@ -1029,7 +1029,14 @@ export function StudioWorkspace() {
                             {editingId === asset.id ? 'Finish editing' : 'Edit'}
                           </button>
                           <button onClick={() => { setRevisionId(asset.id); setRevisionInstruction('') }}>Improve with AI</button>
-                          {canRender ? (
+                          <button
+                            className={asset.status === 'approved' ? 'approved' : 'approve'}
+                            disabled={media?.status === 'generating' || media?.status === 'pending' || media?.status === 'in_progress'}
+                            onClick={() => updateAsset(asset.id, { status: asset.status === 'approved' ? 'draft' : 'approved' })}
+                          >
+                            {asset.status === 'approved' ? '✓ Approved' : 'Approve asset'}
+                          </button>
+                          {canRender && asset.status === 'approved' ? (
                             <button
                               className="execute"
                               onClick={() => prepareExecution(asset)}
@@ -1044,13 +1051,16 @@ export function StudioWorkspace() {
                                     : 'Create design'}
                             </button>
                           ) : null}
-                          <button
-                            className={asset.status === 'approved' ? 'approved' : 'approve'}
-                            onClick={() => updateAsset(asset.id, { status: asset.status === 'approved' ? 'draft' : 'approved' })}
-                          >
-                            {asset.status === 'approved' ? '✓ Approved' : 'Approve asset'}
-                          </button>
                         </div>
+                        {canRender && asset.status !== 'approved' ? (
+                          <div className="asset-production-hint">
+                            <span>◇</span>
+                            <span>
+                              <b>Production unlocks after approval</b>
+                              <small>Review this direction, then approve it to create the downloadable {asset.type === 'video' ? 'video' : 'design'}.</small>
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     )}
                   </article>

@@ -53,6 +53,32 @@ ${clean(body.asset?.content, 5_000)}
 Art direction: modern, distinctive, premium but approachable, commercially usable, strong hierarchy, generous negative space, designed for a real small business in Africa. Avoid generic AI imagery, mockup frames, watermarks and tiny illegible details. ${body.kind === 'logo' ? 'Show a single clean brand mark on a plain background. Keep typography minimal and spell the business name correctly.' : 'Leave copy-heavy details out of the artwork. Include only the business name and one short call to action if the model can render them accurately.'}`
 }
 
+function imageModels() {
+  const configured = (process.env.OPENROUTER_IMAGE_MODELS || '')
+    .split(',')
+    .map((model) => model.trim())
+    .filter(Boolean)
+  const primary = process.env.OPENROUTER_IMAGE_MODEL || 'openai/gpt-image-1-mini'
+  return [...new Set(configured.length
+    ? configured
+    : [primary, 'google/gemini-3.1-flash-lite-image'])].slice(0, 3)
+}
+
+function modelOptions(model: string, kind: ImageRequest['kind']) {
+  const aspectRatio = kind === 'flyer' ? '2:3' : '1:1'
+  if (model.startsWith('openai/')) {
+    return {
+      aspect_ratio: aspectRatio,
+      quality: 'low',
+      background: kind === 'logo' ? 'transparent' : 'opaque',
+    }
+  }
+  if (model.startsWith('google/')) {
+    return { resolution: '1K', aspect_ratio: aspectRatio }
+  }
+  return { aspect_ratio: aspectRatio }
+}
+
 export async function POST(request: Request) {
   const log = requestLogger(request, '/api/studio/image')
   const tooLarge = rejectLargeRequest(request, 250_000)
@@ -101,68 +127,95 @@ export async function POST(request: Request) {
     })
   }
 
-  const model = process.env.OPENROUTER_IMAGE_MODEL || 'openai/gpt-image-1-mini'
+  const models = imageModels()
   const startedAt = performance.now()
-  log.info('studio.image.started', { model, kind: body.kind, quality: 'low', approved: true })
+  log.info('studio.image.started', { models, kind: body.kind, approved: true })
 
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/images', {
-      method: 'POST',
-      signal: AbortSignal.timeout(120_000),
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-        'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI 360 Lab',
-      },
-      body: JSON.stringify({
+  for (const [attempt, model] of models.entries()) {
+    const providerStartedAt = performance.now()
+    try {
+      log.info('studio.image.provider_started', { model, attempt: attempt + 1, kind: body.kind })
+      const response = await fetch('https://openrouter.ai/api/v1/images', {
+        method: 'POST',
+        signal: AbortSignal.timeout(120_000),
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
+          'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI 360 Lab',
+        },
+        body: JSON.stringify({
+          model,
+          prompt: promptFor(body),
+          n: 1,
+          ...modelOptions(model, body.kind),
+        }),
+      })
+      if (!response.ok) {
+        const failure = await providerErrorDetails(response)
+        log.warn('studio.image.provider_failed', {
+          model,
+          attempt: attempt + 1,
+          kind: body.kind,
+          durationMs: Math.round(performance.now() - providerStartedAt),
+          ...failure,
+        })
+        continue
+      }
+
+      const result = await response.json() as {
+        data?: Array<{ b64_json?: string; media_type?: string }>
+        usage?: { cost?: number; total_tokens?: number }
+      }
+      const image = result.data?.[0]
+      if (!image?.b64_json) {
+        log.warn('studio.image.provider_failed', {
+          model,
+          attempt: attempt + 1,
+          kind: body.kind,
+          outcome: 'empty_image',
+        })
+        continue
+      }
+      const mediaType = image.media_type || 'image/png'
+
+      log.info('studio.image.completed', {
         model,
-        prompt: promptFor(body),
-        n: 1,
-        quality: 'low',
-        background: body.kind === 'logo' ? 'transparent' : 'opaque',
-      }),
-    })
-    if (!response.ok) {
-      const failure = await providerErrorDetails(response)
-      log.error('studio.image.failed', { model, kind: body.kind, ...failure })
-      log.finish(502, { outcome: 'provider_error' })
+        attempt: attempt + 1,
+        kind: body.kind,
+        durationMs: Math.round(performance.now() - startedAt),
+        mediaType,
+        costUsd: result.usage?.cost,
+        totalTokens: result.usage?.total_tokens,
+      })
+      log.finish(200, { outcome: 'success', model, attempt: attempt + 1, kind: body.kind })
       return Response.json({
-        error: 'The image provider could not complete this design.',
+        image: `data:${mediaType};base64,${image.b64_json}`,
+        mediaType,
+        costUsd: result.usage?.cost,
+        model,
         requestId: log.requestId,
-      }, { status: 502, headers: log.headers() })
+      }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
+    } catch (error) {
+      log.warn('studio.image.provider_failed', {
+        model,
+        attempt: attempt + 1,
+        kind: body.kind,
+        durationMs: Math.round(performance.now() - providerStartedAt),
+        ...errorDetails(error),
+      })
     }
-
-    const result = await response.json() as {
-      data?: Array<{ b64_json?: string; media_type?: string }>
-      usage?: { cost?: number; total_tokens?: number }
-    }
-    const image = result.data?.[0]
-    if (!image?.b64_json) throw new Error('Provider returned no image data')
-    const mediaType = image.media_type || 'image/png'
-
-    log.info('studio.image.completed', {
-      model,
-      kind: body.kind,
-      durationMs: Math.round(performance.now() - startedAt),
-      mediaType,
-      costUsd: result.usage?.cost,
-      totalTokens: result.usage?.total_tokens,
-    })
-    log.finish(200, { outcome: 'success', model, kind: body.kind })
-    return Response.json({
-      image: `data:${mediaType};base64,${image.b64_json}`,
-      mediaType,
-      costUsd: result.usage?.cost,
-      model,
-      requestId: log.requestId,
-    }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
-  } catch (error) {
-    log.error('studio.image.failed', { model, kind: body.kind, ...errorDetails(error) })
-    log.finish(500, { outcome: 'exception' })
-    return Response.json({ error: 'Image generation failed.', requestId: log.requestId }, {
-      status: 500,
-      headers: log.headers(),
-    })
   }
+
+  log.error('studio.image.failed', {
+    models,
+    kind: body.kind,
+    durationMs: Math.round(performance.now() - startedAt),
+    outcome: 'all_providers_failed',
+  })
+  log.finish(502, { outcome: 'all_providers_failed', attemptedModels: models.length })
+  return Response.json({
+    error: 'Studio could not create this design after trying its backup image provider. Please try again shortly.',
+    requestId: log.requestId,
+  }, { status: 502, headers: log.headers({ 'Cache-Control': 'no-store' }) })
 }

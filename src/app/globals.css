@@ -472,6 +472,11 @@ button { color: inherit; }
 .asset-actions button:disabled { cursor: wait; opacity: .5; }
 .asset-actions button.approve { margin-left: auto; border-color: var(--black); background: var(--black); color: white; }
 .asset-actions button.approved { margin-left: auto; border-color: #b9cbbb; background: #edf4ee; color: var(--green); }
+.asset-production-hint { display: flex; align-items: center; gap: 9px; margin-top: 8px; padding: 9px 10px; border: 1px dashed #d7c7b8; border-radius: 9px; background: #fffaf4; }
+.asset-production-hint > span:first-child { display: grid; width: 26px; height: 26px; flex: 0 0 26px; place-items: center; border-radius: 8px; background: #efe3d8; color: #70452d; font-size: 9px; }
+.asset-production-hint b, .asset-production-hint small { display: block; }
+.asset-production-hint b { color: #70452d; font-size: 8px; }
+.asset-production-hint small { margin-top: 2px; color: var(--grey); font-size: 8px; line-height: 1.4; }
 .asset-revision { margin-top: 15px; padding: 14px; border: 1px solid #d8c7b9; border-radius: 11px; background: #fff9f3; }
 .asset-revision label { color: var(--charcoal); font-size: 10px; font-weight: 700; }
 .asset-revision > div { display: flex; justify-content: flex-end; gap: 6px; }

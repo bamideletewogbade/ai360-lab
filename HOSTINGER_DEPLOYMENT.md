@@ -37,6 +37,7 @@ OPENROUTER_API_KEY=<newly rotated key>
 OPENROUTER_SITE_URL=https://lab.aithreesixty.tech
 OPENROUTER_SITE_NAME=AI 360 Lab
 OPENROUTER_IMAGE_MODEL=openai/gpt-image-1-mini
+OPENROUTER_IMAGE_MODELS=openai/gpt-image-1-mini,google/gemini-3.1-flash-lite-image
 OPENROUTER_VIDEO_MODEL=google/veo-3.1-lite
 AI360_RATE_CHAT_PER_MINUTE=12
 AI360_RATE_CHAT_PER_DAY=80
@@ -100,6 +101,7 @@ agent.stream.failed
 studio.provider.retrying
 studio.generation.failed
 studio.image.failed
+studio.image.provider_failed
 studio.video.failed
 studio.video.download_failed
 transcription.failed
