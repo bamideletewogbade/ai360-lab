@@ -1,7 +1,7 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { MODEL_OPTIONS, type ChatMode } from '@/lib/models'
 import { ResponseContent } from '@/components/ResponseContent'
@@ -72,6 +72,44 @@ const AGENT_TASKS = [
   { icon: 'Aa', label: 'Create a proposal', prompt: 'Research what is needed and create a practical, professional proposal for: ' },
   { icon: '✓', label: 'Build an action plan', prompt: 'Turn this outcome into a researched, step-by-step action plan with priorities, risks and next actions: ' },
 ]
+
+const MODE_META: Record<Experience, {
+  label: string
+  short: string
+  description: string
+  eyebrow: string
+  heading: ReactNode
+  intro: string
+  mark: string
+}> = {
+  chat: {
+    label: 'Ask',
+    short: 'Think, write and learn',
+    description: 'Answers & ideas',
+    eyebrow: 'Everyday intelligence',
+    heading: <>Turn a thought into<br />something useful.</>,
+    intro: 'Ask a question, shape an idea, or bring a task. AI 360 chooses the right intelligence and helps you move forward.',
+    mark: 'A',
+  },
+  agent: {
+    label: 'Agent',
+    short: 'Research and execute',
+    description: 'Research & action',
+    eyebrow: 'Outcome-focused agent',
+    heading: <>Give us the outcome.<br />We will work the steps.</>,
+    intro: 'Set a goal and let AI 360 research the web, inspect your materials, reason through the work and return a checked deliverable.',
+    mark: '✦',
+  },
+  studio: {
+    label: 'Build',
+    short: 'Create business assets',
+    description: 'Campaign studio',
+    eyebrow: 'AI 360 production studio',
+    heading: <>Build the assets that<br />move your business.</>,
+    intro: 'Go from a brand brief to a coordinated launch pack, then review, refine, approve and produce each asset.',
+    mark: '◆',
+  },
+}
 
 const STATUS = ['Thinking', 'Exploring your question', 'Finding the clearest answer']
 
@@ -167,6 +205,7 @@ export default function Lab() {
   const messages = useMemo(() => active?.messages ?? [], [active])
   const selectedModel = active?.model ?? 'auto'
   const experience = active?.experience ?? 'chat'
+  const modeMeta = MODE_META[experience]
 
   useEffect(() => {
     let mounted = true
@@ -208,7 +247,11 @@ export default function Lab() {
   }, [activeId, conversations, hydrated])
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+    if (messages.length) {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+    } else {
+      scrollRef.current?.scrollTo({ top: 0 })
+    }
   }, [messages, busy])
 
   useEffect(() => {
@@ -749,15 +792,15 @@ export default function Lab() {
     <div className="lab-shell">
       <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
         <div className="side-head">
-          <img src="/logo-black.png" alt="AI Three Sixty" className="wordmark" />
+          <img src="/logo-white.png" alt="AI Three Sixty" className="wordmark" />
           <button className="icon-button close-side" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">×</button>
         </div>
-        <button className="new-chat" onClick={newChat}><span>＋</span> New conversation</button>
+        <button className="new-chat" onClick={newChat}><span>＋</span><span>Start something</span></button>
         <label className="history-search">
           <span>⌕</span>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats" />
         </label>
-        <div className="history-label">Your conversations</div>
+        <div className="history-label">Recent work</div>
         <nav className="history-list">
           {visibleConversations.map((conversation) => (
             <div className={`history-item${conversation.id === active.id ? ' active' : ''}`} key={conversation.id}>
@@ -773,7 +816,7 @@ export default function Lab() {
         </nav>
         <div className="side-foot">
           <div className="privacy-dot">●</div>
-          <div><b>Saved on this device</b><span>Your chats stay in this browser.</span></div>
+          <div><b>Private workspace</b><span>Your work stays in this browser.</span></div>
         </div>
       </aside>
       {sidebarOpen && <button className="scrim" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />}
@@ -791,25 +834,28 @@ export default function Lab() {
               onClick={() => selectExperience('chat')}
               aria-pressed={experience === 'chat'}
             >
-              Chat
+              <span className="mode-mark">A</span>
+              <span className="mode-copy"><b>Ask</b><small>Answers & ideas</small></span>
             </button>
             <button
               className={experience === 'agent' ? 'active agent' : 'agent'}
               onClick={() => selectExperience('agent')}
               aria-pressed={experience === 'agent'}
             >
-              <span>✦</span> Agent
+              <span className="mode-mark">✦</span>
+              <span className="mode-copy"><b>Agent</b><small>Research & action</small></span>
             </button>
             <button
               className={experience === 'studio' ? 'active studio' : 'studio'}
               onClick={() => selectExperience('studio')}
               aria-pressed={experience === 'studio'}
             >
-              <span>◆</span> Build
+              <span className="mode-mark">◆</span>
+              <span className="mode-copy"><b>Build</b><small>Campaign studio</small></span>
             </button>
           </div>
           <span className="web-ready" title="AI 360 can search and read current web information when needed">
-            <i /> Web ready
+            <i /> Live intelligence
           </span>
           <span className="spacer" />
           {experience !== 'studio' && <div className="model-picker">
@@ -842,15 +888,14 @@ export default function Lab() {
             <div className="lab-empty">
               <div className="sparkle-field" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i></div>
               <img src="/icon-mark-black.png" alt="" className="hero-icon" />
-              <p className="eyebrow"><span>✦</span>{experience === 'agent' ? 'Outcome-focused agent' : 'Open AI practice'}</p>
-              <h1>
-                {experience === 'agent' ? <>What outcome should<br />we complete?</> : <>What would you like<br />to make possible?</>}
-              </h1>
-              <p className="intro">
-                {experience === 'agent'
-                  ? 'Give AI 360 Agent a goal. It can research the web, read your materials, check its result and create a useful deliverable.'
-                  : 'Ask a question, shape an idea, or bring a task. AI 360 Lab chooses the right intelligence and helps you move forward.'}
-              </p>
+              <p className="eyebrow"><span>✦</span>{modeMeta.eyebrow}</p>
+              <h1>{modeMeta.heading}</h1>
+              <p className="intro">{modeMeta.intro}</p>
+              <div className="capability-strip" aria-label="AI 360 capabilities">
+                <span><i>01</i><b>Current</b><small>Searches the live web</small></span>
+                <span><i>02</i><b>Multimodal</b><small>Reads files and media</small></span>
+                <span><i>03</i><b>Ready to use</b><small>Exports polished work</small></span>
+              </div>
               <div className="task-grid">
                 {(experience === 'agent' ? AGENT_TASKS : TASKS).map((task) => (
                   <button
@@ -867,9 +912,15 @@ export default function Lab() {
                   </button>
                 ))}
               </div>
-              <div className="try-line"><span />Try one above, or start with your own words<span /></div>
+              <div className="try-line"><span />Choose a starting point or describe your own<span /></div>
             </div>
           ) : (
+            <>
+            <div className="thread-context">
+              <div className={`context-mark ${experience}`}>{modeMeta.mark}</div>
+              <div><span>{modeMeta.label} workspace</span><b>{active.title}</b></div>
+              <small>{messages.length} message{messages.length === 1 ? '' : 's'} · {modeMeta.short}</small>
+            </div>
             <div className="thread">
               {messages.map((message, index) => (
                 <article className={`message ${message.role}`} key={message.id}>
@@ -981,6 +1032,7 @@ export default function Lab() {
                 </article>
               ))}
             </div>
+            </>
           )}
           </main>
 
