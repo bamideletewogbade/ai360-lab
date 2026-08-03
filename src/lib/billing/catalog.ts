@@ -14,7 +14,7 @@ export type BillingPlan = {
   templateExamples: string[]
 }
 
-export const BILLING_CATALOG_VERSION = 'pilot-2026-08-v1'
+export const BILLING_CATALOG_VERSION = 'pilot-2026-08-v2'
 
 export const BILLING_PLANS: BillingPlan[] = [
   {
@@ -24,9 +24,9 @@ export const BILLING_PLANS: BillingPlan[] = [
     audience: 'For trying AI 360 and handling occasional everyday tasks.',
     monthlyPriceGhs: 0,
     annualMonthlyPriceGhs: 0,
-    includedCredits: 120,
+    includedCredits: 5,
     workspace: 'personal',
-    features: ['Everyday chat and learning help', 'Limited current web research', 'Local conversation history', 'Basic document and voice input'],
+    features: ['Five work credits reset each month', 'Everyday chat and learning help', 'Local conversation history', 'Basic document and voice input'],
     templateExamples: ['Study helper', 'Quick writing', 'Weekly planner'],
   },
   {
@@ -34,9 +34,9 @@ export const BILLING_PLANS: BillingPlan[] = [
     name: 'Everyday',
     eyebrow: 'Made for Ghana',
     audience: 'For students, graduates, parents and professionals using AI each week.',
-    monthlyPriceGhs: 39,
-    annualMonthlyPriceGhs: 33,
-    includedCredits: 900,
+    monthlyPriceGhs: 125,
+    annualMonthlyPriceGhs: 105,
+    includedCredits: 120,
     featured: true,
     workspace: 'personal',
     features: ['Everything in Explorer', 'Saved work across devices', 'More current research and file analysis', 'Document exports and voice tools', 'Core agent templates'],
@@ -47,9 +47,9 @@ export const BILLING_PLANS: BillingPlan[] = [
     name: 'Builder',
     eyebrow: 'Create and execute',
     audience: 'For people producing campaigns, proposals, research and digital assets.',
-    monthlyPriceGhs: 89,
-    annualMonthlyPriceGhs: 75,
-    includedCredits: 2_600,
+    monthlyPriceGhs: 300,
+    annualMonthlyPriceGhs: 250,
+    includedCredits: 400,
     workspace: 'personal',
     features: ['Everything in Everyday', 'Full agent and Studio workflows', 'Image generation allowance', 'Brand guide and project memory', 'Priority production queue'],
     templateExamples: ['Brand launch', 'Campaign builder', 'Proposal studio'],
@@ -59,9 +59,9 @@ export const BILLING_PLANS: BillingPlan[] = [
     name: 'Team',
     eyebrow: 'Shared outcomes',
     audience: 'For businesses, schools, NGOs, programmes and public-service teams.',
-    monthlyPriceGhs: 299,
-    annualMonthlyPriceGhs: 249,
-    includedCredits: 8_000,
+    monthlyPriceGhs: 900,
+    annualMonthlyPriceGhs: 750,
+    includedCredits: 1_400,
     workspace: 'organization',
     features: ['Five members included', 'Shared projects and credit pool', 'Roles, approvals and usage controls', 'Organization agent templates', 'Reporting and priority support'],
     templateExamples: ['NGO proposal', 'Policy brief', 'Community outreach'],
@@ -69,9 +69,17 @@ export const BILLING_PLANS: BillingPlan[] = [
 ]
 
 export const CREDIT_TOP_UPS = [
-  { slug: 'topup-10', priceGhs: 10, credits: 200 },
-  { slug: 'topup-25', priceGhs: 25, credits: 550 },
-  { slug: 'topup-50', priceGhs: 50, credits: 1_200 },
+  { slug: 'topup-50', priceGhs: 50, credits: 40 },
+  { slug: 'topup-100', priceGhs: 100, credits: 90 },
+  { slug: 'topup-200', priceGhs: 200, credits: 200 },
+] as const
+
+export const CREDIT_GUIDE = [
+  { task: 'Quick answer or writing help', credits: '1' },
+  { task: 'Current web research or file review', credits: '2' },
+  { task: 'Multi-step agent workflow', credits: '3 to 8' },
+  { task: 'Generated image', credits: '3 to 6' },
+  { task: 'Four-second promotional video', credits: '12 to 20' },
 ] as const
 
 export function findBillingPlan(slug: string) {

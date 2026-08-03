@@ -1,4 +1,4 @@
-import { isChatMode, routeFor, type ChatMode } from '@/lib/models'
+import { isChatMode, providerPreferences, routeFor, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
     return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })
   }
 
-  let body: { messages?: Msg[]; mode?: ChatMode }
+  let body: { messages?: Msg[]; mode?: ChatMode; sessionId?: string }
   try {
     body = await request.json()
   } catch {
@@ -157,6 +157,7 @@ export async function POST(request: Request) {
     })
   }
   const mode: ChatMode = isChatMode(body.mode) ? body.mode : 'auto'
+  const sessionId = typeof body.sessionId === 'string' ? body.sessionId.slice(0, 256) : undefined
   const key = process.env.OPENROUTER_API_KEY
   const encoder = new TextEncoder()
   const attachments = messages.flatMap((message) => message.attachments ?? [])
@@ -194,7 +195,7 @@ export async function POST(request: Request) {
         send({ type: 'step', id: 'plan', label: 'Plan ready', status: 'complete' })
         send({ type: 'step', id: 'tools', label: 'Researching and reading relevant material', status: 'active' })
 
-        const { model, models } = routeFor(mode)
+        const { model, models } = routeFor(mode, { workload: 'agent' })
         const hasPdf = messages.some((message) =>
           message.attachments?.some((attachment) => attachment.kind === 'pdf'),
         )
@@ -219,8 +220,10 @@ export async function POST(request: Request) {
           body: JSON.stringify({
             model,
             models,
+            ...(sessionId ? { session_id: sessionId } : {}),
             messages: [{ role: 'system', content: AGENT_PROMPT }, ...messages.map(providerMessage)],
             tools: RESEARCH_TOOLS,
+            provider: providerPreferences('agent'),
             max_tokens: 3_500,
             ...(hasPdf
               ? { plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] }

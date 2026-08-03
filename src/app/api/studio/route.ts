@@ -1,5 +1,5 @@
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
-import { routeFor } from '@/lib/models'
+import { providerPreferences, routeFor } from '@/lib/models'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
 import { citationSources, LIVE_INFORMATION_TOOLS } from '@/lib/live-tools'
@@ -291,7 +291,7 @@ export async function POST(request: Request) {
     })
   }
 
-  const { model, models } = routeFor('auto')
+  const { model, models } = routeFor('auto', { workload: 'studio' })
   const hasPdf = body.brandFile?.kind === 'pdf'
   const startedAt = performance.now()
   let research = ''
@@ -341,6 +341,7 @@ export async function POST(request: Request) {
               },
             ],
             tools: LIVE_INFORMATION_TOOLS,
+            provider: providerPreferences('studio'),
             max_tokens: 1_200,
           }),
         })
@@ -379,6 +380,7 @@ export async function POST(request: Request) {
             }
           : { type: 'json_object' },
         max_tokens: action === 'create' ? 6_000 : 1_800,
+        provider: providerPreferences('studio'),
         temperature: 0.6,
         plugins: [
           { id: 'response-healing' },

@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
-import { BILLING_PLANS, BILLING_CATALOG_VERSION, CREDIT_TOP_UPS, planPrice, type BillingCadence } from '@/lib/billing/catalog'
+import { BILLING_PLANS, BILLING_CATALOG_VERSION, CREDIT_GUIDE, CREDIT_TOP_UPS, planPrice, type BillingCadence } from '@/lib/billing/catalog'
 import styles from '@/app/pricing/pricing.module.css'
 
 const TEMPLATE_GROUPS = [
@@ -53,7 +53,7 @@ export function PricingExperience() {
         </div>
         <div className={styles.priceSignal} aria-hidden="true">
           <div className={styles.signalOrbit}><i /><i /><i /><span>GH₵</span></div>
-          <div className={styles.signalCard}><small>LOCAL ACCESS</small><b>Start at GH₵0</b><span>Move up only when the work needs it.</span></div>
+          <div className={styles.signalCard}><small>MONTHLY RESET</small><b>5 free credits</b><span>Enough to try real work before paying.</span></div>
           <div className={styles.signalCard}><small>PAY YOUR WAY</small><b>MoMo · Card</b><span>One checkout, familiar payment choices.</span></div>
         </div>
       </header>
@@ -79,7 +79,7 @@ export function PricingExperience() {
                 <p className={styles.audience}>{plan.audience}</p>
                 <div className={styles.price}><span>GH₵</span><b>{price}</b><small>{paid ? '/ month' : 'forever'}</small></div>
                 {cadence === 'annual' && paid ? <p className={styles.billingNote}>GH₵{price * 12} billed yearly</p> : <p className={styles.billingNote}>Pay month to month</p>}
-                <div className={styles.creditLine}><span>{plan.includedCredits.toLocaleString()}</span><span>work credits included monthly</span></div>
+                <div className={styles.creditLine}><span>{plan.includedCredits.toLocaleString()}</span><span>{plan.slug === 'explorer' ? 'free credits, reset monthly' : 'work credits included monthly'}</span></div>
                 <ul>{plan.features.map((feature) => <li key={feature}><span>✓</span>{feature}</li>)}</ul>
                 <div className={styles.templates}><small>Example templates</small><p>{plan.templateExamples.join(' · ')}</p></div>
                 <Link href={paid ? `/sign-up?plan=${plan.slug}` : '/app'} className={paid ? styles.choose : styles.start}>
@@ -103,6 +103,10 @@ export function PricingExperience() {
           <article><span>02</span><b>Deep work uses more</b><p>Long research, premium models and large files consume more capacity.</p></article>
           <article><span>03</span><b>Media is confirmed first</b><p>Images and video show an estimate before generation begins.</p></article>
           <article><span>04</span><b>Unused money is never guessed</b><p>Failed work releases reserved credits and every charge enters a ledger.</p></article>
+        </div>
+        <div className={styles.creditGuide}>
+          <div><b>What might work cost?</b><small>Shown before a task begins. Final charges follow measured work.</small></div>
+          {CREDIT_GUIDE.map((item) => <div key={item.task}><span>{item.task}</span><b>{item.credits} {item.credits === '1' ? 'credit' : 'credits'}</b></div>)}
         </div>
         <div className={styles.topups}>
           <span><b>Need a little more?</b><small>One-time top-ups proposed for paid plans</small></span>
@@ -154,7 +158,8 @@ export function PricingExperience() {
           <details><summary>Why not promise unlimited AI?<span>+</span></summary><p>Model, research, image and video costs vary. An allowance keeps entry prices low and prevents one unusually expensive workflow from raising prices for everyone.</p></details>
           <details><summary>Will Mobile Money renew automatically?<span>+</span></summary><p>Only if MojoPay confirms a compliant recurring authorization flow. Otherwise AI 360 will send a renewal reminder and let the customer approve each monthly payment.</p></details>
           <details><summary>Can a student or programme receive a discount?<span>+</span></summary><p>Yes. Sponsored seats and verified education or community programmes should receive controlled allowances rather than a permanent blanket discount with no funding source.</p></details>
-          <details><summary>What happens when credits finish?<span>+</span></summary><p>People can wait for renewal, buy a small top-up or move to a larger plan. AI 360 will not silently create an overage bill for individuals.</p></details>
+          <details><summary>Do the five free credits roll over?<span>+</span></summary><p>No. They reset on the first day of each month and unused free credits expire. This keeps the free tier generous enough to test real work without creating an open-ended cost.</p></details>
+          <details><summary>What happens when credits finish?<span>+</span></summary><p>People can wait for renewal, buy a top-up or move to a larger plan. AI 360 will not silently create an overage bill for individuals.</p></details>
         </div>
       </section>
 

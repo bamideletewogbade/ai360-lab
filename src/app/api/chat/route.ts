@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server'
-import { isChatMode, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models'
+import { isChatMode, providerPreferences, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { citationSources, LIVE_INFORMATION_TOOLS } from '@/lib/live-tools'
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     return responseWithRequestId(limited, log.requestId)
   }
 
-  let body: { messages?: Msg[]; mode?: ChatMode }
+  let body: { messages?: Msg[]; mode?: ChatMode; sessionId?: string }
   try {
     body = await req.json()
   } catch {
@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
     .filter((message) => message && typeof message.content === 'string')
     .slice(-20)
   const mode: ChatMode = isChatMode(body.mode) ? body.mode : 'auto'
+  const sessionId = typeof body.sessionId === 'string' ? body.sessionId.slice(0, 256) : undefined
   const key = process.env.OPENROUTER_API_KEY
   const attachments = messages.flatMap((message) => message.attachments ?? [])
   log.info('chat.accepted', {
@@ -119,7 +120,10 @@ export async function POST(req: NextRequest) {
           return
         }
 
-        const { model, models } = routeFor(mode)
+        const hasVideo = messages.some((message) =>
+          message.attachments?.some((attachment) => attachment.kind === 'video'),
+        )
+        const { model, models } = routeFor(mode, { workload: 'chat', hasVideo })
         const hasPdf = messages.some((message) =>
           message.attachments?.some((attachment) => attachment.kind === 'pdf'),
         )
@@ -142,11 +146,12 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             model,
             models,
+            ...(sessionId ? { session_id: sessionId } : {}),
             messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages.map(toProviderMessage)],
             tools: LIVE_INFORMATION_TOOLS,
+            provider: providerPreferences('chat'),
             stream: true,
-            stream_options: { include_usage: true },
-            max_tokens: 2_500,
+            max_tokens: 2_000,
             ...(hasPdf
               ? { plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] }
               : {}),

@@ -5,8 +5,9 @@ import { BILLING_PLANS, findBillingPlan, planPrice } from '../src/lib/billing/ca
 test('the pilot catalog keeps a free entry point and prices paid access in Ghana cedis', () => {
   assert.equal(BILLING_PLANS[0]?.slug, 'explorer')
   assert.equal(BILLING_PLANS[0]?.monthlyPriceGhs, 0)
-  assert.equal(findBillingPlan('everyday')?.monthlyPriceGhs, 39)
-  assert.equal(planPrice(findBillingPlan('builder')!, 'annual'), 75)
+  assert.equal(BILLING_PLANS[0]?.includedCredits, 5)
+  assert.equal(findBillingPlan('everyday')?.monthlyPriceGhs, 125)
+  assert.equal(planPrice(findBillingPlan('builder')!, 'annual'), 250)
   assert.ok(BILLING_PLANS.every((plan) => plan.includedCredits > 0))
 })
 

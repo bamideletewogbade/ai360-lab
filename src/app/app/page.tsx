@@ -117,7 +117,20 @@ const MODE_META: Record<Experience, {
   },
 }
 
-const STATUS = ['Thinking', 'Exploring your question', 'Finding the clearest answer']
+const ACTIVITY_STATUS: Record<'chat' | 'agent', Array<{ label: string; detail: string }>> = {
+  chat: [
+    { label: 'Focused analysis', detail: 'Understanding what matters most' },
+    { label: 'Useful exploration', detail: 'Checking the strongest direction' },
+    { label: 'Clear synthesis', detail: 'Shaping an answer you can use' },
+    { label: 'Final polish', detail: 'Making every line easier to follow' },
+  ],
+  agent: [
+    { label: 'Focused planning', detail: 'Breaking the outcome into useful steps' },
+    { label: 'Live investigation', detail: 'Finding and checking relevant evidence' },
+    { label: 'Careful comparison', detail: 'Testing options against your goal' },
+    { label: 'Practical synthesis', detail: 'Preparing a complete deliverable' },
+  ],
+}
 
 function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -402,7 +415,7 @@ function LabWorkspace({
 
   useEffect(() => {
     if (!busy) return
-    const timer = window.setInterval(() => setStatusIndex((index) => (index + 1) % STATUS.length), 1800)
+    const timer = window.setInterval(() => setStatusIndex((index) => (index + 1) % ACTIVITY_STATUS.chat.length), 2100)
     return () => window.clearInterval(timer)
   }, [busy])
 
@@ -779,6 +792,7 @@ function LabWorkspace({
             attachments,
           })),
           mode,
+          sessionId: requestConversationId,
         }),
       })
       if (!res.ok) {
@@ -1092,7 +1106,14 @@ function LabWorkspace({
                     ) : message.agentSteps?.length ? (
                       <span className="agent-wait">The agent is working. You can continue browsing this conversation.</span>
                     ) : (
-                      <span className="thinking"><span className="thinking-spark">✦</span>{STATUS[statusIndex]}<i /><i /><i /></span>
+                      <span className="thinking">
+                        <span className="thinking-spark">✦</span>
+                        <span className="thinking-copy">
+                          <b>{ACTIVITY_STATUS.chat[statusIndex]?.label}</b>
+                          <small>{ACTIVITY_STATUS.chat[statusIndex]?.detail}</small>
+                        </span>
+                        <span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
+                      </span>
                     )}
                     {message.sources?.length ? (
                       <details className="source-drawer">
