@@ -62,6 +62,7 @@ export function LabLanding() {
         <div className="landing-links">
           <a href="#outcomes">What you can make</a>
           <a href="#how">Simple process</a>
+          <Link href="/pricing">Pricing</Link>
           <a href="https://aithreesixty.tech">AI 360 home</a>
         </div>
         <LandingAccountActions />
@@ -155,7 +156,7 @@ export function LabLanding() {
       <footer className="landing-footer">
         <Image src="/logo-black.png" width={146} height={36} alt="AI Three Sixty" />
         <p>AI 360 Lab <span>·</span> Intelligence that helps you finish the work.</p>
-        <div><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/app">Try AI 360</Link></div>
+        <div><Link href="/pricing">Pricing</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/app">Try AI 360</Link></div>
       </footer>
     </main>
   )

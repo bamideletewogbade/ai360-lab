@@ -1,6 +1,6 @@
 # AI 360 Lab implementation roadmap
 
-Last updated: 2026-08-01
+Last updated: 2026-08-03
 
 This is the living delivery checklist for shared AI 360 identity, organization-ready workspaces, durable projects, and bounded multi-agent execution. Update the checkboxes and status table as work is completed.
 
@@ -35,6 +35,9 @@ AI 360 Lab should help an individual or team move from an outcome to a reviewed 
 - [x] Local conversation persistence and signed-in conversation synchronization.
 - [x] Request logging, request IDs, size limits and basic rate limits.
 - [x] Production build and live-provider release-candidate test.
+- [x] Public Ghana-first pricing page and versioned pilot plan catalog.
+- [x] Provider-neutral payment, subscription, webhook and credit-ledger schema.
+- [x] Safe checkout boundary that remains closed until MojoPay is verified.
 - [ ] Production Clerk keys configured.
 - [ ] Production MySQL connection configured and migrated.
 - [ ] Studio projects synchronized across devices.
@@ -213,13 +216,29 @@ Why: subscriptions should be based on measured cost and reliable entitlements, n
 - [ ] Run the coordinator behind a feature flag with AI 360 staff first.
 - [ ] Pilot with a small set of learners and businesses.
 - [ ] Collect structured feedback at the end of completed projects.
-- [ ] Define free and paid limits using observed usage data.
-- [ ] Decide whether billing is individual, organization-based or hybrid.
-- [ ] Add plan and feature entitlements.
+- [x] Publish a proposed four-tier pilot catalog: Explorer, Everyday, Builder and Team.
+- [x] Select hybrid billing: personal subscriptions plus organization workspaces.
+- [x] Define a centralized plan and feature catalog in code.
+- [x] Define payment attempts, subscriptions, replay-safe webhook receipts and an append-only credit ledger.
+- [ ] Calibrate included credits and top-ups using observed provider cost and completion data.
+- [ ] Implement plan and feature entitlement checks at every paid server boundary.
 - [ ] Add credit reservations for expensive media jobs.
 - [ ] Reconcile reserved and actual provider cost after completion or failure.
 - [ ] Add spend caps at user, organization and application levels.
 - [ ] Publish clear retention, privacy, cancellation and refund rules before charging.
+
+### MojoPay activation gate
+
+Why: MojoPay is the preferred Ghana payment edge, but AI 360 must not invent a provider contract or activate access from a browser redirect.
+
+- [ ] Obtain sandbox and production merchant credentials directly from MojoPay.
+- [ ] Confirm Mobile Money networks, cards, settlement schedule, transaction fees and refund fees.
+- [ ] Confirm whether recurring MoMo uses wallet direct debit, standing approval or monthly customer authorization.
+- [ ] Obtain the canonical checkout endpoint, webhook signature scheme, retry behavior and event catalog.
+- [ ] Confirm idempotency support, provider reference uniqueness and status-query endpoint.
+- [ ] Test successful, abandoned, delayed, duplicate, reversed and refunded payments.
+- [ ] Activate an entitlement only after a verified server-to-server event or verified status query.
+- [ ] Keep Paystack or Flutterwave as a documented fallback adapter if MojoPay reliability or feature coverage fails the pilot gate.
 
 ## First implementation slice
 
@@ -254,6 +273,8 @@ Only after this passes should Studio persistence and the coordinator runtime be 
 | 2026-08-01 | Bounded coordinator selected | Better cost control, observability and evaluation than an immediate large swarm |
 | 2026-08-01 | First specialist team selected | Researcher, Strategist and Verifier cover evidence, decisions and quality control |
 | 2026-08-01 | Workspace ownership foundation implemented | Server-derived personal and organization keys now scope conversation persistence |
+| 2026-08-03 | Ghana-first hybrid pricing proposed | GH₵0 Explorer, GH₵39 Everyday, GH₵89 Builder and GH₵299 Team balance access with controlled variable cost |
+| 2026-08-03 | MojoPay selected behind an adapter | Mobile Money should lead checkout, while AI 360 retains provider-neutral billing and entitlement records |
 
 ## Definition of done
 

@@ -1,5 +1,6 @@
 import { isAuthConfigured } from '@/lib/auth'
 import { getMySqlPool, isDatabaseConfigured } from '@/lib/mysql'
+import { isPaymentProviderConfigured } from '@/lib/payments/contracts'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,9 @@ export async function GET(request: Request) {
       databaseConfigured,
       databaseStatus,
       usageLedgerConfigured: databaseConfigured,
+      billingEnabled: process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true',
+      paymentProvider: process.env.PAYMENTS_PROVIDER || null,
+      paymentProviderConfigured: isPaymentProviderConfigured(),
       environment: process.env.NODE_ENV,
       uptimeSeconds: Math.round(process.uptime()),
       requestId,
