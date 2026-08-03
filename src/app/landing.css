@@ -41,11 +41,10 @@
 .landing-links a:hover { color: var(--ai-black); }
 .landing-links a:hover::after { transform: scaleX(1); transform-origin: left; }
 .landing-account-actions { display: flex; align-items: center; gap: 12px; }
-.landing-sign-in, .landing-create-account { font-size: .68rem; font-weight: 750; }
+.landing-sign-in { font-size: .68rem; font-weight: 750; }
 .landing-sign-in { color: var(--institutional-grey) !important; }
 .landing-sign-in:hover { color: var(--ai-black) !important; }
-.landing-create-account { min-height: 42px; display: inline-flex; align-items: center; border: 1px solid rgba(86,89,92,.4); border-radius: 9px; padding: 0 14px; transition: border-color .2s, transform .25s var(--landing-ease); }
-.landing-create-account:hover { transform: translateY(-2px); border-color: var(--ai-black); }
+.landing-user { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; }
 .landing-open { display: inline-flex; min-height: 42px; align-items: center; gap: 18px; border: 1px solid var(--ai-black); border-radius: 9px; background: var(--ai-black); padding: 0 16px; color: var(--warm-white) !important; font-size: .68rem; font-weight: 750; transition: transform .25s var(--landing-ease), background .2s ease; }
 .landing-open:hover { transform: translateY(-2px); background: var(--deep-charcoal); }
 .landing-open span { font-size: .88rem; transition: transform .25s var(--landing-ease); }
@@ -233,7 +232,6 @@
   .landing-section-head { grid-template-columns: .7fr 1.3fr; }
   .landing-section-head > span { grid-column: 2; }
   .outcome-grid { grid-template-columns: repeat(2, 1fr); }
-  .landing-create-account { display: none; }
 }
 
 @media (max-width: 760px) {
@@ -278,7 +276,9 @@
 }
 
 @media (max-width: 430px) {
-  .landing-sign-in { display: none; }
+  .landing-logo span { display: none; }
+  .landing-account-actions { gap: 8px; }
+  .landing-sign-in { font-size: .62rem; }
   .landing-open { min-height: 38px; padding-inline: 12px; }
   .landing-open span { display: none; }
   .landing-hero { padding-top: 40px; }

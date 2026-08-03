@@ -3,8 +3,11 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Show, UserButton } from '@clerk/nextjs'
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { HeroVision } from '@/components/HeroVision'
+
+const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
 
 const STARTERS = [
   { mark: '01', label: 'Understand a topic', mode: 'chat', prompt: 'Teach me this topic in simple steps, then help me test what I understand: ' },
@@ -61,11 +64,7 @@ export function LabLanding() {
           <a href="#how">Simple process</a>
           <a href="https://aithreesixty.tech">AI 360 home</a>
         </div>
-        <div className="landing-account-actions">
-          <Link href="/sign-in" className="landing-sign-in">Sign in</Link>
-          <Link href="/sign-up" className="landing-create-account">Create account</Link>
-          <Link href="/app" className="landing-open">Open Lab <span aria-hidden="true">↗</span></Link>
-        </div>
+        <LandingAccountActions />
       </nav>
 
       <section className="landing-hero">
@@ -156,8 +155,32 @@ export function LabLanding() {
       <footer className="landing-footer">
         <Image src="/logo-black.png" width={146} height={36} alt="AI Three Sixty" />
         <p>AI 360 Lab <span>·</span> Intelligence that helps you finish the work.</p>
-        <div><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/app">Open Lab</Link></div>
+        <div><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/app">Try AI 360</Link></div>
       </footer>
     </main>
+  )
+}
+
+function LandingAccountActions() {
+  if (!AUTH_ENABLED) return <div className="landing-account-actions"><SignedOutLandingActions /></div>
+
+  return (
+    <div className="landing-account-actions">
+      <Show when="signed-in" fallback={<SignedOutLandingActions />}>
+        <span className="landing-user" aria-label="Your AI 360 account">
+          <UserButton appearance={{ elements: { avatarBox: { width: 34, height: 34 } } }} showName={false} />
+        </span>
+        <Link href="/app" className="landing-open">Open workspace <span aria-hidden="true">↗</span></Link>
+      </Show>
+    </div>
+  )
+}
+
+function SignedOutLandingActions() {
+  return (
+    <>
+      <Link href="/sign-in" className="landing-sign-in">Sign in</Link>
+      <Link href="/app" className="landing-open">Try AI 360 <span aria-hidden="true">↗</span></Link>
+    </>
   )
 }
