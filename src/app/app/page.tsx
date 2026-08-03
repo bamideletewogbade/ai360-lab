@@ -8,6 +8,7 @@ import { ResponseContent } from '@/components/ResponseContent'
 import { StudioWorkspace } from '@/components/StudioWorkspace'
 import { AccountControls } from '@/components/AccountControls'
 import { WorkspaceOnboarding, type OnboardingChoice } from '@/components/WorkspaceOnboarding'
+import { WorkspaceBoot } from '@/components/WorkspaceBoot'
 import { useAuth } from '@clerk/nextjs'
 import { scopedStorageKey } from '@/lib/workspace'
 
@@ -901,7 +902,7 @@ function LabWorkspace({
     else setInput(choice.prompt)
   }
 
-  if (!hydrated || !active) return <div className="boot"><span className="sparkle">✦</span></div>
+  if (!hydrated || !active) return <WorkspaceBoot authLoaded={authLoaded} signedIn={signedIn} />
 
   return (
     <div className="lab-shell">
@@ -929,8 +930,8 @@ function LabWorkspace({
           ))}
           {!visibleConversations.length && <p className="no-results">No conversations found.</p>}
         </nav>
-        <div className="side-foot">
-          <div className="privacy-dot">●</div>
+        <div className="side-foot" aria-live="polite">
+          <div className={`privacy-dot ${signedIn ? cloudStatus : 'local'}`}><span /></div>
           <div>
             <b>{signedIn ? 'Private workspace' : 'Saved on this device'}</b>
             <span>{signedIn

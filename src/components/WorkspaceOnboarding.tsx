@@ -9,10 +9,10 @@ export type OnboardingChoice = {
 
 const CHOICES: Array<OnboardingChoice & { mark: string; title: string; detail: string }> = [
   { mark: 'A', title: 'Get a quick answer', detail: 'Think, write, learn or solve an everyday task.', mode: 'chat', prompt: '' },
-  { mark: '⌕', title: 'Research a decision', detail: 'Investigate the web and return a sourced recommendation.', mode: 'agent', prompt: 'Research this and help me make a well-supported decision: ' },
-  { mark: '↗', title: 'Launch a campaign', detail: 'Build the strategy, messages and production assets.', mode: 'studio', prompt: 'I want to create a complete marketing launch campaign for: ' },
-  { mark: '◇', title: 'Build a business brand', detail: 'Shape the identity, voice and essential digital assets.', mode: 'studio', prompt: 'I want to build a practical brand and digital asset pack for: ' },
-  { mark: 'Aa', title: 'Create a deliverable', detail: 'Produce a proposal, plan, report or presentation.', mode: 'agent', prompt: 'Create a polished, ready-to-use deliverable for: ' },
+  { mark: '01', title: 'Learn or prepare', detail: 'Understand a topic, practise, study or prepare for an opportunity.', mode: 'chat', prompt: 'Help me learn or prepare for: ' },
+  { mark: '⌕', title: 'Research a decision', detail: 'Investigate current information and return a sourced recommendation.', mode: 'agent', prompt: 'Research this and help me make a well-supported decision: ' },
+  { mark: 'Aa', title: 'Create useful materials', detail: 'Produce a plan, report, proposal, presentation or public message.', mode: 'agent', prompt: 'Create a polished, ready-to-use deliverable for: ' },
+  { mark: '◇', title: 'Build a campaign or brand', detail: 'Shape the strategy, identity, messages and production assets.', mode: 'studio', prompt: 'I want to create a coordinated campaign or brand asset pack for: ' },
 ]
 
 export function WorkspaceOnboarding({ onChoose, onSkip }: { onChoose: (choice: OnboardingChoice) => void; onSkip: () => void }) {

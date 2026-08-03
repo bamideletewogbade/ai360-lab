@@ -35,17 +35,24 @@ const clerkAppearance = {
   variables: {
     colorPrimary: '#101112',
     colorBackground: '#ffffff',
-    colorText: '#101112',
-    colorTextSecondary: '#56595c',
-    colorInputBackground: '#ffffff',
-    colorInputText: '#101112',
+    colorForeground: '#101112',
+    colorMutedForeground: '#56595c',
+    colorInput: '#ffffff',
+    colorInputForeground: '#101112',
+    colorBorder: '#cfcdc5',
+    colorRing: '#101112',
     borderRadius: '0.75rem',
     fontFamily: 'var(--font-dm), sans-serif',
   },
   options: {
     logoImageUrl: '/icon-black.png',
+    animations: true,
+    autoFocus: true,
+    elevation: 'flush' as const,
     socialButtonsVariant: 'blockButton' as const,
     socialButtonsPlacement: 'top' as const,
+    privacyPageUrl: '/privacy',
+    termsPageUrl: '/terms',
   },
   elements: {
     rootBox: { width: '100%' },
@@ -53,9 +60,9 @@ const clerkAppearance = {
     card: { width: '100%', boxShadow: 'none', padding: 0 },
     header: { display: 'none' },
     footer: { display: 'none' },
-    formButtonPrimary: { boxShadow: 'none', minHeight: '44px', fontWeight: 700 },
-    socialButtonsBlockButton: { minHeight: '44px', boxShadow: 'none' },
-    formFieldInput: { minHeight: '44px', boxShadow: 'none' },
+    formButtonPrimary: { boxShadow: 'none', minHeight: '46px', fontWeight: 700, transition: 'transform 180ms ease, background 180ms ease' },
+    socialButtonsBlockButton: { minHeight: '46px', boxShadow: 'none', transition: 'transform 180ms ease, border-color 180ms ease' },
+    formFieldInput: { minHeight: '46px', boxShadow: 'none', transition: 'border-color 180ms ease, box-shadow 180ms ease' },
   },
 }
 
@@ -66,7 +73,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   )
 
   return (
-    <main className={styles.shell}>
+    <main className={`${styles.shell} ${mode === 'sign-in' ? styles.signIn : styles.signUp}`}>
       <Link href="/" className={styles.brand} aria-label="AI 360 Lab home">
         <Image src="/logo-black.png" width={180} height={44} alt="AI Three Sixty" priority />
         <span>LAB</span>
@@ -88,11 +95,22 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           <div className={styles.audiences} aria-label="Ways people use AI 360 Lab">
             <span>Learn</span><span>Work</span><span>Create</span><span>Organise</span><span>Serve</span>
           </div>
+
+          <div className={styles.continuityCard} aria-hidden="true">
+            <span className={styles.continuityMark}>AI</span>
+            <span><b>Your work is ready</b><small>Ideas, files and progress stay connected</small></span>
+            <i>Ready</i>
+          </div>
         </div>
       </section>
 
       <section className={styles.panel}>
         <div className={styles.panelInner}>
+          <div className={styles.journey} aria-label="Account setup progress">
+            <span className={styles.done}>Explore</span><i />
+            <span className={styles.current}>{mode === 'sign-in' ? 'Sign in' : 'Create account'}</span><i />
+            <span>Workspace</span>
+          </div>
           <p className={styles.eyebrow}>{content.eyebrow}</p>
           <h2>{mode === 'sign-in' ? 'Sign in to AI 360 Lab' : 'Create your AI 360 account'}</h2>
           <p className={styles.panelCopy}>

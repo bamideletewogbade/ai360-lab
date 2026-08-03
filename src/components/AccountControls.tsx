@@ -6,7 +6,11 @@ import { OrganizationSwitcher, Show, UserButton } from '@clerk/nextjs'
 const TEAM_WORKSPACES_ENABLED = process.env.NEXT_PUBLIC_AI360_TEAM_WORKSPACES === 'true'
 
 export function AccountControls({ enabled }: { enabled: boolean }) {
-  if (!enabled) return <span className="guest-badge" title="Authentication is not configured yet">Guest</span>
+  if (!enabled) return (
+    <Link href="/sign-in" className="guest-badge" title="Sign in to save your work across devices">
+      <span className="guest-status" /> Guest <b>Save work</b>
+    </Link>
+  )
 
   return (
     <div className="account-controls">
@@ -22,7 +26,10 @@ export function AccountControls({ enabled }: { enabled: boolean }) {
           />
         ) : null}
         <UserButton
-          appearance={{ elements: { avatarBox: { width: 32, height: 32 } } }}
+          appearance={{
+            options: { shimmer: true },
+            elements: { avatarBox: { width: 32, height: 32 }, userButtonTrigger: { transition: 'transform 180ms ease' } },
+          }}
           showName={false}
         />
       </Show>
@@ -34,7 +41,7 @@ function SignedOutControls() {
   return (
     <div className="signed-out-controls">
       <Link href="/sign-in" className="auth-sign-in">Sign in</Link>
-      <Link href="/sign-up" className="auth-sign-up">Create account</Link>
+      <Link href="/sign-up" className="auth-sign-up">Save your work</Link>
     </div>
   )
 }
