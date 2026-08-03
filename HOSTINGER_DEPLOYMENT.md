@@ -4,6 +4,10 @@ AI 360 Lab is a full Next.js application with server-side API routes. Deploy it
 as a **Node.js Web App** using Hostinger's **Next.js** framework preset. Do not
 deploy it as a static website.
 
+The public product page lives at `/`. The working environment lives at `/app`.
+Landing-page goals are carried into the correct Quick, Research or Create mode,
+and the installable PWA opens directly into `/app`.
+
 ## Requirements
 
 - Hostinger Business Web Hosting or a Cloud hosting plan
@@ -39,6 +43,15 @@ OPENROUTER_SITE_NAME=AI 360 Lab
 OPENROUTER_IMAGE_MODEL=openai/gpt-image-1-mini
 OPENROUTER_IMAGE_MODELS=openai/gpt-image-1-mini,google/gemini-3.1-flash-lite-image
 OPENROUTER_VIDEO_MODEL=google/veo-3.1-lite
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<Clerk production publishable key>
+CLERK_SECRET_KEY=<Clerk production secret key>
+CLERK_WEBHOOK_SIGNING_SECRET=<Clerk webhook signing secret>
+NEXT_PUBLIC_AI360_TEAM_WORKSPACES=false
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=<dedicated Lab database name from Hostinger>
+MYSQL_USER=<dedicated Lab database user>
+MYSQL_PASSWORD=<dedicated Lab database password>
 AI360_RATE_CHAT_PER_MINUTE=12
 AI360_RATE_CHAT_PER_DAY=80
 AI360_RATE_AGENT_PER_MINUTE=4
@@ -54,7 +67,58 @@ AI360_RATE_VOICE_PER_DAY=24
 ```
 
 Deploy the temporary Hostinger URL first. Open `/api/health` and confirm it
-returns `"status":"ok"` and `"aiConfigured":true`.
+returns `"status":"ok"`, `"aiConfigured":true`, `"authConfigured":true`,
+`"clerkWebhookConfigured":true`, `"usageLedgerConfigured":true` and
+`"databaseStatus":"connected"`.
+
+## Authentication and database setup
+
+Use the same Hostinger MySQL service as `aithreesixty.tech`, but create a
+separate logical database and database user for the Lab. This isolates the
+public product's user data and high-write chat traffic from the informational
+website.
+
+1. In hPanel, open **Databases > Management** for `aithreesixty.tech`.
+2. Create a database for the Lab and a dedicated user with access only to that
+   database. Hostinger may prefix both names with your account identifier.
+3. Prefer setting the MySQL variables locally and running `npm run db:migrate`.
+   This creates the current schema and safely upgrades an earlier Lab schema.
+   Import `database/schema.sql` directly only for a completely empty database.
+4. Add the five `MYSQL_*` values above to the Lab web app's Environment
+   Variables. On Hostinger managed hosting, the application host is normally
+   `localhost`.
+5. Reuse the existing AI 360 Clerk application so learners have one identity
+   across the informational site and Lab. In Clerk Organizations settings, use
+   optional membership, disable automatic first-Organization creation, and keep
+   public Organization creation disabled during the pilot.
+6. Allow `lab.aithreesixty.tech` in the Clerk production domain settings, add
+   the same production keys to Hostinger, redeploy, then test account creation,
+   sign-in, sign-out and conversation sync in two browsers.
+7. Leave `NEXT_PUBLIC_AI360_TEAM_WORKSPACES=false` until personal/team tenant
+   isolation has passed in production. Set it to `true` and redeploy to expose
+   the Organization switcher for the controlled team-workspace pilot.
+
+### Clerk lifecycle webhook
+
+The webhook keeps the Lab's local user, workspace and membership records aligned
+with Clerk. Clerk remains the authority for live access decisions; MySQL stores
+the durable application record needed by projects, usage and future billing.
+
+1. In the Clerk production instance, create an endpoint at
+   `https://lab.aithreesixty.tech/api/webhooks/clerk`.
+2. Subscribe to `user.created`, `user.updated`, `user.deleted`,
+   `organization.created`, `organization.updated`, `organization.deleted`,
+   `organizationMembership.created`, `organizationMembership.updated` and
+   `organizationMembership.deleted`.
+3. Copy the endpoint signing secret into Hostinger as
+   `CLERK_WEBHOOK_SIGNING_SECRET`, then redeploy.
+4. Send a Clerk test event and confirm Runtime logs contain
+   `clerk.webhook.processed`. Replayed event IDs are accepted but ignored, so a
+   provider retry cannot duplicate a lifecycle change.
+
+Guest access remains available. Guests save chats in their browser; signed-in
+users gain private cross-device sync. AI routes are intentionally not hard-gated
+yet, so enabling authentication cannot interrupt a class already in progress.
 
 ## Connect the subdomain
 

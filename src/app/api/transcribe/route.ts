@@ -1,5 +1,6 @@
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
+import { recordUsageEventSafe } from '@/lib/usage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -47,6 +48,19 @@ export async function POST(request: Request) {
     })
   }
 
+  // Browser recordings arrive as data URLs, while OpenRouter expects only the
+  // raw base64 payload inside input_audio.data.
+  const audioData = data.startsWith('data:')
+    ? data.slice(data.indexOf(',') + 1)
+    : data
+  if (!audioData || !/^[A-Za-z0-9+/=_-]+$/.test(audioData)) {
+    log.finish(400, { outcome: 'invalid_audio_data', format })
+    return Response.json({ error: 'The recording data is invalid', requestId: log.requestId }, {
+      status: 400,
+      headers: log.headers(),
+    })
+  }
+
   const key = process.env.OPENROUTER_API_KEY
   if (!key) {
     log.finish(503, { outcome: 'not_configured' })
@@ -64,7 +78,7 @@ export async function POST(request: Request) {
       feature: 'transcription',
       model,
       format,
-      encodedBytes: data.length,
+      encodedBytes: audioData.length,
     })
     const response = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
       method: 'POST',
@@ -77,7 +91,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model,
-        input_audio: { data, format },
+        input_audio: { data: audioData, format },
         temperature: 0,
       }),
     })
@@ -91,17 +105,29 @@ export async function POST(request: Request) {
         ...failure,
       })
       log.finish(502, { outcome: 'provider_error', providerStatus: response.status })
+      await recordUsageEventSafe({
+        requestId: log.requestId, route: '/api/transcribe', feature: 'transcription',
+        provider: 'openrouter', model, latencyMs: Math.round(performance.now() - providerStartedAt),
+        outcome: 'provider_error', metadata: { providerStatus: response.status, format },
+      })
       return Response.json({
         error: 'The recording could not be transcribed',
         requestId: log.requestId,
       }, { status: 502, headers: log.headers() })
     }
     const result = await response.json()
+    const latencyMs = Math.round(performance.now() - providerStartedAt)
+    await recordUsageEventSafe({
+      requestId: log.requestId, route: '/api/transcribe', feature: 'transcription',
+      provider: 'openrouter', model, inputTokens: result.usage?.prompt_tokens,
+      outputTokens: result.usage?.completion_tokens, actualCostUsd: result.usage?.cost,
+      latencyMs, outcome: 'success', metadata: { format },
+    })
     log.finish(200, {
       outcome: 'success',
       provider: 'openrouter',
       model,
-      durationMs: Math.round(performance.now() - providerStartedAt),
+      durationMs: latencyMs,
       outputCharacters: typeof result.text === 'string' ? result.text.length : 0,
       totalTokens: result.usage?.total_tokens,
       cost: result.usage?.cost,

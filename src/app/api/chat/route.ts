@@ -3,6 +3,7 @@ import { isChatMode, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { citationSources, LIVE_INFORMATION_TOOLS } from '@/lib/live-tools'
+import { recordUsageEventSafe } from '@/lib/usage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -161,6 +162,11 @@ export async function POST(req: NextRequest) {
             ...failure,
           })
           log.finish(502, { outcome: 'provider_error', providerStatus: res.status })
+          await recordUsageEventSafe({
+            requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter', model,
+            latencyMs: Math.round(performance.now() - providerStartedAt), outcome: 'provider_error',
+            metadata: { providerStatus: res.status, mode, attachmentCount: attachments.length },
+          })
           controller.enqueue(
             encoder.encode(`The Lab could not reach its AI provider. Please try again. Reference: ${log.requestId}`),
           )
@@ -209,6 +215,16 @@ export async function POST(req: NextRequest) {
             const data = trimmed.slice(5).trim()
             if (data === '[DONE]') {
               appendLiveSources()
+              await recordUsageEventSafe({
+                requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter', model,
+                inputTokens: usage?.prompt_tokens, outputTokens: usage?.completion_tokens,
+                actualCostUsd: usage?.cost, latencyMs: Math.round(performance.now() - providerStartedAt),
+                outcome: 'success', metadata: {
+                  mode, liveWebUsed: sources.size > 0, sourceCount: sources.size,
+                  webSearchRequests: usage?.server_tool_use?.web_search_requests || 0,
+                  attachmentCount: attachments.length,
+                },
+              })
               log.finish(200, {
                 outcome: 'success',
                 provider: 'openrouter',
@@ -246,6 +262,12 @@ export async function POST(req: NextRequest) {
           }
         }
         appendLiveSources()
+        await recordUsageEventSafe({
+          requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter', model,
+          inputTokens: usage?.prompt_tokens, outputTokens: usage?.completion_tokens,
+          actualCostUsd: usage?.cost, latencyMs: Math.round(performance.now() - providerStartedAt),
+          outcome: 'success_without_done_event', metadata: { mode, sourceCount: sources.size, attachmentCount: attachments.length },
+        })
         log.finish(200, {
           outcome: 'success_without_done_event',
           provider: 'openrouter',

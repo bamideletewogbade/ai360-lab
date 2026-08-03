@@ -1,6 +1,7 @@
 import { isChatMode, routeFor, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
+import { recordUsageEventSafe } from '@/lib/usage'
 import { citationSources, RESEARCH_TOOLS } from '@/lib/live-tools'
 
 export const runtime = 'nodejs'
@@ -236,6 +237,11 @@ export async function POST(request: Request) {
             durationMs: Math.round(performance.now() - providerStartedAt),
             ...failure,
           })
+          await recordUsageEventSafe({
+            requestId: log.requestId, route: '/api/agent', feature: 'agent',
+            provider: 'openrouter', model, latencyMs: Math.round(performance.now() - providerStartedAt),
+            outcome: 'provider_error', metadata: { providerStatus: response.status },
+          })
           throw new Error(`Agent provider request failed with status ${response.status}`)
         }
         log.info('provider.request.completed', {
@@ -263,6 +269,12 @@ export async function POST(request: Request) {
             totalTokens: json.usage?.total_tokens,
             cost: json.usage?.cost,
           },
+        })
+        await recordUsageEventSafe({
+          requestId: log.requestId, route: '/api/agent', feature: 'agent', provider: 'openrouter', model,
+          inputTokens: json.usage?.prompt_tokens, outputTokens: json.usage?.completion_tokens,
+          actualCostUsd: json.usage?.cost, latencyMs: Math.round(performance.now() - providerStartedAt),
+          outcome: 'success', metadata: { sourceCount: sources.length, attachmentCount: attachments.length },
         })
         log.finish(200, {
           outcome: 'success',

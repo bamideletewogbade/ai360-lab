@@ -1,0 +1,129 @@
+import Image from 'next/image'
+import Link from 'next/link'
+import { SignIn, SignUp } from '@clerk/nextjs'
+import styles from '@/app/auth.module.css'
+
+type AuthMode = 'sign-in' | 'sign-up'
+
+const CONTENT: Record<AuthMode, {
+  eyebrow: string
+  title: string
+  copy: string
+  alternate: string
+  alternateHref: string
+  alternateAction: string
+}> = {
+  'sign-in': {
+    eyebrow: 'Welcome back',
+    title: 'Pick up where you left off.',
+    copy: 'Return to your conversations, projects and finished work from any device.',
+    alternate: 'New to AI 360 Lab?',
+    alternateHref: '/sign-up',
+    alternateAction: 'Create a free account',
+  },
+  'sign-up': {
+    eyebrow: 'Your workspace',
+    title: 'Keep the work you create.',
+    copy: 'Create an account to save your progress and continue your work whenever you are ready.',
+    alternate: 'Already have an account?',
+    alternateHref: '/sign-in',
+    alternateAction: 'Sign in',
+  },
+}
+
+const clerkAppearance = {
+  variables: {
+    colorPrimary: '#101112',
+    colorBackground: '#ffffff',
+    colorText: '#101112',
+    colorTextSecondary: '#56595c',
+    colorInputBackground: '#ffffff',
+    colorInputText: '#101112',
+    borderRadius: '0.75rem',
+    fontFamily: 'var(--font-dm), sans-serif',
+  },
+  options: {
+    logoImageUrl: '/icon-black.png',
+    socialButtonsVariant: 'blockButton' as const,
+    socialButtonsPlacement: 'top' as const,
+  },
+  elements: {
+    rootBox: { width: '100%' },
+    cardBox: { width: '100%', boxShadow: 'none' },
+    card: { width: '100%', boxShadow: 'none', padding: 0 },
+    header: { display: 'none' },
+    footer: { display: 'none' },
+    formButtonPrimary: { boxShadow: 'none', minHeight: '44px', fontWeight: 700 },
+    socialButtonsBlockButton: { minHeight: '44px', boxShadow: 'none' },
+    formFieldInput: { minHeight: '44px', boxShadow: 'none' },
+  },
+}
+
+export function AuthPage({ mode }: { mode: AuthMode }) {
+  const content = CONTENT[mode]
+  const authConfigured = Boolean(
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY,
+  )
+
+  return (
+    <main className={styles.shell}>
+      <Link href="/" className={styles.brand} aria-label="AI 360 Lab home">
+        <Image src="/logo-black.png" width={180} height={44} alt="AI Three Sixty" priority />
+        <span>LAB</span>
+      </Link>
+
+      <section className={styles.story}>
+        <div className={styles.orbit} aria-hidden="true"><i /><i /><i /></div>
+        <div className={styles.storyContent}>
+          <p className={styles.kicker}><span>✦</span> One place to move forward</p>
+          <h1>{content.title}</h1>
+          <p className={styles.lead}>{content.copy}</p>
+
+          <div className={styles.benefits}>
+            <article><span>01</span><div><b>Save your progress</b><small>Keep conversations, projects and useful files together.</small></div></article>
+            <article><span>02</span><div><b>Continue anywhere</b><small>Move between your phone and computer without starting again.</small></div></article>
+            <article><span>03</span><div><b>Make it yours</b><small>Build a workspace around what you want to learn or accomplish.</small></div></article>
+          </div>
+
+          <div className={styles.audiences} aria-label="Ways people use AI 360 Lab">
+            <span>Learn</span><span>Work</span><span>Create</span><span>Organise</span><span>Serve</span>
+          </div>
+        </div>
+      </section>
+
+      <section className={styles.panel}>
+        <div className={styles.panelInner}>
+          <p className={styles.eyebrow}>{content.eyebrow}</p>
+          <h2>{mode === 'sign-in' ? 'Sign in to AI 360 Lab' : 'Create your AI 360 account'}</h2>
+          <p className={styles.panelCopy}>
+            {mode === 'sign-in'
+              ? 'Use the same account you use across AI 360.'
+              : 'Start free. You can explore before deciding what to save.'}
+          </p>
+
+          <div className={styles.formFrame}>
+            {authConfigured ? (
+              mode === 'sign-in' ? (
+                <SignIn appearance={clerkAppearance} signUpUrl="/sign-up" fallbackRedirectUrl="/app" />
+              ) : (
+                <SignUp appearance={clerkAppearance} signInUrl="/sign-in" fallbackRedirectUrl="/app" />
+              )
+            ) : (
+              <div className={styles.setupNotice} role="status">
+                <span>✦</span>
+                <b>Account access is being connected</b>
+                <p>You can still explore the Lab as a guest. Sign-in will appear here once the secure account service is enabled.</p>
+                <Link href="/app">Continue as a guest</Link>
+              </div>
+            )}
+          </div>
+
+          <p className={styles.alternate}>
+            {content.alternate} <Link href={content.alternateHref}>{content.alternateAction}</Link>
+          </p>
+          <p className={styles.legal}>By continuing, you agree to our <Link href="/terms">Terms</Link> and acknowledge our <Link href="/privacy">Privacy notice</Link>.</p>
+        </div>
+      </section>
+    </main>
+  )
+}

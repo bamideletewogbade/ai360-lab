@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ResponseContent } from '@/components/ResponseContent'
+import { mergeProjects, setProjectArchived, sortProjects, upsertProject } from '@/lib/studio-projects'
+import { scopedStorageKey } from '@/lib/workspace'
 
 type BrandFile = {
   name: string
@@ -59,6 +61,7 @@ type StudioProject = {
   campaign: Campaign
   assets: StudioAsset[]
   sources?: Array<{ title: string; url: string }>
+  archivedAt?: number
 }
 
 type GeneratedMedia = {
@@ -87,7 +90,13 @@ type BuildAgent = {
   handoff: string
 }
 
-const STORAGE_KEY = 'ai360-studio-project-v1'
+type StudioView = 'dashboard' | 'intake' | 'project'
+type SaveState = 'local' | 'saving' | 'saved' | 'unavailable'
+
+const STORAGE_KEY = 'ai360-studio-projects-v2'
+const LEGACY_STORAGE_KEY = 'ai360-studio-project-v1'
+const VIEW_KEY = 'ai360-studio-view-v2'
+const IMPORT_ACK_KEY = 'ai360-studio-guest-import-v1'
 const CHANNELS = ['WhatsApp', 'Instagram', 'Facebook', 'TikTok', 'SMS', 'Email', 'Google Business', 'Print']
 const GOALS = [
   'Launch a new business',
@@ -96,6 +105,12 @@ const GOALS = [
   'Increase enquiries and sales',
   'Build online visibility',
   'Run a 30-day campaign',
+]
+const QUICK_STARTS = [
+  { mark: '01', title: 'Launch a business', note: 'Brand foundation, launch campaign and practical sales assets.', goal: 'Launch a new business' },
+  { mark: '02', title: 'Promote an offer', note: 'Turn one product or service into a coordinated conversion campaign.', goal: 'Promote a product or service' },
+  { mark: '03', title: 'Fill an event', note: 'Create the message, promotion plan and event-ready content pack.', goal: 'Announce an event' },
+  { mark: '04', title: 'Plan 30 days', note: 'Build a focused month of content with one consistent direction.', goal: 'Run a 30-day campaign' },
 ]
 const ASSET_ICONS: Record<StudioAsset['type'], string> = {
   strategy: '01',
@@ -162,6 +177,10 @@ const BUILD_AGENTS: BuildAgent[] = [
 
 function requestId() {
   return crypto.randomUUID()
+}
+
+function eventTimestamp() {
+  return Date.now()
 }
 
 function normalizeHex(value: string) {
@@ -295,11 +314,25 @@ function StudioBuildRoom({
   )
 }
 
-export function StudioWorkspace() {
+export function StudioWorkspace({
+  initialBrief = '',
+  signedIn = false,
+  workspaceScope = 'guest',
+}: {
+  initialBrief?: string
+  signedIn?: boolean
+  workspaceScope?: string
+}) {
   const [hydrated, setHydrated] = useState(false)
   const [intake, setIntake] = useState<Intake>(EMPTY_INTAKE)
   const [brandFile, setBrandFile] = useState<BrandFile | null>(null)
   const [project, setProject] = useState<StudioProject | null>(null)
+  const [projects, setProjects] = useState<StudioProject[]>([])
+  const [view, setView] = useState<StudioView>('dashboard')
+  const [cloudReady, setCloudReady] = useState(false)
+  const [saveState, setSaveState] = useState<SaveState>('local')
+  const [guestProjects, setGuestProjects] = useState<StudioProject[]>([])
+  const [importBusy, setImportBusy] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState('')
@@ -316,33 +349,126 @@ export function StudioWorkspace() {
   const [buildElapsed, setBuildElapsed] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
   const mainRef = useRef<HTMLElement>(null)
+  const loadedWorkspaceRef = useRef('')
+  const projectStorageKey = scopedStorageKey(STORAGE_KEY, workspaceScope)
+  const viewStorageKey = scopedStorageKey(VIEW_KEY, workspaceScope)
+  const importAckKey = scopedStorageKey(IMPORT_ACK_KEY, workspaceScope)
 
   useEffect(() => {
     let mounted = true
     queueMicrotask(() => {
       if (!mounted) return
       try {
-        const saved = localStorage.getItem(STORAGE_KEY)
-        if (saved) setProject(JSON.parse(saved) as StudioProject)
+        const saved = localStorage.getItem(projectStorageKey)
+        let loaded = saved ? JSON.parse(saved) as StudioProject[] : []
+        if (!saved && workspaceScope === 'guest') {
+          const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+          if (legacy) {
+            loaded = [JSON.parse(legacy) as StudioProject]
+            localStorage.removeItem(LEGACY_STORAGE_KEY)
+          }
+        }
+        loaded = sortProjects(loaded)
+        setProjects(loaded)
+        setGuestProjects([])
+        if (signedIn && !localStorage.getItem(importAckKey)) {
+          const guestSaved = localStorage.getItem(STORAGE_KEY)
+          const candidates = guestSaved ? JSON.parse(guestSaved) as StudioProject[] : []
+          setGuestProjects(candidates.filter((item) => !item.archivedAt))
+        }
+        const savedView = localStorage.getItem(viewStorageKey) as StudioView | null
+        if (initialBrief.trim()) {
+          setIntake((current) => ({ ...current, notes: initialBrief.trim() }))
+          setView('intake')
+          setProject(null)
+        } else if (savedView === 'project' && loaded[0]) {
+          setProject(loaded[0])
+          setView('project')
+        } else {
+          setProject(null)
+          setView(savedView === 'intake' ? 'intake' : 'dashboard')
+        }
       } catch {
         // A damaged local project should not prevent Studio from opening.
+        setProjects([])
+        setProject(null)
+        setView(initialBrief.trim() ? 'intake' : 'dashboard')
       }
+      loadedWorkspaceRef.current = workspaceScope
+      setCloudReady(false)
+      setSaveState(signedIn ? 'saving' : 'local')
       setHydrated(true)
     })
     return () => {
       mounted = false
     }
-  }, [])
+  }, [importAckKey, initialBrief, projectStorageKey, signedIn, viewStorageKey, workspaceScope])
 
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated || loadedWorkspaceRef.current !== workspaceScope) return
     try {
-      if (project) localStorage.setItem(STORAGE_KEY, JSON.stringify(project))
-      else localStorage.removeItem(STORAGE_KEY)
+      localStorage.setItem(projectStorageKey, JSON.stringify(projects))
+      localStorage.setItem(viewStorageKey, view)
     } catch {
-      console.warn('[AI360] Studio project could not be saved locally.')
+      console.warn('[AI360] Studio projects could not be saved locally.')
     }
-  }, [hydrated, project])
+  }, [hydrated, projectStorageKey, projects, view, viewStorageKey, workspaceScope])
+
+  useEffect(() => {
+    if (!project || loadedWorkspaceRef.current !== workspaceScope) return
+    setProjects((current) => upsertProject(current, project))
+  }, [project, workspaceScope])
+
+  useEffect(() => {
+    if (!hydrated || !signedIn || loadedWorkspaceRef.current !== workspaceScope) {
+      setCloudReady(false)
+      return
+    }
+    let cancelled = false
+    setSaveState('saving')
+    fetch('/api/projects')
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error?.message || 'Cloud projects are unavailable.')
+        return (data.projects || []) as StudioProject[]
+      })
+      .then((cloudProjects) => {
+        if (cancelled) return
+        setProjects((localProjects) => mergeProjects(cloudProjects, localProjects))
+        setProject((current) => {
+          if (!current) return current
+          const cloudCopy = cloudProjects.find((item) => item.id === current.id)
+          return cloudCopy && cloudCopy.updatedAt > current.updatedAt ? cloudCopy : current
+        })
+        setCloudReady(true)
+        setSaveState('saved')
+      })
+      .catch(() => {
+        if (!cancelled) setSaveState('unavailable')
+      })
+    return () => { cancelled = true }
+  }, [hydrated, signedIn, workspaceScope])
+
+  useEffect(() => {
+    if (!project || !signedIn || !cloudReady || loadedWorkspaceRef.current !== workspaceScope) return
+    setSaveState('saving')
+    const timer = window.setTimeout(() => {
+      fetch('/api/projects', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId() },
+        body: JSON.stringify(project),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}))
+            throw new Error(data.error?.message || 'Cloud save failed.')
+          }
+          setSaveState('saved')
+        })
+        .catch(() => setSaveState('unavailable'))
+    }, 900)
+    return () => window.clearTimeout(timer)
+  }, [cloudReady, project, signedIn, workspaceScope])
 
   useEffect(() => {
     if (!buildingProject || buildComplete) return
@@ -446,8 +572,8 @@ export function StudioWorkspace() {
       }
       const next: StudioProject = {
         id: requestId(),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+        createdAt: eventTimestamp(),
+        updatedAt: eventTimestamp(),
         intake,
         brand: result.brand,
         campaign: result.campaign,
@@ -459,6 +585,7 @@ export function StudioWorkspace() {
         })),
       }
       setProject(next)
+      setView('project')
       setExpandedId(next.assets[0]?.id || '')
       setBrandFile(null)
       requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
@@ -475,7 +602,7 @@ export function StudioWorkspace() {
     setProject((current) => current
       ? {
           ...current,
-          updatedAt: Date.now(),
+          updatedAt: eventTimestamp(),
           assets: current.assets.map((asset) => asset.id === id ? { ...asset, ...updates } : asset),
         }
       : current)
@@ -753,10 +880,70 @@ export function StudioWorkspace() {
     link.remove()
   }
 
-  function newProject() {
-    if (project && !window.confirm('Start a new Studio project? Your current local project will be replaced.')) return
+  async function changeProjectLifecycle(target: StudioProject, action: 'archive' | 'restore') {
+    setError('')
+    if (signedIn) {
+      const id = requestId()
+      try {
+        const response = await fetch('/api/projects', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
+          body: JSON.stringify({ id: target.id, action }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          const reference = data.requestId || response.headers.get('X-Request-Id') || id
+          throw new Error(`${data.error?.message || 'The project could not be updated.'} Reference: ${reference}`)
+        }
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'The project could not be updated.')
+        return
+      }
+    }
+
+    const archivedAt = action === 'archive' ? eventTimestamp() : undefined
+    setProjects((current) => setProjectArchived(current, target.id, archivedAt))
+    if (action === 'archive' && project?.id === target.id) openDashboard()
+  }
+
+  async function importGuestWork() {
+    if (!guestProjects.length || importBusy) return
+    setImportBusy(true)
+    setError('')
+    try {
+      for (const guestProject of guestProjects) {
+        const id = requestId()
+        const response = await fetch('/api/projects', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
+          body: JSON.stringify(guestProject),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          const reference = data.requestId || response.headers.get('X-Request-Id') || id
+          throw new Error(`${data.error?.message || 'Guest projects could not be imported.'} Reference: ${reference}`)
+        }
+      }
+      setProjects((current) => mergeProjects(current, guestProjects))
+      localStorage.setItem(importAckKey, new Date().toISOString())
+      setGuestProjects([])
+      setSaveState('saved')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Guest projects could not be imported.')
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
+  function dismissGuestImport() {
+    localStorage.setItem(importAckKey, new Date().toISOString())
+    setGuestProjects([])
+  }
+
+  function beginProject(goal = '') {
     setProject(null)
-    setIntake(EMPTY_INTAKE)
+    setView('intake')
+    setIntake({ ...EMPTY_INTAKE, goal })
     setBrandFile(null)
     setExpandedId('')
     setEditingId('')
@@ -765,8 +952,125 @@ export function StudioWorkspace() {
     requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
   }
 
+  function openProject(next: StudioProject) {
+    setProject(next)
+    setView('project')
+    setExpandedId(next.assets[0]?.id || '')
+    setError('')
+    requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
+  }
+
+  function openDashboard() {
+    setProject(null)
+    setView('dashboard')
+    setExpandedId('')
+    setError('')
+    requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
+  }
+
   if (!hydrated) {
     return <main className="studio-main" ref={mainRef}><div className="studio-loading">Opening Studio…</div></main>
+  }
+
+  if (view === 'dashboard') {
+    const activeProjects = projects.filter((item) => !item.archivedAt)
+    const archivedProjects = projects.filter((item) => item.archivedAt)
+    const featured = activeProjects[0]
+    const remaining = activeProjects.slice(featured ? 1 : 0)
+    return (
+      <main className="studio-main" ref={mainRef}>
+        <div className="studio-dashboard">
+          <header className="studio-dashboard-head">
+            <div>
+              <span className="studio-kicker">AI 360 Studio · Project home</span>
+              <h1>Your work,<br />moving forward.</h1>
+              <p>Turn a business goal into a coordinated campaign, then return to improve, approve and produce each asset.</p>
+            </div>
+            <div className="studio-dashboard-actions">
+              <span className={`studio-save-state ${saveState}`}>
+                <i />
+                {signedIn
+                  ? saveState === 'saving' ? 'Saving securely' : saveState === 'saved' ? 'Saved securely' : saveState === 'unavailable' ? 'Saved on this device' : 'Cloud ready'
+                  : 'Saved on this device'}
+              </span>
+              <button onClick={() => beginProject()}>New project <span>+</span></button>
+            </div>
+          </header>
+
+          {error ? <div className="studio-error dashboard-error">{error}</div> : null}
+
+          {guestProjects.length ? (
+            <section className="studio-import-banner">
+              <span className="import-mark">↥</span>
+              <span>
+                <b>Bring your guest work into this account</b>
+                <small>{guestProjects.length} project{guestProjects.length === 1 ? '' : 's'} from this device can be copied into your secure workspace.</small>
+              </span>
+              <span className="import-actions">
+                <button onClick={dismissGuestImport}>Not now</button>
+                <button className="import-primary" onClick={importGuestWork} disabled={importBusy}>{importBusy ? 'Importing…' : 'Import projects'}</button>
+              </span>
+            </section>
+          ) : null}
+
+          {featured ? (
+            <section className="studio-continue" aria-labelledby="continue-project-title">
+              <div className="continue-copy">
+                <span className="continue-label"><i /> Continue where you left off</span>
+                <h2 id="continue-project-title">{featured.campaign.name}</h2>
+                <p>{featured.intake.businessName} · {featured.campaign.objective}</p>
+                <button onClick={() => openProject(featured)}>Open project <span>→</span></button>
+              </div>
+              <ProjectPulse project={featured} />
+            </section>
+          ) : (
+            <section className="studio-empty-projects">
+              <span className="empty-orbit"><i>AI</i><i>✦</i></span>
+              <div>
+                <span className="studio-kicker">Your first outcome starts here</span>
+                <h2>Bring the goal. Studio assembles the team.</h2>
+                <p>One guided brief becomes a brand direction, campaign plan and eight editable assets.</p>
+              </div>
+              <button onClick={() => beginProject()}>Build my first project <span>→</span></button>
+            </section>
+          )}
+
+          <section className="studio-project-library">
+            <div className="studio-section-head">
+              <span><b>{remaining.length ? 'More projects' : 'Start with an outcome'}</b><small>{remaining.length ? 'Everything stays organized by business and campaign.' : 'Choose a route. You can change every detail in the brief.'}</small></span>
+              {remaining.length ? <span>{activeProjects.length} active</span> : null}
+            </div>
+            {remaining.length ? (
+              <div className="studio-project-grid">
+                {remaining.map((item) => <ProjectCard project={item} onOpen={() => openProject(item)} key={item.id} />)}
+                <button className="studio-project-new-card" onClick={() => beginProject()}>
+                  <span>+</span><b>Start another project</b><small>Build a fresh campaign pack</small>
+                </button>
+              </div>
+            ) : (
+              <div className="studio-quick-grid">
+                {QUICK_STARTS.map((start) => (
+                  <button onClick={() => beginProject(start.goal)} key={start.title}>
+                    <span>{start.mark}</span><b>{start.title}</b><small>{start.note}</small><i>↗</i>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {archivedProjects.length ? (
+            <details className="studio-archive">
+              <summary><span><b>Archived projects</b><small>Out of the way, never lost.</small></span><span>{archivedProjects.length} <i>+</i></span></summary>
+              <div className="studio-project-grid">
+                {archivedProjects.map((item) => (
+                  <ProjectCard project={item} onOpen={() => changeProjectLifecycle(item, 'restore')} archived key={item.id} />
+                ))}
+              </div>
+            </details>
+          ) : null}
+        </div>
+      </main>
+    )
   }
 
   if (!project && buildingProject) {
@@ -798,6 +1102,7 @@ export function StudioWorkspace() {
       <main className="studio-main" ref={mainRef}>
         <div className="studio-intake">
           <section className="studio-intro">
+            <button className="studio-back" onClick={openDashboard}>← Project home</button>
             <span className="studio-kicker">AI 360 Studio · Guided project</span>
             <h1>Build a complete<br />marketing launch pack.</h1>
             <p>
@@ -908,9 +1213,11 @@ export function StudioWorkspace() {
             <p>{project.intake.businessName} · Updated {new Date(project.updatedAt).toLocaleDateString()}</p>
           </div>
           <div className="project-head-actions">
+            <button onClick={openDashboard}>All projects</button>
             <button onClick={() => exportPack('pdf')} disabled={Boolean(exporting)}>{exporting === 'pdf' ? 'Creating…' : 'Export PDF'}</button>
             <button onClick={() => exportPack('docx')} disabled={Boolean(exporting)}>{exporting === 'docx' ? 'Creating…' : 'Export Word'}</button>
-            <button className="project-new" onClick={newProject}>New project</button>
+            <button onClick={() => changeProjectLifecycle(project, 'archive')}>Archive</button>
+            <button className="project-new" onClick={() => beginProject()}>New project</button>
           </div>
         </header>
 
@@ -1124,6 +1431,53 @@ export function StudioWorkspace() {
         </div>
       ) : null}
     </main>
+  )
+}
+
+function projectCompletion(project: StudioProject) {
+  const approved = project.assets.filter((asset) => asset.status === 'approved').length
+  return {
+    approved,
+    total: project.assets.length,
+    percent: project.assets.length ? Math.round((approved / project.assets.length) * 100) : 0,
+  }
+}
+
+function ProjectPulse({ project }: { project: StudioProject }) {
+  const completion = projectCompletion(project)
+  const milestones = [
+    { label: 'Brief', complete: true },
+    { label: 'Brand', complete: true },
+    { label: 'Campaign', complete: true },
+    { label: 'Assets', complete: completion.percent === 100, active: completion.percent < 100 },
+  ]
+  return (
+    <div className="project-pulse">
+      <div className="pulse-score">
+        <span>{completion.percent}%</span>
+        <small>{completion.approved} of {completion.total} approved</small>
+      </div>
+      <div className="pulse-track" aria-label={`${completion.percent}% of assets approved`}>
+        {milestones.map((milestone, index) => (
+          <span className={`${milestone.complete ? 'complete' : ''}${milestone.active ? ' active' : ''}`} key={milestone.label}>
+            <i>{milestone.complete ? '✓' : String(index + 1).padStart(2, '0')}</i>
+            <b>{milestone.label}</b>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ProjectCard({ project, onOpen, archived = false }: { project: StudioProject; onOpen: () => void; archived?: boolean }) {
+  const completion = projectCompletion(project)
+  return (
+    <button className={`studio-project-card${archived ? ' archived' : ''}`} onClick={onOpen}>
+      <span className="project-card-top"><i>{project.intake.businessName.slice(0, 2).toUpperCase()}</i><em>{archived ? 'Archived' : completion.percent === 100 ? 'Complete' : 'In progress'}</em></span>
+      <span className="project-card-copy"><b>{project.campaign.name}</b><small>{project.intake.businessName}</small></span>
+      <span className="project-card-progress"><i style={{ width: `${completion.percent}%` }} /></span>
+      <span className="project-card-foot"><small>{completion.approved} of {completion.total} approved</small><em>{archived ? 'Restore ↥' : `${new Date(project.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ↗`}</em></span>
+    </button>
   )
 }
 

@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
+import { recordUsageEventSafe } from '@/lib/usage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -96,7 +97,7 @@ Asset purpose: ${clean(body.asset?.purpose, 500)}
 Approved scene plan:
 ${clean(body.asset?.content, 5_000)}
 
-Execution: one coherent cinematic moment with intentional camera movement, natural lighting and a strong first frame. Premium but authentic African small-business advertising. No audio, no watermark, no fake interface, no unreadable text, no distorted hands or faces. Leave clean visual space for captions to be added later.`
+Execution: one coherent cinematic moment with intentional camera movement, natural lighting and a strong first frame. Premium but authentic African small-business advertising. No audio, no watermark, no fake interface, no visible third-party logos or trademarks, no text, no distorted hands or faces. Leave clean visual space for captions to be added later.`
 }
 
 async function providerHeaders() {
@@ -110,6 +111,7 @@ async function providerHeaders() {
 
 export async function POST(request: Request) {
   const log = requestLogger(request, '/api/studio/video')
+  const requestStartedAt = performance.now()
   const tooLarge = rejectLargeRequest(request, 250_000)
   if (tooLarge) {
     log.finish(tooLarge.status, { outcome: 'request_too_large' })
@@ -152,6 +154,12 @@ export async function POST(request: Request) {
   try {
     if (body.action === 'quote') {
       const quote = await currentQuote()
+      await recordUsageEventSafe({
+        requestId: log.requestId, route: '/api/studio/video', feature: 'video.quote',
+        provider: 'openrouter', model: quote.model, estimatedCostUsd: quote.costUsd,
+        latencyMs: Math.round(performance.now() - requestStartedAt), outcome: 'quote',
+        metadata: { duration: DURATION, resolution: RESOLUTION, aspectRatio: ASPECT_RATIO },
+      })
       log.finish(200, { outcome: 'quote', model: quote.model, estimatedCostUsd: quote.costUsd })
       return Response.json({
         ...quote,
@@ -191,6 +199,11 @@ export async function POST(request: Request) {
         error?: string
         usage?: { cost?: number }
       }
+      await recordUsageEventSafe({
+        requestId: log.requestId, route: '/api/studio/video', feature: 'video.status',
+        provider: 'openrouter', model: videoModel(), actualCostUsd: result.usage?.cost,
+        latencyMs: Math.round(performance.now() - requestStartedAt), outcome: result.status || 'status',
+      })
       log.info('studio.video.status', { status: result.status, costUsd: result.usage?.cost })
       log.finish(200, { outcome: 'status', status: result.status })
       return Response.json({
@@ -255,6 +268,12 @@ export async function POST(request: Request) {
     const result = await response.json() as { id?: string; status?: string }
     if (!result.id) throw new Error('Provider returned no video job ID')
     const token = signJob(result.id)
+    await recordUsageEventSafe({
+      requestId: log.requestId, route: '/api/studio/video', feature: 'video.submit',
+      provider: 'openrouter', model: quote.model, estimatedCostUsd: quote.costUsd,
+      latencyMs: Math.round(performance.now() - requestStartedAt), outcome: 'submitted',
+      metadata: { duration: DURATION, resolution: RESOLUTION, aspectRatio: ASPECT_RATIO },
+    })
     log.info('studio.video.submitted', { model: quote.model, status: result.status })
     log.finish(202, { outcome: 'submitted', model: quote.model })
     return Response.json({

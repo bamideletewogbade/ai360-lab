@@ -20,6 +20,7 @@ import {
 } from 'docx'
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { errorDetails, requestLogger } from '@/lib/observability'
+import { recordUsageEventSafe } from '@/lib/usage'
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 
 export const runtime = 'nodejs'
@@ -462,6 +463,7 @@ async function buildPdf(title: string, blocks: ExportBlock[]) {
 
 export async function POST(request: Request) {
   const log = requestLogger(request, '/api/export')
+  const startedAt = performance.now()
   const tooLarge = rejectLargeRequest(request, 250_000)
   if (tooLarge) {
     log.finish(tooLarge.status, { outcome: 'request_too_large' })
@@ -502,6 +504,11 @@ export async function POST(request: Request) {
     })
     if (body.format === 'docx') {
       const file = await buildDocx(title, blocks)
+      await recordUsageEventSafe({
+        requestId: log.requestId, route: '/api/export', feature: 'export.docx',
+        latencyMs: Math.round(performance.now() - startedAt), outcome: 'success',
+        metadata: { inputCharacters: content.length, outputBytes: file.byteLength },
+      })
       log.finish(200, { outcome: 'success', format: 'docx', outputBytes: file.byteLength })
       return new Response(new Uint8Array(file), {
         headers: log.headers({
@@ -513,6 +520,11 @@ export async function POST(request: Request) {
     }
     if (body.format === 'pdf') {
       const file = await buildPdf(title, blocks)
+      await recordUsageEventSafe({
+        requestId: log.requestId, route: '/api/export', feature: 'export.pdf',
+        latencyMs: Math.round(performance.now() - startedAt), outcome: 'success',
+        metadata: { inputCharacters: content.length, outputBytes: file.byteLength },
+      })
       log.finish(200, { outcome: 'success', format: 'pdf', outputBytes: file.byteLength })
       return new Response(new Uint8Array(file), {
         headers: log.headers({

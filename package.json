@@ -8,11 +8,16 @@
     "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
     "build": "cross-env NODE_OPTIONS=--no-deprecation next build",
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
-    "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint ."
+    "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint .",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "db:migrate": "node scripts/migrate-mysql.mjs"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.6.4",
     "cross-env": "^7.0.3",
     "docx": "^9.7.1",
+    "dotenv": "^16.6.1",
+    "mysql2": "^3.23.2",
     "next": "^16.2.11",
     "pdf-lib": "^1.17.1",
     "react": "19.2.6",

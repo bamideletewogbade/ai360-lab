@@ -1,5 +1,6 @@
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
+import { recordUsageEventSafe } from '@/lib/usage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -50,7 +51,7 @@ Asset purpose: ${clean(body.asset?.purpose, 500)}
 Approved creative direction:
 ${clean(body.asset?.content, 5_000)}
 
-Art direction: modern, distinctive, premium but approachable, commercially usable, strong hierarchy, generous negative space, designed for a real small business in Africa. Avoid generic AI imagery, mockup frames, watermarks and tiny illegible details. ${body.kind === 'logo' ? 'Show a single clean brand mark on a plain background. Keep typography minimal and spell the business name correctly.' : 'Leave copy-heavy details out of the artwork. Include only the business name and one short call to action if the model can render them accurately.'}`
+Art direction: modern, distinctive, premium but approachable, commercially usable, strong hierarchy, generous negative space, designed for a real small business in Africa. Avoid generic AI imagery, mockup frames, watermarks, visible third-party logos, trademarks and tiny illegible details. Never invent a price, phone number, URL, date or promotional claim. ${body.kind === 'logo' ? 'Show a single clean brand mark on a plain background. Keep typography minimal and spell the business name correctly.' : 'Treat this as clean base artwork for later typesetting. Include at most one short approved headline. Do not add body copy, prices, phone numbers or secondary call-to-action text.'}`
 }
 
 function imageModels() {
@@ -178,12 +179,20 @@ export async function POST(request: Request) {
         continue
       }
       const mediaType = image.media_type || 'image/png'
+      const latencyMs = Math.round(performance.now() - startedAt)
+
+      await recordUsageEventSafe({
+        requestId: log.requestId, route: '/api/studio/image', feature: `image.${body.kind}`,
+        provider: 'openrouter', model, outputTokens: result.usage?.total_tokens,
+        actualCostUsd: result.usage?.cost, latencyMs, outcome: 'success',
+        metadata: { kind: body.kind, attempt: attempt + 1, mediaType },
+      })
 
       log.info('studio.image.completed', {
         model,
         attempt: attempt + 1,
         kind: body.kind,
-        durationMs: Math.round(performance.now() - startedAt),
+        durationMs: latencyMs,
         mediaType,
         costUsd: result.usage?.cost,
         totalTokens: result.usage?.total_tokens,
@@ -212,6 +221,11 @@ export async function POST(request: Request) {
     kind: body.kind,
     durationMs: Math.round(performance.now() - startedAt),
     outcome: 'all_providers_failed',
+  })
+  await recordUsageEventSafe({
+    requestId: log.requestId, route: '/api/studio/image', feature: `image.${body.kind}`,
+    provider: 'openrouter', model: models[0], latencyMs: Math.round(performance.now() - startedAt),
+    outcome: 'all_providers_failed', metadata: { attemptedModels: models },
   })
   log.finish(502, { outcome: 'all_providers_failed', attemptedModels: models.length })
   return Response.json({

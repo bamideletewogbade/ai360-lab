@@ -1,6 +1,7 @@
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { routeFor } from '@/lib/models'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
+import { recordUsageEventSafe } from '@/lib/usage'
 import { citationSources, LIVE_INFORMATION_TOOLS } from '@/lib/live-tools'
 
 export const runtime = 'nodejs'
@@ -296,6 +297,8 @@ export async function POST(request: Request) {
   let research = ''
   let researchSources: Array<{ title: string; url: string }> = []
   let researchUsage: {
+    prompt_tokens?: number
+    completion_tokens?: number
     total_tokens?: number
     cost?: number
     server_tool_use?: { web_search_requests?: number }
@@ -431,6 +434,11 @@ export async function POST(request: Request) {
         ...failure,
       })
       log.finish(502, { outcome: 'provider_error', providerStatus: response.status })
+      await recordUsageEventSafe({
+        requestId: log.requestId, route: '/api/studio', feature: `studio.${action}`,
+        provider: 'openrouter', model, latencyMs: Math.round(performance.now() - startedAt),
+        outcome: 'provider_error', metadata: { providerStatus: response.status },
+      })
       return Response.json({
         error: 'Studio could not produce the campaign pack',
         requestId: log.requestId,
@@ -466,11 +474,25 @@ export async function POST(request: Request) {
         )
         .slice(0, 8)
     }
+    const totalInputTokens = Number(json.usage?.prompt_tokens || 0) + Number(researchUsage?.prompt_tokens || 0)
+    const totalOutputTokens = Number(json.usage?.completion_tokens || 0) + Number(researchUsage?.completion_tokens || 0)
+    const totalCost = Number(json.usage?.cost || 0) + Number(researchUsage?.cost || 0)
+    const latencyMs = Math.round(performance.now() - startedAt)
+    await recordUsageEventSafe({
+      requestId: log.requestId, route: '/api/studio', feature: `studio.${action}`,
+      provider: 'openrouter', model, inputTokens: totalInputTokens, outputTokens: totalOutputTokens,
+      actualCostUsd: totalCost, latencyMs, outcome: 'success',
+      metadata: {
+        researchUsed: Boolean(research),
+        webSearchRequests: researchUsage?.server_tool_use?.web_search_requests || 0,
+        assetCount: Array.isArray(result.assets) ? result.assets.length : action === 'regenerate' ? 1 : 0,
+      },
+    })
     log.finish(200, {
       outcome: 'success',
       action,
       model,
-      durationMs: Math.round(performance.now() - startedAt),
+      durationMs: latencyMs,
       assetCount: Array.isArray(result.assets) ? result.assets.length : action === 'regenerate' ? 1 : 0,
       totalTokens: json.usage?.total_tokens,
       cost: json.usage?.cost,
