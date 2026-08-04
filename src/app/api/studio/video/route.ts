@@ -1,7 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
+import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
+import { openCreditGate } from '@/lib/billing/credit-gate'
+import { settleReservation } from '@/lib/billing/credit-repository'
+import { estimateCredits } from '@/lib/billing/credits'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -62,8 +65,16 @@ function tokenSecret() {
   return process.env.OPENROUTER_API_KEY || ''
 }
 
-function signJob(id: string) {
-  const payload = Buffer.from(JSON.stringify({ id, createdAt: Date.now() })).toString('base64url')
+// The token carries the credit reservation as well as the job, because video
+// work finishes long after the request that started it. Without this the hold
+// could only be reclaimed by expiry, so a failed render would still cost money
+// until the sweeper ran.
+function signJob(id: string, reservationId?: string | null) {
+  const payload = Buffer.from(JSON.stringify({
+    id,
+    createdAt: Date.now(),
+    ...(reservationId ? { res: reservationId } : {}),
+  })).toString('base64url')
   const signature = createHmac('sha256', tokenSecret()).update(payload).digest('base64url')
   return `${payload}.${signature}`
 }
@@ -75,10 +86,14 @@ function readJob(token: string) {
   const supplied = Buffer.from(signature, 'base64url')
   if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return null
   try {
-    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { id?: unknown; createdAt?: unknown }
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString()) as {
+      id?: unknown
+      createdAt?: unknown
+      res?: unknown
+    }
     if (typeof parsed.id !== 'string' || typeof parsed.createdAt !== 'number') return null
     if (Date.now() - parsed.createdAt > 24 * 60 * 60 * 1_000) return null
-    return parsed.id
+    return { id: parsed.id, reservationId: typeof parsed.res === 'string' ? parsed.res : null }
   } catch {
     return null
   }
@@ -133,10 +148,17 @@ export async function POST(request: Request) {
     : body.action === 'status'
       ? 'studio_video_status'
       : 'studio_video'
+  const requester = await resolveRequester(request)
+  const anonymous = requireIdentifiedRequester(rateScope, requester)
+  if (anonymous) {
+    log.finish(anonymous.status, { outcome: 'sign_in_required', action: body.action })
+    return new Response(anonymous.body, { status: anonymous.status, headers: log.headers(anonymous.headers) })
+  }
   const limited = rateLimit(
     request,
     rateScope,
     body.action === 'quote' ? { minute: 8, daily: 50 } : body.action === 'status' ? { minute: 8, daily: 100 } : { minute: 1, daily: 3 },
+    requester,
   )
   if (limited) {
     log.finish(limited.status, { outcome: 'rate_limited', action: body.action })
@@ -172,8 +194,9 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'status') {
-      const id = readJob(clean(body.token, 2_000))
-      if (!id) {
+      const job = readJob(clean(body.token, 2_000))
+      const id = job?.id
+      if (!job || !id) {
         log.finish(400, { outcome: 'invalid_job_token' })
         return Response.json({ error: 'This video job is invalid or expired.', requestId: log.requestId }, {
           status: 400,
@@ -204,6 +227,26 @@ export async function POST(request: Request) {
         provider: 'openrouter', model: videoModel(), actualCostUsd: result.usage?.cost,
         latencyMs: Math.round(performance.now() - requestStartedAt), outcome: result.status || 'status',
       })
+
+      // The render finished in a later request than the one that reserved the
+      // credits, so this is where a video is finally charged or refunded.
+      const finished = result.status === 'completed' || result.status === 'failed'
+      if (finished && job.reservationId && requester.context) {
+        const settlement = await settleReservation({
+          context: requester.context,
+          reservationId: job.reservationId,
+          estimate: estimateCredits('video', { quotedUsd: result.usage?.cost }),
+          measuredUsd: result.usage?.cost,
+          outcome: result.status === 'completed' ? 'success' : 'failure',
+        })
+        log.info('studio.video.settled', {
+          status: result.status,
+          settled: settlement.ok,
+          charged: settlement.ok ? settlement.charged : undefined,
+          released: settlement.ok ? settlement.released : undefined,
+        })
+      }
+
       log.info('studio.video.status', { status: result.status, costUsd: result.usage?.cost })
       log.finish(200, { outcome: 'status', status: result.status })
       return Response.json({
@@ -235,6 +278,17 @@ export async function POST(request: Request) {
       }, { status: 409, headers: log.headers() })
     }
 
+    // The accepted quote is a real provider price, so it decides the hold
+    // rather than the published range.
+    const credit = await openCreditGate({
+      request, requester, feature: 'video', requestId: log.requestId, quotedUsd: quote.costUsd,
+    })
+    if (credit.denied) {
+      log.finish(402, { outcome: 'insufficient_credits', estimatedCostUsd: quote.costUsd })
+      return new Response(credit.denied.body, { status: 402, headers: log.headers(credit.denied.headers) })
+    }
+    const gate = credit.gate
+
     log.info('studio.video.started', {
       model: quote.model,
       duration: DURATION,
@@ -242,6 +296,7 @@ export async function POST(request: Request) {
       aspectRatio: ASPECT_RATIO,
       audio: false,
       acceptedCostUsd: quote.costUsd,
+      creditsReserved: gate.reserved,
     })
     const response = await fetch('https://openrouter.ai/api/v1/videos', {
       method: 'POST',
@@ -259,6 +314,7 @@ export async function POST(request: Request) {
     if (!response.ok) {
       const failure = await providerErrorDetails(response)
       log.error('studio.video.failed', { model: quote.model, ...failure })
+      await gate.settle('failure')
       log.finish(502, { outcome: 'provider_error' })
       return Response.json({ error: 'The video provider could not start this job.', requestId: log.requestId }, {
         status: 502,
@@ -266,8 +322,11 @@ export async function POST(request: Request) {
       })
     }
     const result = await response.json() as { id?: string; status?: string }
-    if (!result.id) throw new Error('Provider returned no video job ID')
-    const token = signJob(result.id)
+    if (!result.id) {
+      await gate.settle('failure')
+      throw new Error('Provider returned no video job ID')
+    }
+    const token = signJob(result.id, gate.reservationId)
     await recordUsageEventSafe({
       requestId: log.requestId, route: '/api/studio/video', feature: 'video.submit',
       provider: 'openrouter', model: quote.model, estimatedCostUsd: quote.costUsd,
@@ -308,7 +367,7 @@ export async function GET(request: Request) {
       headers: log.headers(),
     })
   }
-  const id = readJob(token)
+  const id = readJob(token)?.id
   if (!id) {
     log.finish(400, { outcome: 'invalid_job_token' })
     return Response.json({ error: 'This video download is invalid or expired.', requestId: log.requestId }, {

@@ -1,7 +1,11 @@
-import 'dotenv/config'
+import { config } from 'dotenv'
 import { createHash } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import postgres from 'postgres'
+
+// Next.js reads .env.local automatically; a plain Node script does not.
+config({ path: '.env.local', quiet: true })
+config({ path: '.env', quiet: true })
 
 const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL
 if (!connectionString) throw new Error('Missing DIRECT_URL or DATABASE_URL')

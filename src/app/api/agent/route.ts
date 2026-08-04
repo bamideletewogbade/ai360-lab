@@ -1,7 +1,8 @@
 import { isChatMode, providerPreferences, routeFor, type ChatMode } from '@/lib/models'
-import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
+import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
+import { openCreditGate } from '@/lib/billing/credit-gate'
 import { citationSources, RESEARCH_TOOLS } from '@/lib/live-tools'
 
 export const runtime = 'nodejs'
@@ -129,7 +130,13 @@ export async function POST(request: Request) {
     log.finish(tooLarge.status, { outcome: 'request_too_large' })
     return new Response(tooLarge.body, { status: tooLarge.status, headers: log.headers(tooLarge.headers) })
   }
-  const limited = rateLimit(request, 'agent', { minute: 4, daily: 16 })
+  const requester = await resolveRequester(request)
+  const anonymous = requireIdentifiedRequester('agent', requester)
+  if (anonymous) {
+    log.finish(anonymous.status, { outcome: 'sign_in_required' })
+    return new Response(anonymous.body, { status: anonymous.status, headers: log.headers(anonymous.headers) })
+  }
+  const limited = rateLimit(request, 'agent', { minute: 4, daily: 16 }, requester)
   if (limited) {
     log.finish(limited.status, { outcome: 'rate_limited' })
     return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })
@@ -168,6 +175,16 @@ export async function POST(request: Request) {
     attachmentKinds: attachments.map((attachment) => attachment.kind),
     aiConfigured: Boolean(key),
   })
+
+  // Preview mode costs nothing, so it is never charged.
+  const credit = key
+    ? await openCreditGate({ request, requester, feature: 'agent', requestId: log.requestId })
+    : { gate: undefined, denied: undefined }
+  if (credit.denied) {
+    log.finish(402, { outcome: 'insufficient_credits' })
+    return new Response(credit.denied.body, { status: 402, headers: log.headers(credit.denied.headers) })
+  }
+  const gate = credit.gate
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -279,10 +296,12 @@ export async function POST(request: Request) {
           actualCostUsd: json.usage?.cost, latencyMs: Math.round(performance.now() - providerStartedAt),
           outcome: 'success', metadata: { sourceCount: sources.length, attachmentCount: attachments.length },
         })
+        await gate?.settle('success', json.usage?.cost)
         log.finish(200, {
           outcome: 'success',
           provider: 'openrouter',
           model,
+          creditsReserved: gate?.reserved,
           sourceCount: sources.length,
           outputCharacters: resultContent.length,
           totalTokens: json.usage?.total_tokens,
@@ -291,6 +310,7 @@ export async function POST(request: Request) {
         controller.close()
       } catch (error) {
         log.error('agent.stream.failed', errorDetails(error))
+        await gate?.settle('failure')
         log.finish(500, { outcome: 'stream_error' })
         send({
           type: 'error',

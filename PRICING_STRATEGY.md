@@ -99,6 +99,50 @@ The public credit value is intentionally not a fixed token exchange rate. One
 credit represents bounded useful work; internal cost weights may change while
 the user sees the estimate before execution.
 
+### The internal credit price
+
+Implemented in `src/lib/billing/credits.ts`. Everyday sets the reference point:
+GH₵125 × 25% = GH₵31.25 of model budget over 120 credits, so **one credit may
+represent GH₵0.26 of landed cost**. Landed cost is the provider charge plus the
+OpenRouter platform fee, converted at the working rate, plus a 10% foreign
+exchange buffer. At the current default rate, one US dollar of provider spend
+lands at roughly GH₵15.
+
+Operational values are environment variables, so a rate move is a configuration
+change rather than a deploy: `AI360_USD_TO_GHS` and `AI360_PROVIDER_FEE_RATE`.
+Confirm both against payment-provider settlement and an OpenRouter invoice
+before launch.
+
+### Known breaches in the pilot catalog
+
+Measured at full utilisation of the included allowance:
+
+| Plan | Cost at full use | Share of revenue | Within 25% target |
+| --- | ---: | ---: | --- |
+| Explorer | GH₵1.30 | acquisition cost | n/a |
+| Everyday | GH₵31.20 | 25.0% | yes |
+| Builder | GH₵104.00 | 34.7% | **no** |
+| Team | GH₵364.00 | 40.4% | **no** |
+
+Builder and Team are still profitable in absolute terms, and low utilisation may
+well keep them comfortable in practice. But both sit outside the guardrail this
+document sets, so the position must be a deliberate choice: either accept a
+higher cost ratio on the upper plans and say so here, or reduce the allowance to
+320 and 865 credits respectively. A test pins the current expectation, so an
+allowance cannot drift across the line unnoticed.
+
+Free credits are not free to AI 360. Every Explorer account carries GH₵1.30 of
+monthly cost, so a thousand dormant free accounts is GH₵1,300 a month. Expire
+unused free credits monthly, as published, and reclaim inactive grants.
+
+### Media pricing must be verified before launch
+
+Twenty credits buys about **$0.34** of provider spend for a four-second video.
+The video quote endpoint already fetches the real per-second price from the
+provider, so one call settles whether that clip sells above or below cost. If it
+lands above $0.34, either raise the video weight or shorten the default clip.
+Do this before the pricing page goes live with the published range.
+
 ## Cost and latency routing
 
 1. Classify the task by complexity, modality, context size and quality risk.

@@ -1,4 +1,4 @@
-import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
+import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveRequester } from '@/lib/guardrails'
 import { providerPreferences, routeFor } from '@/lib/models'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
@@ -255,7 +255,13 @@ export async function POST(request: Request) {
     log.finish(tooLarge.status, { outcome: 'request_too_large' })
     return new Response(tooLarge.body, { status: tooLarge.status, headers: log.headers(tooLarge.headers) })
   }
-  const limited = rateLimit(request, 'studio', { minute: 5, daily: 24 })
+  const requester = await resolveRequester(request)
+  const anonymous = requireIdentifiedRequester('studio', requester)
+  if (anonymous) {
+    log.finish(anonymous.status, { outcome: 'sign_in_required' })
+    return new Response(anonymous.body, { status: anonymous.status, headers: log.headers(anonymous.headers) })
+  }
+  const limited = rateLimit(request, 'studio', { minute: 5, daily: 24 }, requester)
   if (limited) {
     log.finish(limited.status, { outcome: 'rate_limited' })
     return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })

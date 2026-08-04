@@ -1,6 +1,10 @@
-import 'dotenv/config'
+import { config } from 'dotenv'
 import { readFile } from 'node:fs/promises'
 import mysql from 'mysql2/promise'
+
+// Next.js reads .env.local automatically; a plain Node script does not.
+config({ path: '.env.local', quiet: true })
+config({ path: '.env', quiet: true })
 
 const required = ['MYSQL_HOST', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD']
 const missing = required.filter((name) => !process.env[name])

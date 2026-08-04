@@ -18,7 +18,7 @@ import {
   TextRun,
   WidthType,
 } from 'docx'
-import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
+import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
@@ -469,7 +469,7 @@ export async function POST(request: Request) {
     log.finish(tooLarge.status, { outcome: 'request_too_large' })
     return new Response(tooLarge.body, { status: tooLarge.status, headers: log.headers(tooLarge.headers) })
   }
-  const limited = rateLimit(request, 'export', { minute: 15, daily: 80 })
+  const limited = rateLimit(request, 'export', { minute: 15, daily: 80 }, await resolveRequester(request))
   if (limited) {
     log.finish(limited.status, { outcome: 'rate_limited' })
     return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })

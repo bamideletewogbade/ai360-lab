@@ -1,6 +1,7 @@
-import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
+import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
+import { openCreditGate } from '@/lib/billing/credit-gate'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -87,7 +88,13 @@ export async function POST(request: Request) {
     log.finish(tooLarge.status, { outcome: 'request_too_large' })
     return new Response(tooLarge.body, { status: tooLarge.status, headers: log.headers(tooLarge.headers) })
   }
-  const limited = rateLimit(request, 'studio_image', { minute: 2, daily: 8 })
+  const requester = await resolveRequester(request)
+  const anonymous = requireIdentifiedRequester('studio_image', requester)
+  if (anonymous) {
+    log.finish(anonymous.status, { outcome: 'sign_in_required' })
+    return new Response(anonymous.body, { status: anonymous.status, headers: log.headers(anonymous.headers) })
+  }
+  const limited = rateLimit(request, 'studio_image', { minute: 2, daily: 8 }, requester)
   if (limited) {
     log.finish(limited.status, { outcome: 'rate_limited' })
     return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })
@@ -128,9 +135,18 @@ export async function POST(request: Request) {
     })
   }
 
+  const credit = await openCreditGate({
+    request, requester, feature: 'image', requestId: log.requestId,
+  })
+  if (credit.denied) {
+    log.finish(402, { outcome: 'insufficient_credits', kind: body.kind })
+    return new Response(credit.denied.body, { status: 402, headers: log.headers(credit.denied.headers) })
+  }
+  const gate = credit.gate
+
   const models = imageModels()
   const startedAt = performance.now()
-  log.info('studio.image.started', { models, kind: body.kind, approved: true })
+  log.info('studio.image.started', { models, kind: body.kind, approved: true, creditsReserved: gate.reserved })
 
   for (const [attempt, model] of models.entries()) {
     const providerStartedAt = performance.now()
@@ -197,7 +213,8 @@ export async function POST(request: Request) {
         costUsd: result.usage?.cost,
         totalTokens: result.usage?.total_tokens,
       })
-      log.finish(200, { outcome: 'success', model, attempt: attempt + 1, kind: body.kind })
+      await gate.settle('success', result.usage?.cost)
+      log.finish(200, { outcome: 'success', model, attempt: attempt + 1, kind: body.kind, creditsReserved: gate.reserved })
       return Response.json({
         image: `data:${mediaType};base64,${image.b64_json}`,
         mediaType,
@@ -227,6 +244,7 @@ export async function POST(request: Request) {
     provider: 'openrouter', model: models[0], latencyMs: Math.round(performance.now() - startedAt),
     outcome: 'all_providers_failed', metadata: { attemptedModels: models },
   })
+  await gate.settle('failure')
   log.finish(502, { outcome: 'all_providers_failed', attemptedModels: models.length })
   return Response.json({
     error: 'Studio could not create this design after trying its backup image provider. Please try again shortly.',

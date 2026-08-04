@@ -1,4 +1,4 @@
-import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
+import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrails'
 import { requestLogger } from '@/lib/observability'
 
 export const runtime = 'nodejs'
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     log.finish(tooLarge.status, { outcome: 'request_too_large' })
     return new Response(tooLarge.body, { status: tooLarge.status, headers: log.headers(tooLarge.headers) })
   }
-  const limited = rateLimit(request, 'action', { minute: 20, daily: 100 })
+  const limited = rateLimit(request, 'action', { minute: 20, daily: 100 }, await resolveRequester(request))
   if (limited) {
     log.finish(limited.status, { outcome: 'rate_limited' })
     return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })

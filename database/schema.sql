@@ -217,6 +217,10 @@ CREATE TABLE IF NOT EXISTS lab_credit_ledger (
     REFERENCES lab_workspaces (workspace_key) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Credits live in Supabase Postgres only: lab_credit_accounts and
+-- lab_credit_reservations are defined in database/postgres/0002 and 0003.
+-- Every table has exactly one home. Do not add credit tables here.
+
 CREATE TABLE IF NOT EXISTS lab_billing_webhook_events (
   provider VARCHAR(40) NOT NULL,
   event_id VARCHAR(160) NOT NULL,

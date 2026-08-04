@@ -35,7 +35,12 @@ external media and payment providers.
 | Cloud conversations and projects | Implemented for MySQL | MySQL credentials and migrated schema | Database unavailable locally | Blocked |
 | Supabase Postgres target | Initial schema, RLS and pooler client prepared | Supabase project, region and connection strings | Runtime data-route cutover pending | In progress |
 | Usage ledger and cost records | Schema and write contracts implemented | Durable database | Live reconciliation test pending | In progress |
-| Rate limiting | Process-local burst/day limits implemented | None | Does not coordinate multiple instances | Not production-scale |
+| Rate limiting | Identity-aware burst/day limits; per workspace when signed in, network address as an anonymous backstop | None | Still process-local, so limits reset on restart and do not coordinate across instances | Pilot-ready, not production-scale |
+| Anonymous access to expensive work | Agent, Studio, image and video require an identified workspace whenever Clerk is configured | Clerk keys | End-to-end test pending live keys | Implemented |
+| Credit engine | Landed-cost conversion, per-feature reserve/floor/ceiling, settlement and plan economics implemented and unit tested | None | Verified | Ready |
+| Credit ledger and reservations | Reserve, settle, release, expiry and grant on Supabase Postgres; wired into chat, agent, image and video | `DATABASE_URL` | `npm run credits:verify` passes 11/11 against the live database, including ledger reconciliation | Pilot-ready |
+| Monthly allowance grants | Lazy renewal on first touch of a new period; unused allowance expires, purchased credits survive | None, no scheduler required | Covered by `npm run credits:verify` including a rollover case | Pilot-ready |
+| Credit interface | `/api/credits` returns balance, holds and cost table | None | No screen displays a balance | Missing |
 | Subscriptions and credits | Catalog and ledger schema prepared | Database, payment provider and policies | No live entitlement activation | In progress |
 | MojoPay checkout | Safe disabled boundary implemented | Signed API/webhook contract and credentials | Sandbox scenarios pending | Blocked intentionally |
 | Logs and request IDs | Structured redacted logs implemented | Host log retention | External alerting absent | Pilot-ready |
@@ -68,9 +73,15 @@ external media and payment providers.
 
 ### Gate 2: durable data
 
-- [ ] Create the Supabase production project in the approved region.
+- [x] Create the Supabase production project in the approved region.
 - [ ] Keep the project spend cap enabled and enforce MFA for administrators.
-- [ ] Apply `database/postgres/0001_initial.sql` using the direct migration URL.
+- [ ] Rotate the database password used during initial setup.
+- [x] Apply `database/postgres/0001_initial.sql` and `0002_runtime_foundation.sql`
+  using the direct migration URL. Verified with `npm run db:postgres:verify`:
+  22 tables, row-level security on every one, zero grants to the anon role.
+- [ ] Confirm whether the Hostinger runtime can reach IPv6. The direct host
+  `db.<ref>.supabase.co` resolves AAAA only, so `DATABASE_URL` must use the
+  session pooler if the host is IPv4-only.
 - [ ] Connect Hostinger through Supabase's shared session pooler (port 5432).
 - [ ] Use the transaction pooler (port 6543) only if the API moves to a
   serverless or short-lived runtime.
@@ -82,9 +93,19 @@ external media and payment providers.
 ### Gate 3: cost and abuse controls
 
 - [ ] Replace process-memory daily quotas with a shared atomic limiter.
-- [ ] Require a signed-in workspace for expensive Agent, image and video work,
-  or enforce a deliberately small anonymous allowance.
-- [ ] Reserve credits before expensive work and settle actual cost afterward.
+- [x] Limit by workspace rather than network address, so shared connections do
+  not throttle genuine users, with a reduced anonymous allowance as a backstop.
+- [x] Require a signed-in workspace for expensive Agent, Studio, image and video
+  work whenever identity is configured.
+- [x] Define the credit engine: landed cost, per-feature reserve and ceiling,
+  settlement rules and plan economics (`src/lib/billing/credits.ts`).
+- [x] Persist credit accounts and reservations, then reserve before expensive
+  work and settle actual cost afterward. Credits live in Supabase Postgres only.
+- [x] Deliver the monthly allowance. Renewal is lazy: the first touch of a new
+  period expires unused allowance and grants the current plan's credits, so no
+  scheduled job can fail to run.
+- [ ] Port conversations, projects and usage from MySQL, then delete
+  `src/lib/mysql.ts` and the MySQL schema.
 - [ ] Add application, workspace and user spend caps.
 - [ ] Add provider timeouts, circuit breakers and failover metrics.
 

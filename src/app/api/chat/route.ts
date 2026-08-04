@@ -1,9 +1,11 @@
 import type { NextRequest } from 'next/server'
 import { isChatMode, providerPreferences, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models'
-import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
+import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { citationSources, LIVE_INFORMATION_TOOLS } from '@/lib/live-tools'
 import { recordUsageEventSafe } from '@/lib/usage'
+import { openCreditGate } from '@/lib/billing/credit-gate'
+import { chatFeature } from '@/lib/billing/credits'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -80,7 +82,8 @@ export async function POST(req: NextRequest) {
     log.finish(tooLarge.status, { outcome: 'request_too_large' })
     return responseWithRequestId(tooLarge, log.requestId)
   }
-  const limited = rateLimit(req, 'chat', { minute: 12, daily: 80 })
+  const requester = await resolveRequester(req)
+  const limited = rateLimit(req, 'chat', { minute: 12, daily: 80 }, requester)
   if (limited) {
     log.finish(limited.status, { outcome: 'rate_limited' })
     return responseWithRequestId(limited, log.requestId)
@@ -108,6 +111,21 @@ export async function POST(req: NextRequest) {
     attachmentKinds: attachments.map((attachment) => attachment.kind),
     aiConfigured: Boolean(key),
   })
+
+  // Preview mode costs nothing, so it is never charged.
+  const credit = key
+    ? await openCreditGate({
+        request: req,
+        requester,
+        feature: chatFeature({ hasAttachment: attachments.length > 0 }),
+        requestId: log.requestId,
+      })
+    : { gate: undefined, denied: undefined }
+  if (credit.denied) {
+    log.finish(402, { outcome: 'insufficient_credits' })
+    return responseWithRequestId(credit.denied, log.requestId)
+  }
+  const gate = credit.gate
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -172,6 +190,7 @@ export async function POST(req: NextRequest) {
             latencyMs: Math.round(performance.now() - providerStartedAt), outcome: 'provider_error',
             metadata: { providerStatus: res.status, mode, attachmentCount: attachments.length },
           })
+          await gate?.settle('failure')
           controller.enqueue(
             encoder.encode(`The Lab could not reach its AI provider. Please try again. Reference: ${log.requestId}`),
           )
@@ -230,10 +249,12 @@ export async function POST(req: NextRequest) {
                   attachmentCount: attachments.length,
                 },
               })
+              await gate?.settle('success', usage?.cost)
               log.finish(200, {
                 outcome: 'success',
                 provider: 'openrouter',
                 model,
+                creditsReserved: gate?.reserved,
                 chunkCount,
                 outputCharacters,
                 promptTokens: usage?.prompt_tokens,
@@ -273,6 +294,7 @@ export async function POST(req: NextRequest) {
           actualCostUsd: usage?.cost, latencyMs: Math.round(performance.now() - providerStartedAt),
           outcome: 'success_without_done_event', metadata: { mode, sourceCount: sources.size, attachmentCount: attachments.length },
         })
+        await gate?.settle('success', usage?.cost)
         log.finish(200, {
           outcome: 'success_without_done_event',
           provider: 'openrouter',
@@ -288,6 +310,7 @@ export async function POST(req: NextRequest) {
         controller.close()
       } catch (error) {
         log.error('chat.stream.failed', errorDetails(error))
+        await gate?.settle('failure')
         log.finish(500, { outcome: 'stream_error' })
         controller.enqueue(
           encoder.encode(`Something went wrong. Please try again. Reference: ${log.requestId}`),
