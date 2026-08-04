@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mergeProjects, setProjectArchived, sortProjects, upsertProject } from '../src/lib/studio-projects.ts'
 
-type Project = { id: string; updatedAt: number; name: string }
+type Project = { id: string; updatedAt: number; name: string; archivedAt?: number }
 
 test('projects are presented with the most recently edited first', () => {
   const projects: Project[] = [

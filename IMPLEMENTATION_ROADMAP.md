@@ -1,8 +1,14 @@
 # AI 360 Lab implementation roadmap
 
-Last updated: 2026-08-03
+Last updated: 2026-08-04
 
 This is the living delivery checklist for shared AI 360 identity, organization-ready workspaces, durable projects, and bounded multi-agent execution. Update the checkboxes and status table as work is completed.
+
+Companion references:
+
+- `SYSTEM_ARCHITECTURE.md` defines every product layer and its quality budget.
+- `PRICING_STRATEGY.md` records global and African evidence, unit economics and
+  the MojoPay activation gate.
 
 ## Product outcome
 
@@ -21,6 +27,10 @@ AI 360 Lab should help an individual or team move from an outcome to a reviewed 
 - [x] Use bounded orchestration before attempting a large swarm.
 - [x] Require human approval before paid media generation or external side effects.
 - [x] Measure an agent by the completed outcome, not by a convincing final message.
+- [x] Keep Clerk as the only identity authority and use Supabase for Postgres,
+  Storage and optional Realtime.
+- [x] Migrate from MySQL through repository cutover and reconciliation instead
+  of switching the production connection string in one step.
 
 ## Current baseline
 
@@ -38,8 +48,16 @@ AI 360 Lab should help an individual or team move from an outcome to a reviewed 
 - [x] Public Ghana-first pricing page and versioned pilot plan catalog.
 - [x] Provider-neutral payment, subscription, webhook and credit-ledger schema.
 - [x] Safe checkout boundary that remains closed until MojoPay is verified.
+- [x] Clerk-compatible CSP, restricted authorized parties and production
+  liveness/readiness endpoints.
+- [x] Supabase Postgres schema, RLS policies, indexes and migration runner prepared.
+- [x] Supabase runtime migration prepared for private assets, agent runs,
+  specialist tasks, events, artifacts, approvals and credit reservation state.
+- [x] Layer-by-layer non-functional quality budgets documented.
+- [x] Production dependency audit has no known production vulnerabilities.
 - [ ] Production Clerk keys configured.
-- [ ] Production MySQL connection configured and migrated.
+- [ ] Production MySQL connection configured for the transition period.
+- [ ] Supabase project created and application data routes migrated to Postgres.
 - [ ] Studio projects synchronized across devices.
 - [ ] Durable usage events and database-backed quotas.
 - [ ] Real multi-agent orchestration.
@@ -49,8 +67,8 @@ AI 360 Lab should help an individual or team move from an outcome to a reviewed 
 | Phase | Outcome | Status | Gate |
 | --- | --- | --- | --- |
 | 0 | Decisions and baseline | Complete | Architecture approved |
-| 1 | Shared identity and tenant isolation | Next | Cross-site sign-in and isolation tests pass |
-| 2 | Durable projects, assets and usage | Planned | Work survives browser and server restarts |
+| 1 | Shared identity and tenant isolation | Blocked on credentials | Cross-site sign-in and isolation tests pass |
+| 2 | Durable projects, assets and usage | In progress | Work survives browser and server restarts |
 | 3 | Coordinator and specialist runtime | Planned | Three-agent pilot beats single-agent baseline |
 | 4 | Live agent-room experience | Planned | UI reflects real persisted events |
 | 5 | Evals, security and cost controls | Planned | Release thresholds pass |
@@ -105,8 +123,8 @@ Why: the product cannot charge for work or promise execution if campaigns, gener
 - [x] Add a responsive project dashboard with save state, last edited time and asset progress.
 - [ ] Add explicit creator and current-workspace labels to project cards.
 - [x] Add project archive and recovery without destructive deletion.
-- [ ] Select an S3-compatible object store for brand guides, generated images, videos and exports.
-- [ ] Store file metadata and ownership in MySQL. Do not store large media binaries in MySQL.
+- [x] Select Supabase Storage for brand guides, generated images, videos and exports.
+- [ ] Store file metadata and ownership in Postgres. Do not store large media binaries in Postgres.
 - [ ] Use short-lived signed download URLs for private assets.
 - [x] Write `lab_usage_events` for chat, Agent, Studio, voice, image, video and export requests.
 - [x] Record model, tokens, actual or estimated cost, latency, outcome and request ID.
@@ -260,8 +278,10 @@ Only after this passes should Studio persistence and the coordinator runtime be 
 - [ ] Confirm Organization membership is set to optional in Clerk.
 - [ ] Confirm whether the Organization in the screenshot should be named `AI 360 Internal`.
 - [ ] Add production Clerk keys directly to Hostinger.
-- [ ] Provide or configure the dedicated Hostinger MySQL database credentials.
-- [ ] Choose an object-storage provider before durable media work begins.
+- [ ] Keep the dedicated Hostinger MySQL credentials available until the
+  Supabase migration and reconciliation pass.
+- [ ] Create the Supabase project, select its region and add connection strings
+  directly to local/Hostinger environment settings.
 - [ ] Approve the first three specialist roles: Researcher, Strategist and Verifier.
 
 ## Change log
@@ -273,8 +293,12 @@ Only after this passes should Studio persistence and the coordinator runtime be 
 | 2026-08-01 | Bounded coordinator selected | Better cost control, observability and evaluation than an immediate large swarm |
 | 2026-08-01 | First specialist team selected | Researcher, Strategist and Verifier cover evidence, decisions and quality control |
 | 2026-08-01 | Workspace ownership foundation implemented | Server-derived personal and organization keys now scope conversation persistence |
-| 2026-08-03 | Ghana-first hybrid pricing proposed | GH₵0 Explorer, GH₵39 Everyday, GH₵89 Builder and GH₵299 Team balance access with controlled variable cost |
+| 2026-08-03 | Ghana-first hybrid pricing revised | GH₵0 Explorer, GH₵125 Everyday, GH₵300 Builder and GH₵900 Team protect accessibility without hiding the real cost of agent and media work |
 | 2026-08-03 | MojoPay selected behind an adapter | Mobile Money should lead checkout, while AI 360 retains provider-neutral billing and entitlement records |
+| 2026-08-04 | Clerk + Supabase production boundary selected | Clerk owns identity; portable Postgres, RLS and Storage provide the durable data plane |
+| 2026-08-04 | Production preflight and readiness endpoint added | Releases must expose missing dependencies instead of silently degrading |
+| 2026-08-04 | Layer-first quality budgets adopted | Performance, latency, accessibility, security and cost are acceptance criteria for every feature |
+| 2026-08-04 | Supabase runtime foundation prepared | Assets, durable agents and credit reservations now have an indexed, tenant-scoped schema before feature expansion |
 
 ## Definition of done
 

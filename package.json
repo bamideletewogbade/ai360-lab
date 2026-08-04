@@ -10,7 +10,9 @@
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "db:migrate": "node scripts/migrate-mysql.mjs"
+    "db:migrate": "node scripts/migrate-mysql.mjs",
+    "db:postgres:migrate": "node scripts/migrate-postgres.mjs",
+    "prod:check": "node scripts/check-production.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.6.4",
@@ -18,8 +20,9 @@
     "docx": "^9.7.1",
     "dotenv": "^16.6.1",
     "mysql2": "^3.23.2",
-    "next": "^16.2.11",
+    "next": "^16.3.0",
     "pdf-lib": "^1.17.1",
+    "postgres": "^3.4.9",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-markdown": "^10.1.0",
@@ -31,7 +34,7 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "^9.16.0",
-    "eslint-config-next": "^16.2.11",
+    "eslint-config-next": "^16.3.0",
     "prettier": "^3.4.2",
     "typescript": "5.7.3"
   },

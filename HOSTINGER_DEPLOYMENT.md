@@ -38,6 +38,7 @@ Add these in hPanel. Never prefix the OpenRouter key with `NEXT_PUBLIC_`.
 
 ```text
 OPENROUTER_API_KEY=<newly rotated key>
+NEXT_PUBLIC_APP_URL=https://lab.aithreesixty.tech
 OPENROUTER_SITE_URL=https://lab.aithreesixty.tech
 OPENROUTER_SITE_NAME=AI 360 Lab
 OPENROUTER_IMAGE_MODEL=openai/gpt-image-1-mini
@@ -46,6 +47,7 @@ OPENROUTER_VIDEO_MODEL=google/veo-3.1-lite
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<Clerk production publishable key>
 CLERK_SECRET_KEY=<Clerk production secret key>
 CLERK_WEBHOOK_SIGNING_SECRET=<Clerk webhook signing secret>
+CLERK_AUTHORIZED_PARTIES=https://aithreesixty.tech,https://lab.aithreesixty.tech
 NEXT_PUBLIC_AI360_TEAM_WORKSPACES=false
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
@@ -66,17 +68,26 @@ AI360_RATE_VOICE_PER_MINUTE=5
 AI360_RATE_VOICE_PER_DAY=24
 ```
 
-Deploy the temporary Hostinger URL first. Open `/api/health` and confirm it
-returns `"status":"ok"`, `"aiConfigured":true`, `"authConfigured":true`,
-`"clerkWebhookConfigured":true`, `"usageLedgerConfigured":true` and
-`"databaseStatus":"connected"`.
+Before deployment, run `npm run prod:check`. Deploy the temporary Hostinger URL
+first. Open `/api/health` and confirm it returns HTTP 200 with `"status":"ok"`.
+Then open `/api/ready`; it must return HTTP 200 with `"status":"ready"` and
+`"databaseConnection":"connected"`. A 503 response includes safe configuration
+checks that identify the remaining release blockers without exposing secrets.
 
 ## Authentication and database setup
 
-Use the same Hostinger MySQL service as `aithreesixty.tech`, but create a
-separate logical database and database user for the Lab. This isolates the
-public product's user data and high-write chat traffic from the informational
-website.
+MySQL remains the transition data plane until the Supabase cutover is complete.
+Do not replace `MYSQL_*` with `DATABASE_URL` in production yet. The target
+architecture uses Supabase Postgres and Storage; see `PRODUCTION_READINESS.md`
+and `database/postgres/0001_initial.sql` for the gated migration path.
+
+The Supabase URLs may be staged while `DATABASE_PROVIDER=mysql` remains set.
+For Hostinger's persistent Node process, use the shared session-pooler URL on
+port 5432 as `DATABASE_URL`. Keep `DIRECT_URL` for migrations. If the direct
+database endpoint cannot be reached because the host is IPv4-only, run the
+migration through the session pooler or paste the reviewed migration into the
+Supabase SQL Editor. Do not expose a database password or service-role key in a
+`NEXT_PUBLIC_` variable.
 
 1. In hPanel, open **Databases > Management** for `aithreesixty.tech`.
 2. Create a database for the Lab and a dedicated user with access only to that
