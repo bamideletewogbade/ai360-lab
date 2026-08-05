@@ -10,10 +10,6 @@ const managedKeys = [
   'CLERK_WEBHOOK_SIGNING_SECRET',
   'DATABASE_PROVIDER',
   'DATABASE_URL',
-  'MYSQL_HOST',
-  'MYSQL_DATABASE',
-  'MYSQL_USER',
-  'MYSQL_PASSWORD',
   'NEXT_PUBLIC_BILLING_ENABLED',
 ] as const
 
@@ -40,33 +36,27 @@ test('partial Clerk configuration is reported as invalid', () => {
   })
 })
 
-test('the current MySQL data plane can be marked ready when fully configured', () => {
-  withEnvironment({
-    DATABASE_PROVIDER: 'mysql',
-    MYSQL_HOST: 'database.internal',
-    MYSQL_DATABASE: 'ai360_lab',
-    MYSQL_USER: 'ai360_app',
-    MYSQL_PASSWORD: 'not-a-real-password',
-  }, () => {
-    assert.equal(selectedDatabaseProvider(), 'mysql')
+test('Postgres is the data plane and is ready once a connection string exists', () => {
+  withEnvironment({ DATABASE_URL: 'postgresql://example.invalid/db' }, () => {
+    assert.equal(selectedDatabaseProvider(), 'postgres')
     assert.equal(productionReadinessChecks().find((check) => check.key === 'database')?.status, 'ready')
   })
 })
 
-test('Supabase remains pending until application data routes are cut over', () => {
-  withEnvironment({ DATABASE_PROVIDER: 'postgres', DATABASE_URL: 'postgresql://example.invalid/db' }, () => {
-    assert.equal(selectedDatabaseProvider(), 'postgres')
-    assert.equal(productionReadinessChecks().find((check) => check.key === 'database')?.status, 'pending')
+test('no connection string means no database, and that blocks readiness', () => {
+  withEnvironment({}, () => {
+    assert.equal(selectedDatabaseProvider(), 'none')
+    const database = productionReadinessChecks().find((check) => check.key === 'database')
+    assert.equal(database?.status, 'missing')
+    assert.equal(database?.required, true)
   })
 })
 
-test('a staged Supabase URL cannot override an explicit MySQL production data plane', () => {
+test('a stale DATABASE_PROVIDER value cannot resurrect a second data plane', () => {
+  // MySQL was retired on 2026-08-05. Leaving the old flag set in an environment
+  // must not change which database the application talks to.
   withEnvironment({
     DATABASE_PROVIDER: 'mysql',
-    DATABASE_URL: 'postgresql://staged.example.invalid/postgres',
-    MYSQL_HOST: 'database.internal',
-    MYSQL_DATABASE: 'ai360_lab',
-    MYSQL_USER: 'ai360_app',
-    MYSQL_PASSWORD: 'not-a-real-password',
-  }, () => assert.equal(selectedDatabaseProvider(), 'mysql'))
+    DATABASE_URL: 'postgresql://example.invalid/db',
+  }, () => assert.equal(selectedDatabaseProvider(), 'postgres'))
 })

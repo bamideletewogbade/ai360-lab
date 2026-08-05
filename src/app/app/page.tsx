@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { MODEL_OPTIONS, type ChatMode } from '@/lib/models'
 import { ResponseContent } from '@/components/ResponseContent'
+import { DEFAULT_LANGUAGE, findLanguage, LANGUAGES, type LanguageCode } from '@/lib/languages'
 import { StudioWorkspace } from '@/components/StudioWorkspace'
 import { AccountControls } from '@/components/AccountControls'
 import { WorkspaceOnboarding, type OnboardingChoice } from '@/components/WorkspaceOnboarding'
@@ -25,12 +26,28 @@ type Msg = {
   attachments?: Attachment[]
   agent?: boolean
   agentSteps?: AgentStep[]
+  agentPlan?: AgentPlan
+  /** Set when the run reports its result, so a streaming draft is not called finished. */
+  agentDone?: boolean
+  /**
+   * The server side run this message is showing. Saved with the conversation so
+   * a dropped connection, or closing the tab entirely, can be picked back up.
+   */
+  agentRunId?: string
   sources?: SourceLink[]
   usage?: { totalTokens?: number; cost?: number }
   actions?: AgentAction[]
 }
 type Experience = 'chat' | 'agent' | 'studio'
-type AgentStep = { id: string; label: string; status: 'active' | 'complete' }
+type AgentStep = { id: string; label: string; status: 'pending' | 'active' | 'complete' | 'failed' }
+type AgentDepth = 'quick' | 'standard' | 'thorough'
+/** A plan waiting for the person to approve it before any paid work runs. */
+type AgentPlan = {
+  objectives: string[]
+  depth: AgentDepth
+  awaitingApproval: boolean
+  estimatedCredits: number
+}
 type SourceLink = { title: string; url: string }
 type ActionKind = 'email' | 'calendar' | 'task'
 type AgentAction = {
@@ -179,7 +196,10 @@ async function readTextStream(response: Response, onText: (text: string) => void
 }
 
 type AgentEvent =
-  | { type: 'step'; id: string; label: string; status: 'active' | 'complete' }
+  | { type: 'run'; runId: string; recoverable: boolean }
+  | { type: 'step'; id: string; label: string; status: 'pending' | 'active' | 'complete' | 'failed' }
+  | { type: 'delta'; text: string; reset?: boolean }
+  | { type: 'plan'; objectives: string[]; depth: AgentDepth; awaitingApproval: boolean; estimatedCredits: number }
   | { type: 'result'; content: string; sources?: SourceLink[]; actions?: AgentAction[]; usage?: { totalTokens?: number; cost?: number } }
   | { type: 'error'; message: string }
 
@@ -199,6 +219,41 @@ async function readAgentStream(response: Response, onEvent: (event: AgentEvent) 
       onEvent(JSON.parse(line) as AgentEvent)
     }
   }
+}
+
+/**
+ * The three things the Lab does, in the order people need them.
+ *
+ * This is the only control that changes what the whole workspace is, so it
+ * lives in one place and is described the same way everywhere.
+ */
+const EXPERIENCES: Array<{
+  id: Experience
+  mark: string
+  label: string
+  caption: string
+  hint: string
+}> = [
+  { id: 'chat', mark: 'A', label: 'Quick', caption: 'Answers and ideas', hint: 'Ask anything. Fastest and cheapest.' },
+  { id: 'agent', mark: '✦', label: 'Research', caption: 'Current and sourced', hint: 'Searches the live web and cites what it used.' },
+  { id: 'studio', mark: '◆', label: 'Create', caption: 'Projects and assets', hint: 'Build a campaign, brand or set of assets.' },
+]
+
+/** Sidebar grouping. A campaign project is not the same kind of thing as a chat. */
+const SIDEBAR_GROUPS: Array<{
+  id: string
+  label: string
+  mark: string
+  match: (experience?: Experience) => boolean
+}> = [
+  { id: 'projects', label: 'Projects', mark: '◆', match: (experience) => experience === 'studio' },
+  { id: 'conversations', label: 'Conversations', mark: '✦', match: (experience) => experience !== 'studio' },
+]
+
+const AGENT_DEPTH_HINTS: Record<AgentDepth, string> = {
+  quick: 'One line of enquiry, no checking pass. Fastest and cheapest.',
+  standard: 'Up to two lines of enquiry, then checked against the sources.',
+  thorough: 'Up to three lines of enquiry, then checked and corrected.',
 }
 
 const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
@@ -228,6 +283,14 @@ function LabWorkspace({
   const [activeId, setActiveId] = useState('')
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  // How thorough an agent run should be, and whether it pauses for sign-off
+  // before spending anything. Both are per-session preferences, not per-message.
+  const [agentDepth, setAgentDepth] = useState<AgentDepth>('standard')
+  const [planFirst, setPlanFirst] = useState(false)
+  // Kept for the session so nobody has to reselect their language every message.
+  const [language, setLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE)
+  const [languageOpen, setLanguageOpen] = useState(false)
+  const recovering = useRef(new Set<string>())
   const [hydrated, setHydrated] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [modelOpen, setModelOpen] = useState(false)
@@ -735,6 +798,202 @@ function LabWorkspace({
     }
   }
 
+  /** Applies one streamed agent event to the message it belongs to. */
+  function applyAgentEvent(conversationId: string, messageId: string, event: AgentEvent) {
+    setConversations((items) =>
+      items.map((item) => {
+        if (item.id !== conversationId) return item
+        return {
+          ...item,
+          updatedAt: Date.now(),
+          messages: item.messages.map((message) => {
+            if (message.id !== messageId) return message
+            if (event.type === 'step') {
+              const steps = message.agentSteps ?? []
+              const existing = steps.findIndex((step) => step.id === event.id)
+              const updated = { id: event.id, label: event.label, status: event.status }
+              return {
+                ...message,
+                agentSteps: existing >= 0
+                  ? steps.map((step) => (step.id === event.id ? updated : step))
+                  : [...steps, updated],
+              }
+            }
+            if (event.type === 'run') {
+              return { ...message, agentRunId: event.recoverable ? event.runId : undefined }
+            }
+            if (event.type === 'delta') {
+              // A reset marks a new draft replacing the one on screen, which is
+              // what happens when verification sends the answer back for correction.
+              return { ...message, content: event.reset ? event.text : message.content + event.text }
+            }
+            if (event.type === 'plan') {
+              return {
+                ...message,
+                agentPlan: {
+                  objectives: event.objectives,
+                  depth: event.depth,
+                  awaitingApproval: event.awaitingApproval,
+                  estimatedCredits: event.estimatedCredits,
+                },
+              }
+            }
+            if (event.type === 'result') {
+              return {
+                ...message,
+                content: event.content,
+                sources: event.sources ?? [],
+                actions: event.actions ?? [],
+                usage: event.usage,
+                agentDone: true,
+                agentPlan: message.agentPlan ? { ...message.agentPlan, awaitingApproval: false } : undefined,
+              }
+            }
+            return { ...message, content: event.message }
+          }),
+        }
+      }),
+    )
+  }
+
+  /**
+   * Reattaches to any run left unfinished, including after the tab was closed.
+   *
+   * A conversation carries its runs with it, so reopening the Lab is enough to
+   * find work that was still going when the connection died.
+   */
+  useEffect(() => {
+    if (!signedIn) return
+    for (const conversation of conversations) {
+      for (const message of conversation.messages) {
+        if (!message.agentRunId || message.agentDone || recovering.current.has(message.agentRunId)) continue
+        recovering.current.add(message.agentRunId)
+        void recoverRun(conversation.id, message.id, message.agentRunId)
+      }
+    }
+    // `recoverRun` is deliberately not a dependency: it is redefined on every
+    // render, so depending on it would re-run this constantly. Each run is
+    // claimed once by id in `recovering`, which is what actually prevents a
+    // second poll starting for the same work.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations, signedIn])
+
+  /**
+   * Picks a run back up after the connection carrying it died.
+   *
+   * Polls rather than reconnecting a stream, because a long lived connection is
+   * the thing that just failed. Keeps asking until the run reaches a terminal
+   * state, then writes the answer into the message that was waiting for it.
+   */
+  async function recoverRun(conversationId: string, messageId: string, runId: string) {
+    const startedAt = Date.now()
+    const deadline = 5 * 60 * 1000
+    let delay = 2_000
+
+    while (Date.now() - startedAt < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, delay))
+      delay = Math.min(delay * 1.4, 8_000)
+
+      let run: {
+        finished?: boolean
+        status?: string
+        steps?: AgentStep[]
+        content?: string | null
+        sources?: SourceLink[]
+        usage?: { totalTokens?: number; cost?: number } | null
+      }
+      try {
+        const res = await fetch(`/api/agent/runs/${encodeURIComponent(runId)}`)
+        if (res.status === 404 || res.status === 401) return
+        if (!res.ok) continue
+        run = await res.json()
+      } catch {
+        continue // Still offline. Keep waiting rather than giving up on the work.
+      }
+
+      for (const step of run.steps ?? []) {
+        applyAgentEvent(conversationId, messageId, {
+          type: 'step', id: step.id, label: step.label, status: step.status,
+        })
+      }
+
+      if (!run.finished) continue
+
+      if (run.content) {
+        applyAgentEvent(conversationId, messageId, {
+          type: 'result',
+          content: run.content,
+          sources: run.sources ?? [],
+          usage: run.usage ?? undefined,
+        })
+      } else {
+        applyAgentEvent(conversationId, messageId, {
+          type: 'error',
+          message: 'That run did not finish. No credits were charged for work you did not receive.',
+        })
+      }
+      return
+    }
+  }
+
+  /**
+   * Runs a plan the person has approved.
+   *
+   * The approved objectives are sent alongside the plan they came from, so the
+   * server can confirm it is executing work it proposed rather than whatever
+   * the client asked for.
+   */
+  async function approvePlan(conversationId: string, message: Msg) {
+    const plan = message.agentPlan
+    const conversation = conversations.find((item) => item.id === conversationId)
+    if (!plan || !conversation || busy) return
+
+    const history = conversation.messages
+      .filter((item) => item.id !== message.id && (item.content || item.attachments?.length))
+      .map(({ role, content, attachments }) => ({ role, content, attachments }))
+
+    applyAgentEvent(conversationId, message.id, {
+      type: 'plan', objectives: plan.objectives, depth: plan.depth,
+      awaitingApproval: false, estimatedCredits: plan.estimatedCredits,
+    })
+    setBusy(true)
+    try {
+      const requestId = crypto.randomUUID()
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
+        body: JSON.stringify({
+          messages: history,
+          mode: conversation.model,
+          depth: plan.depth,
+          language,
+          sessionId: conversationId,
+          proposedPlan: plan.objectives,
+          approvedPlan: plan.objectives,
+        }),
+      })
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}))
+        throw new Error(typeof detail.error === 'string' ? detail.error : 'The plan could not be run.')
+      }
+      await readAgentStream(res, (event) => applyAgentEvent(conversationId, message.id, event))
+    } catch (error) {
+      applyAgentEvent(conversationId, message.id, {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'The plan could not be run.',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function discardPlan(conversationId: string, messageId: string) {
+    applyAgentEvent(conversationId, messageId, {
+      type: 'error',
+      message: 'Plan discarded. Nothing was run and no credits were used for the work.',
+    })
+  }
+
   async function send(
     rawText: string,
     sentAttachment = attachment,
@@ -792,7 +1051,9 @@ function LabWorkspace({
             attachments,
           })),
           mode,
+          language,
           sessionId: requestConversationId,
+          ...(currentExperience === 'agent' ? { depth: agentDepth, planOnly: planFirst } : {}),
         }),
       })
       if (!res.ok) {
@@ -803,45 +1064,24 @@ function LabWorkspace({
         )
       }
       if (currentExperience === 'agent') {
-        await readAgentStream(res, (event) => {
-          setConversations((items) =>
-            items.map((item) => {
-              if (item.id !== requestConversationId) return item
-              return {
-                ...item,
-                updatedAt: Date.now(),
-                messages: item.messages.map((message) => {
-                  if (message.id !== placeholder.id) return message
-                  if (event.type === 'step') {
-                    const steps = message.agentSteps ?? []
-                    const existing = steps.findIndex((step) => step.id === event.id)
-                    return {
-                      ...message,
-                      agentSteps:
-                        existing >= 0
-                          ? steps.map((step) =>
-                              step.id === event.id
-                                ? { id: event.id, label: event.label, status: event.status }
-                                : step,
-                            )
-                          : [...steps, { id: event.id, label: event.label, status: event.status }],
-                    }
-                  }
-                  if (event.type === 'result') {
-                    return {
-                      ...message,
-                      content: event.content,
-                      sources: event.sources ?? [],
-                      actions: event.actions ?? [],
-                      usage: event.usage,
-                    }
-                  }
-                  return { ...message, content: event.message }
-                }),
-              }
-            }),
-          )
-        })
+        // The run continues on the server whatever happens to this connection,
+        // so a broken stream is a reason to go and find it, not to lose it.
+        let runId: string | null = null
+        try {
+          await readAgentStream(res, (event) => {
+            if (event.type === 'run' && event.recoverable) runId = event.runId
+            applyAgentEvent(requestConversationId, placeholder.id, event)
+          })
+        } catch (streamError) {
+          if (!runId) throw streamError
+          applyAgentEvent(requestConversationId, placeholder.id, {
+            type: 'step',
+            id: 'reconnect',
+            label: 'Connection dropped. The work is still running, waiting for it.',
+            status: 'active',
+          })
+          await recoverRun(requestConversationId, placeholder.id, runId)
+        }
       } else {
         await readTextStream(res, (accumulated) => {
           setConversations((items) =>
@@ -930,19 +1170,32 @@ function LabWorkspace({
           <span>⌕</span>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats" />
         </label>
-        <div className="history-label">Projects & conversations</div>
+        {/* Projects and conversations are different objects with different
+            lifespans, so they are listed separately instead of interleaved in
+            one undifferentiated list. */}
         <nav className="history-list">
-          {visibleConversations.map((conversation) => (
-            <div className={`history-item${conversation.id === active.id ? ' active' : ''}`} key={conversation.id}>
-              <button className="history-main" onClick={() => { setActiveId(conversation.id); setSidebarOpen(false) }}>
-                <span className="history-spark">✦</span>
-                <span>{conversation.title}</span>
-              </button>
-              <button className="history-more" onClick={() => renameChat(conversation.id)} title="Rename">✎</button>
-              <button className="history-more delete" onClick={() => deleteChat(conversation.id)} title="Delete">×</button>
-            </div>
-          ))}
-          {!visibleConversations.length && <p className="no-results">No conversations found.</p>}
+          {SIDEBAR_GROUPS.map((group) => {
+            const items = visibleConversations.filter((conversation) => group.match(conversation.experience))
+            if (!items.length) return null
+            return (
+              <div className="history-group" key={group.id}>
+                <div className="history-label">{group.label}<span>{items.length}</span></div>
+                {items.map((conversation) => (
+                  <div className={`history-item${conversation.id === active.id ? ' active' : ''}`} key={conversation.id}>
+                    <button className="history-main" onClick={() => { setActiveId(conversation.id); setSidebarOpen(false) }}>
+                      <span className="history-spark">{group.mark}</span>
+                      <span>{conversation.title}</span>
+                    </button>
+                    <button className="history-more" onClick={() => renameChat(conversation.id)} title="Rename">✎</button>
+                    <button className="history-more delete" onClick={() => deleteChat(conversation.id)} title="Delete">×</button>
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+          {!visibleConversations.length && (
+            <p className="no-results">{search ? 'Nothing matches that search.' : 'Nothing here yet. Start something above.'}</p>
+          )}
         </nav>
         <div className="side-foot" aria-live="polite">
           <div className={`privacy-dot ${signedIn ? cloudStatus : 'local'}`}><span /></div>
@@ -957,42 +1210,33 @@ function LabWorkspace({
       {sidebarOpen && <button className="scrim" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />}
 
       <section className={`workspace ${experience}`}>
+        {/* Three zones: identity on the left, the one control that changes
+            everything in the middle, account and settings on the right. The
+            capability chip moved down to the composer, where it describes the
+            thing the person is about to use rather than competing with it. */}
         <header className="lab-top">
-          <button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open conversations">☰</button>
-          <Link className="lab-brand" href="/" aria-label="AI 360 Lab home">
-            <img src="/icon-mark-black.png" alt="" />
-            <span><b>AI 360</b> LAB</span>
-          </Link>
-          <div className="experience-switch" role="group" aria-label="AI experience">
-            <button
-              className={experience === 'chat' ? 'active' : ''}
-              onClick={() => selectExperience('chat')}
-              aria-pressed={experience === 'chat'}
-            >
-              <span className="mode-mark">A</span>
-              <span className="mode-copy"><b>Quick</b><small>Answers & ideas</small></span>
-            </button>
-            <button
-              className={experience === 'agent' ? 'active agent' : 'agent'}
-              onClick={() => selectExperience('agent')}
-              aria-pressed={experience === 'agent'}
-            >
-              <span className="mode-mark">✦</span>
-              <span className="mode-copy"><b>Research</b><small>Current & sourced</small></span>
-            </button>
-            <button
-              className={experience === 'studio' ? 'active studio' : 'studio'}
-              onClick={() => selectExperience('studio')}
-              aria-pressed={experience === 'studio'}
-            >
-              <span className="mode-mark">◆</span>
-              <span className="mode-copy"><b>Create</b><small>Projects & assets</small></span>
-            </button>
+          <div className="lab-top-left">
+            <button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open conversations">☰</button>
+            <Link className="lab-brand" href="/" aria-label="AI 360 Lab home">
+              <img src="/icon-mark-black.png" alt="" />
+              <span><b>AI 360</b> LAB</span>
+            </Link>
           </div>
-          <span className="web-ready" title="AI 360 can search and read current web information when needed">
-            <i /> Live intelligence
-          </span>
-          <span className="spacer" />
+          <div className="experience-switch" role="group" aria-label="What do you want to do">
+            {EXPERIENCES.map((option) => (
+              <button
+                key={option.id}
+                className={`${option.id === 'chat' ? '' : option.id} ${experience === option.id ? 'active' : ''}`.trim()}
+                onClick={() => selectExperience(option.id)}
+                aria-pressed={experience === option.id}
+                title={option.hint}
+              >
+                <span className="mode-mark">{option.mark}</span>
+                <span className="mode-copy"><b>{option.label}</b><small>{option.caption}</small></span>
+              </button>
+            ))}
+          </div>
+          <div className="lab-top-right">
           {experience !== 'studio' && <div className="model-picker">
             <button className="model-trigger" onClick={() => setModelOpen((open) => !open)} aria-expanded={modelOpen}>
               <span className="status-dot" />
@@ -1015,6 +1259,7 @@ function LabWorkspace({
             <button className="new-top" onClick={newChat}><span>＋</span><span className="hide-mobile">New chat</span></button>
           )}
           <AccountControls enabled={AUTH_ENABLED} />
+          </div>
         </header>
 
         {experience === 'studio' ? (
@@ -1085,16 +1330,37 @@ function LabWorkspace({
                         <b>{file.name}</b>
                       </div>
                     ))}
+                    {message.agentPlan?.awaitingApproval ? (
+                      <div className="agent-plan">
+                        <div className="agent-plan-head">
+                          <span><b>Here is the plan</b><small>Nothing runs and nothing is charged until you approve it.</small></span>
+                          <span className="agent-plan-cost">about {message.agentPlan.estimatedCredits} credits</span>
+                        </div>
+                        <ol className="agent-plan-list">
+                          {message.agentPlan.objectives.map((objective, index) => (
+                            <li key={objective}><span>{String(index + 1).padStart(2, '0')}</span>{objective}</li>
+                          ))}
+                        </ol>
+                        <div className="agent-plan-actions">
+                          <button type="button" className="agent-plan-approve" disabled={busy} onClick={() => active && approvePlan(active.id, message)}>
+                            Run this plan <span aria-hidden="true">↗</span>
+                          </button>
+                          <button type="button" className="agent-plan-discard" disabled={busy} onClick={() => active && discardPlan(active.id, message.id)}>
+                            Discard
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                     {message.agentSteps?.length ? (
                       <div className="agent-run">
                         <div className="agent-run-head">
                           <span className="agent-orbit">✦</span>
-                          <span><b>Agent run</b><small>{message.content ? 'Completed' : 'Working through the task'}</small></span>
+                          <span><b>Agent run</b><small>{message.agentDone ? 'Completed' : 'Working through the task'}</small></span>
                         </div>
                         <div className="agent-steps">
                           {message.agentSteps.map((step) => (
                             <div className={`agent-step ${step.status}`} key={step.id}>
-                              <span>{step.status === 'complete' ? '✓' : '✦'}</span>
+                              <span>{step.status === 'complete' ? '✓' : step.status === 'failed' ? '×' : step.status === 'pending' ? '·' : '✦'}</span>
                               <span>{step.label}</span>
                             </div>
                           ))}
@@ -1232,13 +1498,68 @@ function LabWorkspace({
               />
               <button onClick={() => fileRef.current?.click()} title="Attach an image, video or document" aria-label="Attach file">＋</button>
               <button className={recordingState === 'recording' ? 'active' : ''} onClick={toggleRecording} title="Record your voice" aria-label="Record voice">●</button>
-              <span className="tool-label">
-                {experience === 'agent'
-                  ? 'Agent can research, read and create'
-                  : attachment
-                    ? 'File attached'
-                    : 'Add a file or record your voice'}
-              </span>
+              <div className="language-picker">
+                <button
+                  className={`language-trigger${language === DEFAULT_LANGUAGE ? '' : ' chosen'}`}
+                  onClick={() => setLanguageOpen((open) => !open)}
+                  aria-expanded={languageOpen}
+                  aria-label={`Language: ${findLanguage(language).name}`}
+                  title="Ask and get answers in your own language"
+                >
+                  {findLanguage(language).nativeName}
+                  <span className="chevron">⌄</span>
+                </button>
+                {languageOpen && (
+                  <div className="language-menu">
+                    <div className="language-menu-title">Answer me in</div>
+                    {LANGUAGES.map((option) => (
+                      <button
+                        key={option.code}
+                        className={option.code === language ? 'selected' : ''}
+                        onClick={() => { setLanguage(option.code); setLanguageOpen(false) }}
+                      >
+                        <span className="language-check">{option.code === language ? '✓' : ''}</span>
+                        <span><b>{option.nativeName}</b><small>{option.sample}</small></span>
+                      </button>
+                    ))}
+                    <p className="language-note">Write in any of these and it replies the same way, whatever is selected.</p>
+                  </div>
+                )}
+              </div>
+              {experience === 'agent' ? (
+                <div className="agent-controls">
+                  <div className="agent-depth" role="group" aria-label="How thorough the agent should be">
+                    {(['quick', 'standard', 'thorough'] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        className={agentDepth === option ? 'active' : ''}
+                        aria-pressed={agentDepth === option}
+                        onClick={() => setAgentDepth(option)}
+                        title={AGENT_DEPTH_HINTS[option]}
+                      >
+                        {option[0].toUpperCase() + option.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className={`agent-plan-toggle ${planFirst ? 'active' : ''}`}
+                    aria-pressed={planFirst}
+                    onClick={() => setPlanFirst((value) => !value)}
+                    title="See the plan and approve it before any credits are spent on the work"
+                  >
+                    {planFirst ? '✓ ' : ''}Plan first
+                  </button>
+                </div>
+              ) : (
+                <span className="tool-label">
+                  {attachment ? 'File attached' : 'Add a file or record your voice'}
+                  <span className="web-ready" title="AI 360 searches and reads current web pages when accuracy depends on today">
+                    <i /> Live intelligence
+                  </span>
+                </span>
+              )}
               <button
                 className="send"
                 onClick={() => send(input)}

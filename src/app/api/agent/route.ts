@@ -1,9 +1,11 @@
-import { isChatMode, providerPreferences, routeFor, type ChatMode } from '@/lib/models'
+﻿import { isChatMode, routeFor, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveRequester } from '@/lib/guardrails'
-import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
+import { errorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
 import { openCreditGate } from '@/lib/billing/credit-gate'
-import { citationSources, RESEARCH_TOOLS } from '@/lib/live-tools'
+import { failRun, runAgent } from '@/lib/agent/runtime'
+import { isAgentDepth, reconcileApprovedPlan, type AgentDepth } from '@/lib/agent/protocol'
+import { DEFAULT_LANGUAGE, isLanguageCode, type LanguageCode } from '@/lib/languages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,22 +27,6 @@ type ContentPart =
   | { type: 'video_url'; video_url: { url: string } }
   | { type: 'file'; file: { filename: string; file_data: string } }
 
-const AGENT_PROMPT = `You are AI 360 Agent, an outcome-focused research and document-analysis agent built by AI 360 for learners, professionals and entrepreneurs across Africa.
-
-Your job is to complete useful multi-step knowledge work, not merely discuss it.
-
-- Decide whether current web information or a supplied URL must be researched. Use the available tools when they materially improve accuracy.
-- Examine attached files carefully and connect findings across them.
-- Produce a complete, usable result with a short conclusion, clear evidence and practical next actions.
-- Cite web sources using descriptive Markdown links close to supported claims.
-- Never invent a source, URL, statistic, tool result or completed action.
-- Never claim to send, publish, buy, delete or modify an external system. Those actions are not available.
-- Write in a warm, confident editorial voice. Start with the result.
-- Never use em dashes or en dashes. Use periods, commas, colons or parentheses.
-- Use valid Markdown with short paragraphs, H2/H3 headings, restrained bold, lists and tables only when useful.
-- For medical, legal, financial or employment matters, state relevant limitations and recommend qualified review.
-- Never expose private reasoning. Summarize completed work and evidence instead.`
-
 function providerMessage(message: Msg) {
   if (message.role !== 'user' || !message.attachments?.length) {
     return { role: message.role, content: message.content }
@@ -58,17 +44,6 @@ function providerMessage(message: Msg) {
     }
   }
   return { role: message.role, content }
-}
-
-function textContent(value: unknown) {
-  if (typeof value === 'string') return value
-  if (!Array.isArray(value)) return ''
-  return value
-    .map((part) => {
-      if (part && typeof part === 'object' && 'text' in part && typeof part.text === 'string') return part.text
-      return ''
-    })
-    .join('')
 }
 
 function plainText(value: string) {
@@ -142,7 +117,17 @@ export async function POST(request: Request) {
     return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })
   }
 
-  let body: { messages?: Msg[]; mode?: ChatMode; sessionId?: string }
+  let body: {
+    messages?: Msg[]
+    mode?: ChatMode
+    sessionId?: string
+    depth?: unknown
+    language?: unknown
+    planOnly?: unknown
+    /** The plan the client was shown, echoed back so approvals can be checked against it. */
+    proposedPlan?: unknown
+    approvedPlan?: unknown
+  }
   try {
     body = await request.json()
   } catch {
@@ -164,21 +149,39 @@ export async function POST(request: Request) {
     })
   }
   const mode: ChatMode = isChatMode(body.mode) ? body.mode : 'auto'
+  const depth: AgentDepth = isAgentDepth(body.depth) ? body.depth : 'standard'
+  const language: LanguageCode = isLanguageCode(body.language) ? body.language : DEFAULT_LANGUAGE
+  // Approved objectives are reconciled against what was proposed, so a client
+  // cannot smuggle in extra work by editing the approval payload.
+  const approvedObjectives = reconcileApprovedPlan(
+    Array.isArray(body.proposedPlan)
+      ? body.proposedPlan.filter((item: unknown): item is string => typeof item === 'string')
+      : [],
+    body.approvedPlan,
+  )
+  const planOnly = body.planOnly === true && !approvedObjectives.length
   const sessionId = typeof body.sessionId === 'string' ? body.sessionId.slice(0, 256) : undefined
   const key = process.env.OPENROUTER_API_KEY
   const encoder = new TextEncoder()
   const attachments = messages.flatMap((message) => message.attachments ?? [])
   log.info('agent.accepted', {
     mode,
+    depth,
+    planOnly,
+    approvedTaskCount: approvedObjectives.length,
     messageCount: messages.length,
     attachmentCount: attachments.length,
     attachmentKinds: attachments.map((attachment) => attachment.kind),
     aiConfigured: Boolean(key),
   })
 
-  // Preview mode costs nothing, so it is never charged.
+  // Planning is one small call, so it is charged as a chat turn rather than a
+  // full agent run. Rejecting a plan should cost one credit, not five.
   const credit = key
-    ? await openCreditGate({ request, requester, feature: 'agent', requestId: log.requestId })
+    ? await openCreditGate({
+        request, requester, requestId: log.requestId,
+        feature: planOnly ? 'chat' : 'agent',
+      })
     : { gate: undefined, denied: undefined }
   if (credit.denied) {
     log.finish(402, { outcome: 'insufficient_credits' })
@@ -186,15 +189,34 @@ export async function POST(request: Request) {
   }
   const gate = credit.gate
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (event: Record<string, unknown>) =>
-        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
-      try {
-        send({ type: 'step', id: 'understand', label: 'Understanding the outcome', status: 'active' })
-        send({ type: 'step', id: 'understand', label: 'Outcome understood', status: 'complete' })
-        send({ type: 'step', id: 'plan', label: 'Building a focused plan', status: 'active' })
+  // The run must outlive the connection that started it. On a mobile network
+  // that drops, the old shape lost the work and stranded the credits until the
+  // reservation expired. Now the stream is only a view of the run: writing to a
+  // closed connection is ignored, and the client picks the run up again from
+  // /api/agent/runs/<id>.
+  let connected = true
 
+  const stream = new ReadableStream({
+    cancel() {
+      connected = false
+      log.info('agent.client_disconnected', { runId: `run_${log.requestId.slice(0, 48)}` })
+    },
+    async start(controller) {
+      const send = (event: Record<string, unknown>) => {
+        if (!connected) return
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
+        } catch {
+          // The client has gone. The run carries on and is recovered by id.
+          connected = false
+        }
+      }
+      const close = () => {
+        if (!connected) return
+        connected = false
+        try { controller.close() } catch { /* already closed by the client */ }
+      }
+      try {
         if (!key) {
           send({ type: 'step', id: 'plan', label: 'Plan ready', status: 'complete' })
           send({ type: 'step', id: 'tools', label: 'Previewing research tools', status: 'complete' })
@@ -205,118 +227,80 @@ export async function POST(request: Request) {
             sources: [],
           })
           log.finish(200, { outcome: 'preview_response' })
-          controller.close()
+          close()
           return
         }
 
-        send({ type: 'step', id: 'plan', label: 'Plan ready', status: 'complete' })
-        send({ type: 'step', id: 'tools', label: 'Researching and reading relevant material', status: 'active' })
-
-        const { model, models } = routeFor(mode, { workload: 'agent' })
-        const hasPdf = messages.some((message) =>
-          message.attachments?.some((attachment) => attachment.kind === 'pdf'),
-        )
-        const providerStartedAt = performance.now()
-        log.info('provider.request.started', {
-          provider: 'openrouter',
-          feature: 'agent',
-          model,
-          fallbackModels: models,
-          hasPdf,
-          tools: ['web_search', 'web_fetch', 'datetime'],
-        })
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          signal: AbortSignal.timeout(90_000),
-          headers: {
-            Authorization: `Bearer ${key}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-            'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI 360 Lab',
-          },
-          body: JSON.stringify({
-            model,
-            models,
-            ...(sessionId ? { session_id: sessionId } : {}),
-            messages: [{ role: 'system', content: AGENT_PROMPT }, ...messages.map(providerMessage)],
-            tools: RESEARCH_TOOLS,
-            provider: providerPreferences('agent'),
-            max_tokens: 3_500,
-            ...(hasPdf
-              ? { plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] }
-              : {}),
-          }),
+        const goal = [...messages].reverse().find((message) => message.role === 'user')?.content ?? ''
+        const startedAt = performance.now()
+        const run = await runAgent({
+          goal,
+          messages: messages.map(providerMessage),
+          mode,
+          depth,
+          language,
+          hasAttachments: attachments.length > 0,
+          planOnly,
+          approvedObjectives,
+          requestId: log.requestId,
+          sessionId,
+          context: requester.context,
+          apiKey: key,
+          siteUrl: process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
+          siteName: process.env.OPENROUTER_SITE_NAME || 'AI 360 Lab',
+          emit: (event) => send(event as unknown as Record<string, unknown>),
+          log,
         })
 
-        if (!response.ok) {
-          const failure = await providerErrorDetails(response)
-          log.error('provider.request.failed', {
-            provider: 'openrouter',
-            feature: 'agent',
-            model,
-            durationMs: Math.round(performance.now() - providerStartedAt),
-            ...failure,
-          })
-          await recordUsageEventSafe({
-            requestId: log.requestId, route: '/api/agent', feature: 'agent',
-            provider: 'openrouter', model, latencyMs: Math.round(performance.now() - providerStartedAt),
-            outcome: 'provider_error', metadata: { providerStatus: response.status },
-          })
-          throw new Error(`Agent provider request failed with status ${response.status}`)
+        if (run.awaitingApproval) {
+          await gate?.settle('success', run.costUsd)
+          log.finish(200, { outcome: 'awaiting_approval', taskCount: run.plan.length, cost: run.costUsd, depth })
+          close()
+          return
         }
-        log.info('provider.request.completed', {
-          provider: 'openrouter',
-          feature: 'agent',
-          model,
-          providerStatus: response.status,
-          durationMs: Math.round(performance.now() - providerStartedAt),
-        })
-        const json = await response.json()
-        send({ type: 'step', id: 'tools', label: 'Research and reading complete', status: 'complete' })
-        send({ type: 'step', id: 'verify', label: 'Checking the result and sources', status: 'active' })
 
-        const message = json.choices?.[0]?.message
-        const sources = citationSources(message?.annotations)
-
-        send({ type: 'step', id: 'verify', label: 'Result checked', status: 'complete' })
-        const resultContent = textContent(message?.content) || 'The agent completed its work but returned no readable result.'
+        const resultContent = run.content || 'The agent completed its work but returned no readable result.'
         send({
           type: 'result',
           content: resultContent,
-          sources,
+          sources: run.sources,
           actions: actionSuggestions(messages, resultContent),
-          usage: {
-            totalTokens: json.usage?.total_tokens,
-            cost: json.usage?.cost,
-          },
+          usage: { totalTokens: run.totalTokens, cost: run.costUsd },
         })
         await recordUsageEventSafe({
-          requestId: log.requestId, route: '/api/agent', feature: 'agent', provider: 'openrouter', model,
-          inputTokens: json.usage?.prompt_tokens, outputTokens: json.usage?.completion_tokens,
-          actualCostUsd: json.usage?.cost, latencyMs: Math.round(performance.now() - providerStartedAt),
-          outcome: 'success', metadata: { sourceCount: sources.length, attachmentCount: attachments.length },
+          requestId: log.requestId, route: '/api/agent', feature: 'agent', provider: 'openrouter',
+          model: routeFor(mode, { workload: 'agent' }).model,
+          actualCostUsd: run.costUsd, latencyMs: Math.round(performance.now() - startedAt),
+          outcome: 'success',
+          metadata: {
+            sourceCount: run.sources.length, attachmentCount: attachments.length,
+            tasksRun: run.tasksRun, revised: run.revised, stoppedEarly: run.stoppedEarly,
+          },
         })
-        await gate?.settle('success', json.usage?.cost)
+        await gate?.settle('success', run.costUsd)
         log.finish(200, {
           outcome: 'success',
           provider: 'openrouter',
-          model,
           creditsReserved: gate?.reserved,
-          sourceCount: sources.length,
+          sourceCount: run.sources.length,
           outputCharacters: resultContent.length,
-          totalTokens: json.usage?.total_tokens,
-          cost: json.usage?.cost,
+          totalTokens: run.totalTokens,
+          cost: run.costUsd,
+          tasksRun: run.tasksRun,
+          revised: run.revised,
+          stoppedEarly: run.stoppedEarly,
         })
-        controller.close()
+        close()
       } catch (error) {
         log.error('agent.stream.failed', errorDetails(error))
+        await failRun(log.requestId, requester.context, 'run_failed')
         await gate?.settle('failure')
         log.finish(500, { outcome: 'stream_error' })
         send({
           type: 'error',
           message: `The agent could not complete this task. Please try again. Reference: ${log.requestId}`,
         })
-        controller.close()
+        close()
       }
     },
   })

@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
-import type { ResultSetHeader, RowDataPacket } from 'mysql2'
 import { z } from 'zod'
 import { getOptionalAuthContext } from '@/lib/auth'
-import { isDatabaseConfigured, withTransaction } from '@/lib/mysql'
+import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { ensureWorkspaceRecord } from '@/lib/workspace-db'
 
@@ -72,8 +71,8 @@ const lifecycleSchema = z.object({
   action: z.enum(['archive', 'restore']),
 })
 
-type ProjectRow = RowDataPacket & {
-  project_data: string | Record<string, unknown>
+type ProjectRow = {
+  project_data: Record<string, unknown>
   archived_at: string | number | null
 }
 
@@ -87,25 +86,22 @@ export async function GET(request: Request) {
   try {
     const context = await getOptionalAuthContext()
     if (!context) return response(logger, { error: { code: 'AUTH_REQUIRED', message: 'Sign in to sync projects.' } }, 401)
-    if (!isDatabaseConfigured()) return response(logger, { error: { code: 'DATABASE_NOT_CONFIGURED', message: 'Cloud project sync is not configured yet.' } }, 503)
+    if (!isPostgresConfigured()) return response(logger, { error: { code: 'DATABASE_NOT_CONFIGURED', message: 'Cloud project sync is not configured yet.' } }, 503)
 
-    const projects = await withTransaction(async (connection) => {
-      await ensureWorkspaceRecord(connection, context)
-      const [rows] = await connection.query<ProjectRow[]>(
-        `SELECT project_data, archived_at FROM lab_studio_projects
-         WHERE workspace_key = ? ORDER BY client_updated_at DESC LIMIT 100`,
-        [context.workspace.key],
-      )
+    const sql = getPostgres()
+    const projects = await sql.begin(async (tx) => {
+      await ensureWorkspaceRecord(tx, context)
+      const rows = await tx<ProjectRow[]>`
+        select project_data, archived_at from public.lab_studio_projects
+         where workspace_key = ${context.workspace.key}
+         order by client_updated_at desc limit 100`
+      // jsonb arrives parsed. A row that no longer matches the schema is skipped
+      // rather than failing the whole load.
       return rows.flatMap((row) => {
-        try {
-          const value = typeof row.project_data === 'string' ? JSON.parse(row.project_data) : row.project_data
-          const parsed = projectSchema.safeParse(value)
-          return parsed.success
-            ? [{ ...parsed.data, ...(row.archived_at ? { archivedAt: Number(row.archived_at) } : {}) }]
-            : []
-        } catch {
-          return []
-        }
+        const parsed = projectSchema.safeParse(row.project_data)
+        return parsed.success
+          ? [{ ...parsed.data, ...(row.archived_at ? { archivedAt: Number(row.archived_at) } : {}) }]
+          : []
       })
     })
 
@@ -122,20 +118,20 @@ export async function PATCH(request: Request) {
   try {
     const context = await getOptionalAuthContext()
     if (!context) return response(logger, { error: { code: 'AUTH_REQUIRED', message: 'Sign in to manage projects.' } }, 401)
-    if (!isDatabaseConfigured()) return response(logger, { error: { code: 'DATABASE_NOT_CONFIGURED', message: 'Cloud project sync is not configured yet.' } }, 503)
+    if (!isPostgresConfigured()) return response(logger, { error: { code: 'DATABASE_NOT_CONFIGURED', message: 'Cloud project sync is not configured yet.' } }, 503)
 
     const parsed = lifecycleSchema.safeParse(await request.json().catch(() => null))
     if (!parsed.success) return response(logger, { error: { code: 'INVALID_ACTION', message: 'Project action is invalid.' } }, 400)
 
     const archivedAt = parsed.data.action === 'archive' ? Date.now() : null
-    const affected = await withTransaction(async (connection) => {
-      await ensureWorkspaceRecord(connection, context)
-      const [result] = await connection.execute<ResultSetHeader>(
-        `UPDATE lab_studio_projects SET archived_at = ?
-         WHERE workspace_key = ? AND id = ?`,
-        [archivedAt, context.workspace.key, parsed.data.id],
-      )
-      return result.affectedRows
+    const sql = getPostgres()
+    const affected = await sql.begin(async (tx) => {
+      await ensureWorkspaceRecord(tx, context)
+      const result = await tx`
+        update public.lab_studio_projects
+           set archived_at = ${archivedAt}, updated_at = now()
+         where workspace_key = ${context.workspace.key} and id = ${parsed.data.id}`
+      return result.count
     })
     if (!affected) return response(logger, { error: { code: 'PROJECT_NOT_FOUND', message: 'Project was not found in this workspace.' } }, 404)
 
@@ -156,7 +152,7 @@ export async function PUT(request: Request) {
   try {
     const context = await getOptionalAuthContext()
     if (!context) return response(logger, { error: { code: 'AUTH_REQUIRED', message: 'Sign in to sync projects.' } }, 401)
-    if (!isDatabaseConfigured()) return response(logger, { error: { code: 'DATABASE_NOT_CONFIGURED', message: 'Cloud project sync is not configured yet.' } }, 503)
+    if (!isPostgresConfigured()) return response(logger, { error: { code: 'DATABASE_NOT_CONFIGURED', message: 'Cloud project sync is not configured yet.' } }, 503)
 
     const parsed = projectSchema.safeParse(await request.json().catch(() => null))
     if (!parsed.success) {
@@ -165,18 +161,23 @@ export async function PUT(request: Request) {
     }
 
     const project = parsed.data
-    await withTransaction(async (connection) => {
-      await ensureWorkspaceRecord(connection, context)
-      await connection.execute(
-        `INSERT INTO lab_studio_projects
+    const sql = getPostgres()
+    await sql.begin(async (tx) => {
+      await ensureWorkspaceRecord(tx, context)
+      // Last write wins, but only if it is genuinely newer. An older copy
+      // arriving late from a second device cannot overwrite fresher work.
+      await tx`
+        insert into public.lab_studio_projects
           (id, owner_id, workspace_key, name, project_data, client_updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           name = IF(VALUES(client_updated_at) >= client_updated_at, VALUES(name), name),
-           project_data = IF(VALUES(client_updated_at) >= client_updated_at, VALUES(project_data), project_data),
-           client_updated_at = GREATEST(client_updated_at, VALUES(client_updated_at))`,
-        [project.id, context.userId, context.workspace.key, project.campaign.name, JSON.stringify(project), project.updatedAt],
-      )
+        values (${project.id}, ${context.userId}, ${context.workspace.key},
+                ${project.campaign.name}, ${tx.json(project)}, ${project.updatedAt})
+        on conflict (workspace_key, id) do update set
+          name = case when excluded.client_updated_at >= public.lab_studio_projects.client_updated_at
+                      then excluded.name else public.lab_studio_projects.name end,
+          project_data = case when excluded.client_updated_at >= public.lab_studio_projects.client_updated_at
+                              then excluded.project_data else public.lab_studio_projects.project_data end,
+          client_updated_at = greatest(public.lab_studio_projects.client_updated_at, excluded.client_updated_at),
+          updated_at = now()`
     })
 
     logger.info('studio.project.saved', { workspaceType: context.workspace.type, projectId: project.id })

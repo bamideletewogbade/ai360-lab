@@ -1,13 +1,17 @@
-import type { RowDataPacket } from 'mysql2'
 import { getOptionalAuthContext } from '@/lib/auth'
-import { isDatabaseConfigured, withTransaction } from '@/lib/mysql'
+import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { ensureWorkspaceRecord } from '@/lib/workspace-db'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-type UsageSummaryRow = RowDataPacket & {
+/** Outcomes that represent work the person actually received. */
+const SUCCESSFUL_OUTCOMES = [
+  'success', 'success_without_done_event', 'submitted', 'completed', 'quote', 'status',
+]
+
+type UsageSummaryRow = {
   feature: string
   requests: string | number
   input_tokens: string | number | null
@@ -25,29 +29,29 @@ export async function GET(request: Request) {
       log.finish(401, { outcome: 'auth_required' })
       return Response.json({ error: 'Sign in to view usage.' }, { status: 401, headers: log.headers() })
     }
-    if (!isDatabaseConfigured()) {
+    if (!isPostgresConfigured()) {
       log.finish(503, { outcome: 'database_not_configured' })
       return Response.json({ error: 'Usage reporting is not configured yet.' }, { status: 503, headers: log.headers() })
     }
 
     const now = new Date()
-    const monthStart = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01 00:00:00`
-    const rows = await withTransaction(async (connection) => {
-      await ensureWorkspaceRecord(connection, context)
-      const [result] = await connection.query<UsageSummaryRow[]>(
-        `SELECT feature, COUNT(*) AS requests,
-           COALESCE(SUM(input_tokens), 0) AS input_tokens,
-           COALESCE(SUM(output_tokens), 0) AS output_tokens,
-           COALESCE(SUM(estimated_cost_usd), 0) AS estimated_cost_usd,
-           COALESCE(SUM(actual_cost_usd), 0) AS actual_cost_usd,
-           SUM(CASE WHEN outcome IN ('success', 'success_without_done_event', 'submitted', 'completed', 'quote', 'status') THEN 0 ELSE 1 END) AS failures
-         FROM lab_usage_events
-         WHERE workspace_key = ? AND created_at >= ?
-         GROUP BY feature ORDER BY actual_cost_usd DESC, requests DESC`,
-        [context.workspace.key, monthStart],
-      )
-      return result
-    })
+    const monthStart = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`
+    const sql = getPostgres()
+    const rows = await sql.begin(async (tx) => {
+      await ensureWorkspaceRecord(tx, context)
+      return tx<UsageSummaryRow[]>`
+        select feature, count(*) as requests,
+               coalesce(sum(input_tokens), 0) as input_tokens,
+               coalesce(sum(output_tokens), 0) as output_tokens,
+               coalesce(sum(estimated_cost_usd), 0) as estimated_cost_usd,
+               coalesce(sum(actual_cost_usd), 0) as actual_cost_usd,
+               count(*) filter (where outcome <> all(${SUCCESSFUL_OUTCOMES})) as failures
+          from public.lab_usage_events
+         where workspace_key = ${context.workspace.key}
+           and created_at >= ${monthStart}::date
+         group by feature
+         order by sum(actual_cost_usd) desc nulls last, count(*) desc`
+    }) as UsageSummaryRow[]
 
     const features = rows.map((row) => ({
       feature: row.feature,

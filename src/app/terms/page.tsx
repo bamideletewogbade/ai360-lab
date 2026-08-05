@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
-import Image from 'next/image'
-import Link from 'next/link'
+import { SiteNav } from '@/components/SiteNav'
 import styles from '../legal.module.css'
 
 export const metadata: Metadata = {
@@ -11,14 +10,8 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <main className={styles.page}>
+      <SiteNav current="legal" />
       <div className={styles.shell}>
-        <header className={styles.top}>
-          <Link href="/" className={styles.brand}>
-            <Image src="/icon-mark-black.png" alt="" width={34} height={34} />
-            <b>AI 360 LAB</b>
-          </Link>
-          <Link href="/" className={styles.back}>Return to the Lab</Link>
-        </header>
         <article className={styles.article}>
           <p className={styles.eyebrow}>Responsible use</p>
           <h1>Terms</h1>

@@ -1,4 +1,3 @@
-import { getMySqlPool } from '@/lib/mysql'
 import { checkPostgresConnection } from '@/lib/postgres'
 import { productionReadiness, selectedDatabaseProvider } from '@/lib/runtime-config'
 import { errorDetails, requestLogger } from '@/lib/observability'
@@ -12,10 +11,7 @@ export async function GET(request: Request) {
   let databaseConnection: 'connected' | 'unavailable' | 'not_configured' = 'not_configured'
 
   try {
-    if (databaseProvider === 'mysql') {
-      await getMySqlPool().query('SELECT 1')
-      databaseConnection = 'connected'
-    } else if (databaseProvider === 'postgres') {
+    if (databaseProvider === 'postgres') {
       await checkPostgresConnection()
       databaseConnection = 'connected'
     }

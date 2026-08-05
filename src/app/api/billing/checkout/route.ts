@@ -1,7 +1,7 @@
-import { checkoutRequestSchema } from '@/lib/billing/checkout-contract'
+﻿import { checkoutRequestSchema } from '@/lib/billing/checkout-contract'
 import { findBillingPlan, planPrice } from '@/lib/billing/catalog'
 import { getOptionalAuthContext } from '@/lib/auth'
-import { isDatabaseConfigured } from '@/lib/mysql'
+import { isPostgresConfigured } from '@/lib/postgres'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { isPaymentProviderConfigured } from '@/lib/payments/contracts'
 
@@ -29,10 +29,10 @@ export async function POST(request: Request) {
       return Response.json({ error: 'This plan does not require checkout.' }, { status: 400, headers: log.headers() })
     }
 
-    if (!isDatabaseConfigured() || !isPaymentProviderConfigured()) {
+    if (!isPostgresConfigured() || !isPaymentProviderConfigured()) {
       log.finish(503, {
         outcome: 'billing_not_activated',
-        databaseConfigured: isDatabaseConfigured(),
+        databaseConfigured: isPostgresConfigured(),
         paymentProviderConfigured: isPaymentProviderConfigured(),
         plan: plan.slug,
       })

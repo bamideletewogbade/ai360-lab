@@ -18,7 +18,21 @@
 .landing-shell a { color: inherit; text-decoration: none; }
 .landing-shell button, .landing-shell textarea { font: inherit; }
 
+/* The site navigation is shared by the landing, pricing and legal pages, so it
+   carries its own tokens and link reset rather than inheriting them from
+   .landing-shell. Without this it silently loses its colours and gains
+   underlines on any page that is not the landing page. */
 .landing-nav {
+  --ai-black: #101112;
+  --deep-charcoal: #292b2d;
+  --institutional-grey: #56595c;
+  --capability-grey: #b8babd;
+  --warm-white: #f7f6f2;
+  --landing-line: rgba(86, 89, 92, .32);
+  --landing-pad: clamp(20px, 5vw, 96px);
+  --landing-max: 1860px;
+  --landing-ease: cubic-bezier(.22, 1, .36, 1);
+  box-sizing: border-box;
   position: relative;
   z-index: 20;
   width: min(100%, var(--landing-max));
@@ -32,6 +46,10 @@
   background: color-mix(in srgb, var(--warm-white) 88%, transparent);
   backdrop-filter: blur(18px);
 }
+.landing-nav *, .landing-nav *::before, .landing-nav *::after { box-sizing: border-box; }
+.landing-nav a { color: inherit; text-decoration: none; }
+.landing-links a[aria-current='page'] { color: var(--ai-black); }
+.landing-links a[aria-current='page']::after { transform: scaleX(1); transform-origin: left; }
 .landing-logo { display: inline-flex; align-items: center; gap: 12px; }
 .landing-logo img { width: 142px; height: auto; }
 .landing-logo span { padding-left: 11px; border-left: 1px solid var(--capability-grey); font-family: var(--font-heading); font-size: 0.775rem; font-weight: 800; letter-spacing: .16em; }
@@ -172,6 +190,11 @@
 .landing-section-head > p { align-self: start; margin-top: 7px; }
 .landing-section-head h2, .process-copy h2 { margin: 0; color: var(--deep-charcoal); font-family: var(--font-heading); font-size: clamp(2.55rem, 4.4vw, 5.25rem); line-height: .98; letter-spacing: -.06em; }
 .landing-section-head > span { max-width: 450px; color: var(--institutional-grey); font-size: 1.05rem; line-height: 1.75; }
+.landing-section-head > span a { display: inline-block; margin-top: 10px; color: var(--ai-black); font-weight: 700; border-bottom: 1px solid var(--landing-line); }
+.landing-section-head > span a:hover { border-bottom-color: var(--ai-black); }
+.process-more { margin: 18px 0 0; max-width: 420px; }
+.process-more a { color: var(--capability-grey); font-size: 0.887rem; line-height: 1.6; border-bottom: 1px solid rgba(184, 186, 189, .35); }
+.process-more a:hover { color: var(--warm-white); border-bottom-color: var(--warm-white); }
 .outcome-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--landing-line); border-left: 1px solid var(--landing-line); }
 .outcome-card { position: relative; min-height: 310px; display: flex; flex-direction: column; padding: clamp(22px, 2.6vw, 40px); border-right: 1px solid var(--landing-line); border-bottom: 1px solid var(--landing-line); background: color-mix(in srgb, var(--warm-white) 94%, #fff); transition: background .35s, color .35s, transform .35s var(--landing-ease); }
 .outcome-card:hover { z-index: 2; background: var(--ai-black); color: var(--warm-white); transform: translateY(-8px); }

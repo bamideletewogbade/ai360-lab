@@ -43,27 +43,62 @@ export function isChatMode(value: unknown): value is ChatMode {
   return typeof value === 'string' && value in MODEL_OPTIONS
 }
 
+/**
+ * Reasoning budget.
+ *
+ * Some models reason by default and cannot have it switched off. Left uncapped,
+ * the reasoning consumes `max_tokens` and the response finishes before any
+ * answer is written, which returns an empty result. Verified against the live
+ * API on 2026-08-05: uncapped, Gemini 3.6 Flash finished on `length` with 65
+ * characters of content; capped, it finished on `stop` with a full answer.
+ */
+export const REASONING_BUDGET = { max_tokens: 256 } as const
+
 export function routeFor(
   mode: ChatMode,
-  options: { workload?: ModelWorkload; hasVideo?: boolean } = {},
+  options: { workload?: ModelWorkload; hasVideo?: boolean; hasAttachments?: boolean } = {},
 ): { model: string; models: string[] } {
-  const workload = options.workload ?? 'chat'
-  const automatic = options.hasVideo || workload !== 'chat' ? MULTIMODAL_MODEL : FAST_TEXT_MODEL
+  // Only reach for the multimodal model when there is actually something to
+  // look at. It costs roughly a hundred times more per call than the fast text
+  // model, so routing all agent and studio work to it by default was expensive
+  // for no gain on text-only tasks.
+  const needsVision = Boolean(options.hasVideo || options.hasAttachments)
+  const automatic = needsVision ? MULTIMODAL_MODEL : FAST_TEXT_MODEL
   const selected = mode === 'auto' ? automatic : MODEL_OPTIONS[mode].model
+  // The chosen model always leads its own fallback chain, and the cheaper text
+  // model comes before the multimodal one unless vision is actually required.
   const models = mode === 'auto'
-    ? workload === 'chat' && !options.hasVideo
-      ? [FAST_TEXT_MODEL, FALLBACK, MULTIMODAL_MODEL]
-      : [MULTIMODAL_MODEL, FAST_TEXT_MODEL, FALLBACK]
+    ? needsVision
+      ? [MULTIMODAL_MODEL, FAST_TEXT_MODEL, FALLBACK]
+      : [FAST_TEXT_MODEL, FALLBACK, MULTIMODAL_MODEL]
     : [selected, automatic, FALLBACK]
   return { model: selected, models: [...new Set(models)] }
 }
 
-export function providerPreferences(workload: ModelWorkload) {
+/**
+ * Provider routing constraints.
+ *
+ * These cannot be combined with OpenRouter's server-side tools. Verified
+ * against the live API on 2026-08-05: with tools attached, `require_parameters`
+ * matches no provider at all (404), and `sort`, `allow_fallbacks`,
+ * `preferred_min_throughput` and `max_price` each return 500. Only
+ * `preferred_max_latency` survives.
+ *
+ * Sending the full block alongside tools failed every request on the chat and
+ * agent routes, so any call that attaches tools must pass `withTools`.
+ */
+export function providerPreferences(
+  workload: ModelWorkload,
+  options: { withTools?: boolean } = {},
+) {
+  const latency = { p90: workload === 'chat' ? 3 : 5 }
+  if (options.withTools) return { preferred_max_latency: latency }
+
   return {
     sort: 'price' as const,
     allow_fallbacks: true,
     require_parameters: true,
-    preferred_max_latency: { p90: workload === 'chat' ? 3 : 5 },
+    preferred_max_latency: latency,
     preferred_min_throughput: { p50: workload === 'chat' ? 45 : 30 },
     max_price: {
       prompt: workload === 'chat' ? 4 : 6,

@@ -18,21 +18,12 @@ function validUrl(value: string | undefined, requireHttps: boolean) {
   }
 }
 
+/**
+ * Supabase Postgres is the only data plane. MySQL was retired on 2026-08-05
+ * once every route had been ported; see DECISIONS.md.
+ */
 export function selectedDatabaseProvider() {
-  if (process.env.DATABASE_PROVIDER === 'postgres') return 'postgres' as const
-  if (process.env.DATABASE_PROVIDER === 'mysql') {
-    return configured('MYSQL_HOST') && configured('MYSQL_DATABASE') && configured('MYSQL_USER') && configured('MYSQL_PASSWORD')
-      ? 'mysql' as const
-      : 'none' as const
-  }
-  if (configured('DATABASE_URL')) return 'postgres' as const
-  if (
-    configured('MYSQL_HOST') &&
-    configured('MYSQL_DATABASE') &&
-    configured('MYSQL_USER') &&
-    configured('MYSQL_PASSWORD')
-  ) return 'mysql' as const
-  return 'none' as const
+  return configured('DATABASE_URL') ? 'postgres' as const : 'none' as const
 }
 
 export function productionReadinessChecks(): ReadinessCheck[] {
@@ -72,13 +63,11 @@ export function productionReadinessChecks(): ReadinessCheck[] {
     },
     {
       key: 'database',
-      status: databaseProvider === 'none' ? 'missing' : databaseProvider === 'postgres' ? 'pending' : 'ready',
+      status: databaseProvider === 'postgres' ? 'ready' : 'missing',
       required: true,
       message: databaseProvider === 'postgres'
-        ? 'Supabase Postgres is configured; application data routes still require the Postgres cutover migration.'
-        : databaseProvider === 'mysql'
-          ? 'The current MySQL data plane is configured.'
-          : 'No durable application database is configured.',
+        ? 'Supabase Postgres is configured and serves every application data route.'
+        : 'No durable application database is configured.',
     },
     {
       key: 'payments',

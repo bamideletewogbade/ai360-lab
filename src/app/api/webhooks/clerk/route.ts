@@ -1,7 +1,6 @@
-import type { ResultSetHeader } from 'mysql2'
 import type { NextRequest } from 'next/server'
 import { verifyWebhook } from '@clerk/nextjs/webhooks'
-import { isDatabaseConfigured, withTransaction } from '@/lib/mysql'
+import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { clerkUserProfile, webhookEventId } from '@/lib/clerk-sync'
 import { errorDetails, requestLogger } from '@/lib/observability'
 
@@ -24,7 +23,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Webhook verification failed.' }, { status: 400, headers: log.headers() })
   }
 
-  if (!isDatabaseConfigured()) {
+  if (!isPostgresConfigured()) {
     log.finish(503, { outcome: 'database_not_configured', eventType: event.type })
     return Response.json({ error: 'Identity synchronization is temporarily unavailable.' }, { status: 503, headers: log.headers() })
   }
@@ -36,48 +35,49 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await withTransaction(async (connection) => {
-      const [receipt] = await connection.execute<ResultSetHeader>(
-        'INSERT IGNORE INTO lab_webhook_events (event_id, event_type) VALUES (?, ?)',
-        [eventId, event.type],
-      )
-      if (!receipt.affectedRows) return 'duplicate'
+    const sql = getPostgres()
+    const result = await sql.begin(async (tx) => {
+      // The receipt is the idempotency guard: if this event has been seen
+      // before, the insert affects nothing and the work is skipped entirely.
+      const receipt = await tx`
+        insert into public.lab_webhook_events (event_id, event_type)
+        values (${eventId}, ${event.type})
+        on conflict (event_id) do nothing`
+      if (!receipt.count) return 'duplicate'
 
       if (event.type === 'user.created' || event.type === 'user.updated') {
         const profile = clerkUserProfile(event.data)
         if (!profile.id) throw new Error('Clerk user event has no user ID')
-        await connection.execute(
-          `INSERT INTO lab_users (clerk_user_id, email, display_name, image_url, deleted_at)
-           VALUES (?, ?, ?, ?, NULL)
-           ON DUPLICATE KEY UPDATE email = VALUES(email), display_name = VALUES(display_name),
-             image_url = VALUES(image_url), deleted_at = NULL`,
-          [profile.id, profile.email, profile.displayName, profile.imageUrl],
-        )
-        await connection.execute(
-          `INSERT INTO lab_workspaces
+        await tx`
+          insert into public.lab_users (clerk_user_id, email, display_name, image_url, deleted_at)
+          values (${profile.id}, ${profile.email}, ${profile.displayName}, ${profile.imageUrl}, null)
+          on conflict (clerk_user_id) do update set
+            email = excluded.email, display_name = excluded.display_name,
+            image_url = excluded.image_url, deleted_at = null, updated_at = now()`
+        await tx`
+          insert into public.lab_workspaces
             (workspace_key, workspace_type, subject_id, created_by_user_id, display_name, deleted_at)
-           VALUES (?, 'user', ?, ?, ?, NULL)
-           ON DUPLICATE KEY UPDATE display_name = VALUES(display_name), deleted_at = NULL`,
-          [`user:${profile.id}`, profile.id, profile.id, profile.displayName],
-        )
+          values (${`user:${profile.id}`}, 'user', ${profile.id}, ${profile.id}, ${profile.displayName}, null)
+          on conflict (workspace_key) do update set
+            display_name = excluded.display_name, deleted_at = null, updated_at = now()`
       } else if (event.type === 'user.deleted') {
         const userId = typeof event.data.id === 'string' ? event.data.id : null
         if (!userId) throw new Error('Clerk user deletion has no user ID')
-        await connection.execute('UPDATE lab_users SET deleted_at = CURRENT_TIMESTAMP WHERE clerk_user_id = ?', [userId])
-        await connection.execute("UPDATE lab_workspace_memberships SET status = 'inactive' WHERE user_id = ?", [userId])
+        await tx`update public.lab_users set deleted_at = now(), updated_at = now() where clerk_user_id = ${userId}`
+        await tx`update public.lab_workspace_memberships set status = 'inactive' where user_id = ${userId}`
       } else if (event.type === 'organization.created' || event.type === 'organization.updated') {
-        await connection.execute(
-          `INSERT INTO lab_workspaces
+        await tx`
+          insert into public.lab_workspaces
             (workspace_key, workspace_type, subject_id, display_name, slug, deleted_at)
-           VALUES (?, 'organization', ?, ?, ?, NULL)
-           ON DUPLICATE KEY UPDATE display_name = VALUES(display_name), slug = VALUES(slug), deleted_at = NULL`,
-          [`org:${event.data.id}`, event.data.id, event.data.name, event.data.slug || null],
-        )
+          values (${`org:${event.data.id}`}, 'organization', ${event.data.id}, ${event.data.name}, ${event.data.slug || null}, null)
+          on conflict (workspace_key) do update set
+            display_name = excluded.display_name, slug = excluded.slug,
+            deleted_at = null, updated_at = now()`
       } else if (event.type === 'organization.deleted') {
         const orgId = typeof event.data.id === 'string' ? event.data.id : null
         if (!orgId) throw new Error('Clerk organization deletion has no organization ID')
-        await connection.execute('UPDATE lab_workspaces SET deleted_at = CURRENT_TIMESTAMP WHERE workspace_key = ?', [`org:${orgId}`])
-        await connection.execute("UPDATE lab_workspace_memberships SET status = 'inactive' WHERE workspace_key = ?", [`org:${orgId}`])
+        await tx`update public.lab_workspaces set deleted_at = now(), updated_at = now() where workspace_key = ${`org:${orgId}`}`
+        await tx`update public.lab_workspace_memberships set status = 'inactive' where workspace_key = ${`org:${orgId}`}`
       } else if (
         event.type === 'organizationMembership.created' ||
         event.type === 'organizationMembership.updated' ||
@@ -90,28 +90,23 @@ export async function POST(request: NextRequest) {
           first_name: event.data.public_user_data.first_name,
           last_name: event.data.public_user_data.last_name,
         })
-        await connection.execute(
-          `INSERT INTO lab_users (clerk_user_id, display_name)
-           VALUES (?, ?) ON DUPLICATE KEY UPDATE display_name = COALESCE(VALUES(display_name), display_name)`,
-          [userId, profile.displayName],
-        )
-        await connection.execute(
-          `INSERT INTO lab_workspaces (workspace_key, workspace_type, subject_id, display_name)
-           VALUES (?, 'organization', ?, ?)
-           ON DUPLICATE KEY UPDATE display_name = VALUES(display_name)`,
-          [`org:${orgId}`, orgId, event.data.organization.name],
-        )
-        await connection.execute(
-          `INSERT INTO lab_workspace_memberships (workspace_key, user_id, role, status)
-           VALUES (?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE role = VALUES(role), status = VALUES(status)`,
-          [
-            `org:${orgId}`,
-            userId,
-            event.data.role || 'org:member',
-            event.type === 'organizationMembership.deleted' ? 'inactive' : 'active',
-          ],
-        )
+        await tx`
+          insert into public.lab_users (clerk_user_id, display_name)
+          values (${userId}, ${profile.displayName})
+          on conflict (clerk_user_id) do update set
+            display_name = coalesce(excluded.display_name, public.lab_users.display_name),
+            updated_at = now()`
+        await tx`
+          insert into public.lab_workspaces (workspace_key, workspace_type, subject_id, display_name)
+          values (${`org:${orgId}`}, 'organization', ${orgId}, ${event.data.organization.name})
+          on conflict (workspace_key) do update set
+            display_name = excluded.display_name, updated_at = now()`
+        await tx`
+          insert into public.lab_workspace_memberships (workspace_key, user_id, role, status)
+          values (${`org:${orgId}`}, ${userId}, ${event.data.role || 'org:member'},
+                  ${event.type === 'organizationMembership.deleted' ? 'inactive' : 'active'})
+          on conflict (workspace_key, user_id) do update set
+            role = excluded.role, status = excluded.status, updated_at = now()`
       }
       return 'processed'
     })

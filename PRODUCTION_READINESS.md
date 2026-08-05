@@ -23,7 +23,9 @@ external media and payment providers.
 | Guest workspace and local recovery | Implemented | None | Unit and browser checks pass | Pilot-ready |
 | Chat and model routing | Implemented | OpenRouter key | Live key still required per environment | Conditional |
 | Web research and citations | Implemented | Search/tool provider path | Representative-task evals pending | Pilot-ready |
-| Agent and Studio workflows | Implemented | OpenRouter key | Durable background execution pending | Private pilot |
+| Agent runtime | Plan, execute, synthesise, verify and revise pipeline with per-run cost and time ceilings; runs, tasks, events and artifacts persisted to Postgres | OpenRouter key | Parsing and context handling unit tested; live end-to-end run still pending a key | Pilot-ready |
+| Agent resume after crash | Checkpoints written at every boundary | Durable queue and worker | A run still dies with its web request; state survives but nothing replays it | Missing |
+| Studio workflows | Implemented | OpenRouter key | Durable background execution pending | Private pilot |
 | Image generation | Implemented with model failover | Compatible OpenRouter models | Production generation test pending | Unverified externally |
 | Video generation | Implemented with quote/status/download flow | Compatible OpenRouter video model | Production generation and retention test pending | Unverified externally |
 | Voice recording and transcription | Implemented | Browser microphone and STT model | Physical mobile-browser test pending | Private pilot |
@@ -101,11 +103,13 @@ external media and payment providers.
   settlement rules and plan economics (`src/lib/billing/credits.ts`).
 - [x] Persist credit accounts and reservations, then reserve before expensive
   work and settle actual cost afterward. Credits live in Supabase Postgres only.
+- [x] Port every remaining route from MySQL and remove the second data plane.
+  `src/lib/mysql.ts`, `database/schema.sql`, the MySQL migration script and the
+  `mysql2` dependency are deleted. Verified with `npm run data:verify`: 12 of 12
+  checks pass against the live database.
 - [x] Deliver the monthly allowance. Renewal is lazy: the first touch of a new
   period expires unused allowance and grants the current plan's credits, so no
   scheduled job can fail to run.
-- [ ] Port conversations, projects and usage from MySQL, then delete
-  `src/lib/mysql.ts` and the MySQL schema.
 - [ ] Add application, workspace and user spend caps.
 - [ ] Add provider timeouts, circuit breakers and failover metrics.
 

@@ -1,50 +1,49 @@
 import { getOptionalAuthContext } from '@/lib/auth'
-import { isDatabaseConfigured, withTransaction } from '@/lib/mysql'
+import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { normalizeUsageEvent, type UsageEventInput } from '@/lib/usage-contract'
 import { ensureWorkspaceRecord } from '@/lib/workspace-db'
 
 export { normalizeUsageEvent, type UsageEventInput } from '@/lib/usage-contract'
 
+/**
+ * Records what a provider call actually cost.
+ *
+ * Keyed on request ID and route, so a retried write updates the existing row
+ * rather than double counting a single call. Anonymous calls are still
+ * recorded, with no owner, because the spend is real either way.
+ */
 export async function recordUsageEvent(input: UsageEventInput) {
-  if (!isDatabaseConfigured()) return { recorded: false, reason: 'database_not_configured' as const }
+  if (!isPostgresConfigured()) return { recorded: false, reason: 'database_not_configured' as const }
   const event = normalizeUsageEvent(input)
   const context = await getOptionalAuthContext()
+  const sql = getPostgres()
 
-  await withTransaction(async (connection) => {
-    if (context) await ensureWorkspaceRecord(connection, context)
-    await connection.execute(
-      `INSERT INTO lab_usage_events
+  await sql.begin(async (tx) => {
+    if (context) await ensureWorkspaceRecord(tx, context)
+    await tx`
+      insert into public.lab_usage_events
         (owner_id, workspace_key, request_id, route, feature, provider, model,
          input_tokens, output_tokens, estimated_cost_usd, actual_cost_usd,
          latency_ms, outcome, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-         owner_id = COALESCE(VALUES(owner_id), owner_id),
-         workspace_key = COALESCE(VALUES(workspace_key), workspace_key),
-         feature = VALUES(feature), provider = VALUES(provider), model = VALUES(model),
-         input_tokens = COALESCE(VALUES(input_tokens), input_tokens),
-         output_tokens = COALESCE(VALUES(output_tokens), output_tokens),
-         estimated_cost_usd = COALESCE(VALUES(estimated_cost_usd), estimated_cost_usd),
-         actual_cost_usd = COALESCE(VALUES(actual_cost_usd), actual_cost_usd),
-         latency_ms = COALESCE(VALUES(latency_ms), latency_ms),
-         outcome = VALUES(outcome), metadata = COALESCE(VALUES(metadata), metadata)`,
-      [
-        context?.userId || null,
-        context?.workspace.key || null,
-        event.requestId,
-        event.route,
-        event.feature,
-        event.provider,
-        event.model,
-        event.inputTokens,
-        event.outputTokens,
-        event.estimatedCostUsd,
-        event.actualCostUsd,
-        event.latencyMs,
-        event.outcome,
-        event.metadata,
-      ],
-    )
+      values (${context?.userId ?? null}, ${context?.workspace.key ?? null}, ${event.requestId},
+              ${event.route}, ${event.feature}, ${event.provider}, ${event.model},
+              ${event.inputTokens}, ${event.outputTokens}, ${event.estimatedCostUsd},
+              ${event.actualCostUsd}, ${event.latencyMs}, ${event.outcome},
+              ${event.metadata ? tx.json(JSON.parse(event.metadata)) : null})
+      on conflict (request_id, route) do update set
+        owner_id = coalesce(excluded.owner_id, public.lab_usage_events.owner_id),
+        workspace_key = coalesce(excluded.workspace_key, public.lab_usage_events.workspace_key),
+        feature = excluded.feature,
+        provider = excluded.provider,
+        model = excluded.model,
+        input_tokens = coalesce(excluded.input_tokens, public.lab_usage_events.input_tokens),
+        output_tokens = coalesce(excluded.output_tokens, public.lab_usage_events.output_tokens),
+        estimated_cost_usd = coalesce(excluded.estimated_cost_usd, public.lab_usage_events.estimated_cost_usd),
+        actual_cost_usd = coalesce(excluded.actual_cost_usd, public.lab_usage_events.actual_cost_usd),
+        latency_ms = coalesce(excluded.latency_ms, public.lab_usage_events.latency_ms),
+        outcome = excluded.outcome,
+        metadata = coalesce(excluded.metadata, public.lab_usage_events.metadata),
+        updated_at = now()`
   })
   return { recorded: true as const }
 }

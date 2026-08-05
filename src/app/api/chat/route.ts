@@ -1,11 +1,12 @@
 import type { NextRequest } from 'next/server'
-import { isChatMode, providerPreferences, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models'
+import { isChatMode, providerPreferences, REASONING_BUDGET, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { citationSources, LIVE_INFORMATION_TOOLS } from '@/lib/live-tools'
 import { recordUsageEventSafe } from '@/lib/usage'
 import { openCreditGate } from '@/lib/billing/credit-gate'
 import { chatFeature } from '@/lib/billing/credits'
+import { DEFAULT_LANGUAGE, isLanguageCode, languageDirective, type LanguageCode } from '@/lib/languages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
     return responseWithRequestId(limited, log.requestId)
   }
 
-  let body: { messages?: Msg[]; mode?: ChatMode; sessionId?: string }
+  let body: { messages?: Msg[]; mode?: ChatMode; sessionId?: string; language?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
     .filter((message) => message && typeof message.content === 'string')
     .slice(-20)
   const mode: ChatMode = isChatMode(body.mode) ? body.mode : 'auto'
+  const language: LanguageCode = isLanguageCode(body.language) ? body.language : DEFAULT_LANGUAGE
   const sessionId = typeof body.sessionId === 'string' ? body.sessionId.slice(0, 256) : undefined
   const key = process.env.OPENROUTER_API_KEY
   const attachments = messages.flatMap((message) => message.attachments ?? [])
@@ -141,7 +143,11 @@ export async function POST(req: NextRequest) {
         const hasVideo = messages.some((message) =>
           message.attachments?.some((attachment) => attachment.kind === 'video'),
         )
-        const { model, models } = routeFor(mode, { workload: 'chat', hasVideo })
+        const { model, models } = routeFor(mode, {
+          workload: 'chat',
+          hasVideo,
+          hasAttachments: attachments.length > 0,
+        })
         const hasPdf = messages.some((message) =>
           message.attachments?.some((attachment) => attachment.kind === 'pdf'),
         )
@@ -165,9 +171,15 @@ export async function POST(req: NextRequest) {
             model,
             models,
             ...(sessionId ? { session_id: sessionId } : {}),
-            messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages.map(toProviderMessage)],
+            messages: [
+              { role: 'system', content: `${SYSTEM_PROMPT}\n\n${languageDirective(language)}` },
+              ...messages.map(toProviderMessage),
+            ],
             tools: LIVE_INFORMATION_TOOLS,
-            provider: providerPreferences('chat'),
+            provider: providerPreferences('chat', { withTools: true }),
+            // A thinking model otherwise spends the whole budget reasoning and
+            // streams back an empty answer.
+            reasoning: REASONING_BUDGET,
             stream: true,
             max_tokens: 2_000,
             ...(hasPdf

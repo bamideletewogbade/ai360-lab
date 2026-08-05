@@ -10,10 +10,12 @@
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "db:migrate": "node scripts/migrate-mysql.mjs",
+    "db:migrate": "node scripts/migrate-postgres.mjs",
     "db:postgres:migrate": "node scripts/migrate-postgres.mjs",
     "db:postgres:verify": "node scripts/verify-postgres.mjs",
     "credits:verify": "node --experimental-strip-types scripts/verify-credits.mjs",
+    "data:verify": "node --experimental-strip-types scripts/verify-data-routes.mjs",
+    "runs:verify": "node --experimental-strip-types scripts/verify-run-recovery.mjs",
     "prod:check": "node scripts/check-production.mjs"
   },
   "dependencies": {
@@ -21,7 +23,6 @@
     "cross-env": "^7.0.3",
     "docx": "^9.7.1",
     "dotenv": "^16.6.1",
-    "mysql2": "^3.23.2",
     "next": "^16.3.0",
     "pdf-lib": "^1.17.1",
     "postgres": "^3.4.9",

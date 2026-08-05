@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
-import type { RowDataPacket } from 'mysql2'
 import { z } from 'zod'
 import { getOptionalAuthContext } from '@/lib/auth'
-import { isDatabaseConfigured, withTransaction } from '@/lib/mysql'
+import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { ensureWorkspaceRecord } from '@/lib/workspace-db'
 
 export const runtime = 'nodejs'
@@ -31,7 +30,7 @@ const conversationSchema = z.object({
 
 const syncSchema = z.object({ conversations: z.array(conversationSchema).max(100) })
 
-type ConversationRow = RowDataPacket & {
+type ConversationRow = {
   id: string
   title: string
   model: string
@@ -39,12 +38,12 @@ type ConversationRow = RowDataPacket & {
   client_updated_at: string
 }
 
-type MessageRow = RowDataPacket & {
+type MessageRow = {
   id: string
   conversation_id: string
   role: 'user' | 'assistant'
   content: string
-  metadata: string | Record<string, unknown> | null
+  metadata: Record<string, unknown> | null
 }
 
 function unavailable(status: number, code: string, message: string) {
@@ -54,23 +53,25 @@ function unavailable(status: number, code: string, message: string) {
 export async function GET() {
   const context = await getOptionalAuthContext()
   if (!context) return unavailable(401, 'AUTH_REQUIRED', 'Sign in to sync conversations.')
-  if (!isDatabaseConfigured()) return unavailable(503, 'DATABASE_NOT_CONFIGURED', 'Cloud sync is not configured yet.')
+  if (!isPostgresConfigured()) return unavailable(503, 'DATABASE_NOT_CONFIGURED', 'Cloud sync is not configured yet.')
 
-  const result = await withTransaction(async (connection) => {
-    await ensureWorkspaceRecord(connection, context)
-    const [conversationRows] = await connection.query<ConversationRow[]>(
-      `SELECT id, title, model, experience, client_updated_at
-       FROM lab_conversations WHERE workspace_key = ? ORDER BY client_updated_at DESC LIMIT 100`,
-      [context.workspace.key],
-    )
+  const sql = getPostgres()
+  const result = await sql.begin(async (tx) => {
+    await ensureWorkspaceRecord(tx, context)
+    const conversationRows = await tx<ConversationRow[]>`
+      select id, title, model, experience, client_updated_at
+        from public.lab_conversations
+       where workspace_key = ${context.workspace.key}
+       order by client_updated_at desc limit 100`
     if (!conversationRows.length) return []
 
     const ids = conversationRows.map((row) => row.id)
-    const [messageRows] = await connection.query<MessageRow[]>(
-      `SELECT id, conversation_id, role, content, metadata
-       FROM lab_messages WHERE workspace_key = ? AND conversation_id IN (?) ORDER BY conversation_id, position`,
-      [context.workspace.key, ids],
-    )
+    const messageRows = await tx<MessageRow[]>`
+      select id, conversation_id, role, content, metadata
+        from public.lab_messages
+       where workspace_key = ${context.workspace.key} and conversation_id in ${tx(ids)}
+       order by conversation_id, position`
+
     const grouped = new Map<string, MessageRow[]>()
     for (const row of messageRows) grouped.set(row.conversation_id, [...(grouped.get(row.conversation_id) || []), row])
 
@@ -80,10 +81,10 @@ export async function GET() {
       model: row.model,
       experience: row.experience,
       updatedAt: Number(row.client_updated_at),
-      messages: (grouped.get(row.id) || []).map(({ id, role, content, metadata }) => {
-        const extras = typeof metadata === 'string' ? JSON.parse(metadata) : metadata || {}
-        return { id, role, content, ...extras }
-      }),
+      // jsonb comes back already parsed, unlike the JSON string MySQL returned.
+      messages: (grouped.get(row.id) || []).map(({ id, role, content, metadata }) => ({
+        id, role, content, ...(metadata ?? {}),
+      })),
     }))
   })
 
@@ -93,43 +94,48 @@ export async function GET() {
 export async function PUT(request: Request) {
   const context = await getOptionalAuthContext()
   if (!context) return unavailable(401, 'AUTH_REQUIRED', 'Sign in to sync conversations.')
-  if (!isDatabaseConfigured()) return unavailable(503, 'DATABASE_NOT_CONFIGURED', 'Cloud sync is not configured yet.')
+  if (!isPostgresConfigured()) return unavailable(503, 'DATABASE_NOT_CONFIGURED', 'Cloud sync is not configured yet.')
 
   const parsed = syncSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return unavailable(400, 'INVALID_CONVERSATIONS', 'Conversation data is invalid or too large.')
 
-  await withTransaction(async (connection) => {
-    await ensureWorkspaceRecord(connection, context)
+  const sql = getPostgres()
+  await sql.begin(async (tx) => {
+    await ensureWorkspaceRecord(tx, context)
 
+    // The client owns the list, so anything it no longer sends is gone. Messages
+    // cascade from the conversation, so they do not need deleting separately.
     const incomingIds = parsed.data.conversations.map((conversation) => conversation.id)
     if (incomingIds.length) {
-      await connection.query(
-        'DELETE FROM lab_conversations WHERE workspace_key = ? AND id NOT IN (?)',
-        [context.workspace.key, incomingIds],
-      )
+      await tx`
+        delete from public.lab_conversations
+         where workspace_key = ${context.workspace.key} and id not in ${tx(incomingIds)}`
     } else {
-      await connection.execute('DELETE FROM lab_conversations WHERE workspace_key = ?', [context.workspace.key])
+      await tx`delete from public.lab_conversations where workspace_key = ${context.workspace.key}`
     }
 
     for (const conversation of parsed.data.conversations) {
-      await connection.execute(
-        `INSERT INTO lab_conversations (id, owner_id, workspace_key, title, model, experience, client_updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE title = VALUES(title), model = VALUES(model),
-           experience = VALUES(experience), client_updated_at = VALUES(client_updated_at)`,
-        [conversation.id, context.userId, context.workspace.key, conversation.title, conversation.model, conversation.experience || 'chat', conversation.updatedAt],
-      )
-      await connection.execute(
-        'DELETE FROM lab_messages WHERE workspace_key = ? AND conversation_id = ?',
-        [context.workspace.key, conversation.id],
-      )
+      await tx`
+        insert into public.lab_conversations
+          (id, owner_id, workspace_key, title, model, experience, client_updated_at)
+        values (${conversation.id}, ${context.userId}, ${context.workspace.key}, ${conversation.title},
+                ${conversation.model}, ${conversation.experience || 'chat'}, ${conversation.updatedAt})
+        on conflict (workspace_key, id) do update set
+          title = excluded.title,
+          model = excluded.model,
+          experience = excluded.experience,
+          client_updated_at = excluded.client_updated_at,
+          updated_at = now()`
+      await tx`
+        delete from public.lab_messages
+         where workspace_key = ${context.workspace.key} and conversation_id = ${conversation.id}`
       for (const [position, message] of conversation.messages.entries()) {
         const { id, role, content, ...metadata } = message
-        await connection.execute(
-          `INSERT INTO lab_messages (id, owner_id, workspace_key, conversation_id, position, role, content, metadata)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, context.userId, context.workspace.key, conversation.id, position, role, content, JSON.stringify(metadata)],
-        )
+        await tx`
+          insert into public.lab_messages
+            (id, owner_id, workspace_key, conversation_id, position, role, content, metadata)
+          values (${id}, ${context.userId}, ${context.workspace.key}, ${conversation.id},
+                  ${position}, ${role}, ${content}, ${tx.json(metadata as never)})`
       }
     }
   })

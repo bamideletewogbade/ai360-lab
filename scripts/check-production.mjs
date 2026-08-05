@@ -26,16 +26,10 @@ if (configured('NEXT_PUBLIC_APP_URL')) {
   }
 }
 
-const provider = process.env.DATABASE_PROVIDER || (configured('DATABASE_URL') ? 'postgres' : 'mysql')
-if (provider === 'postgres') {
-  requireValue('DATABASE_URL', 'use the Supabase session-pooler connection string on Hostinger')
-  warnings.push('Supabase is prepared but the application data-route cutover is not complete; do not switch production yet.')
-} else if (provider === 'mysql') {
-  for (const name of ['MYSQL_HOST', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD']) {
-    requireValue(name, 'required by the current MySQL data plane')
-  }
-} else {
-  errors.push('DATABASE_PROVIDER: must be mysql or postgres')
+// Supabase Postgres is the only data plane; MySQL was retired on 2026-08-05.
+requireValue('DATABASE_URL', 'use the Supabase session-pooler connection string on Hostinger')
+if (/@db\.[a-z0-9]+\.supabase\.co/.test(process.env.DATABASE_URL || '')) {
+  warnings.push('DATABASE_URL points at the direct Supabase host, which is IPv6 only. Use the session pooler unless the host has confirmed IPv6.')
 }
 
 if (process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true') {

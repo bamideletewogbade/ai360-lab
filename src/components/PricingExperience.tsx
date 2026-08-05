@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
 import { BILLING_PLANS, CREDIT_GUIDE, CREDIT_TOP_UPS, planPrice, type BillingCadence } from '@/lib/billing/catalog'
+import { SiteNav } from '@/components/SiteNav'
 import styles from '@/app/pricing/pricing.module.css'
 
 const TEMPLATE_GROUPS = [
@@ -18,18 +19,7 @@ export function PricingExperience() {
 
   return (
     <main className={styles.shell}>
-      <nav className={styles.nav} aria-label="Pricing navigation">
-        <Link href="/" className={styles.logo} aria-label="AI 360 Lab home">
-          <Image src="/logo-black.png" width={180} height={44} alt="AI Three Sixty" priority />
-          <span>LAB</span>
-        </Link>
-        <div className={styles.navLinks}>
-          <Link href="/#outcomes">What you can make</Link>
-          <Link href="/pricing" aria-current="page">Pricing</Link>
-          <a href="https://aithreesixty.tech">AI 360 home</a>
-        </div>
-        <Link href="/app" className={styles.open}>Try AI 360 free <span>↗</span></Link>
-      </nav>
+      <SiteNav current="pricing" />
 
       <header className={styles.hero}>
         <div className={styles.heroCopy}>

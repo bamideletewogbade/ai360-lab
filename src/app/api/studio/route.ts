@@ -347,7 +347,7 @@ export async function POST(request: Request) {
               },
             ],
             tools: LIVE_INFORMATION_TOOLS,
-            provider: providerPreferences('studio'),
+            provider: providerPreferences('studio', { withTools: true }),
             max_tokens: 1_200,
           }),
         })
