@@ -69,6 +69,110 @@ $0.0063 and 18.5 seconds.
 
 ---
 
+## 2026-08-06 · Decision · Create produces six outcomes, not one
+
+Studio was a single hardcoded outcome: a brand and launch pack of exactly eight
+assets, written into the prompt and the JSON schema. Right for a business
+starting from nothing, wrong for the far more common case of a business that
+already exists and needs one specific thing.
+
+`src/lib/studio/packs.ts` is now a registry. A pack declares the specialists it
+runs and what each produces, so adding an outcome is data rather than a rewrite.
+
+| Pack | For | Credits |
+| --- | --- | ---: |
+| Brand and launch | No brand yet | 8 |
+| Marketing pack | Brand exists, needs a push | 8 |
+| Ads generator | About to spend on ads | 5 |
+| Name and domain | Stuck on what to call it | 3 |
+| Pitch pack | Approaching a funder or big customer | 7 |
+| Content calendar | Runs out of things to say | 5 |
+
+**Costs come from the same weights the rest of the product bills**, and are
+capped at the agent ceiling. A pack is one piece of work to the person paying,
+so it must never quietly cost more than the priciest thing they have already
+been quoted. A test enforces the cap and that a name search costs less than a
+whole brand.
+
+**Only researcher and domains reach the network.** Same rule as the agent:
+capability is granted by the schema, not by asking nicely.
+
+---
+
+## 2026-08-06 · Decision · The domain finder tells the truth, including when it does not know
+
+Verdicts are `taken`, `available` and `unknown`. Two sources, neither sufficient:
+
+- **RDAP**, the registry protocol that replaced WHOIS. Where a registry
+  publishes it, a 404 genuinely means unregistered.
+- **DNS over HTTPS.** A name with live nameservers is definitely registered.
+
+**The trap this avoids.** `.gh` publishes no RDAP service, and rdap.org returns
+404 for every `.gh` name. Trusting it would have told a Ghanaian business that
+`mtn.com.gh` was available. Verified live: RDAP said available, DNS said
+registered, and DNS is right.
+
+The reverse never holds either. `ecobank.com.gh` has no NS record and is
+certainly not free, which is why a missing DNS record can never mean available.
+
+**So for `.gh` we can only ever say taken or unknown**, and the unknown message
+tells the person to confirm with the registrar. Being useless about a fact is
+better than being confidently wrong about it, especially in our home market.
+
+Suffixes are only added to the trusted list after checking a known-registered
+name under them. `npm run domains:verify` proves the answers against real
+registries, 6 of 6, including the `mtn.com.gh` case specifically.
+
+---
+
+## 2026-08-06 · Decision · Tests can now cover modules that use the `@/` alias
+
+`npm test` registers a resolver hook, so the suite is no longer restricted to
+modules with zero imports. That restriction is why guardrails, usage and the
+credit gate had no coverage.
+
+---
+
+## 2026-08-05 · Decision · Media tiers, and models we cannot quote are excluded
+
+Video is chosen by tier (Draft, Standard, Premium), never by model name, matching
+the agent's depth control. `src/lib/media/video-catalogue.ts` prices the live
+catalogue and picks the best model per tier that fits both the Studio clip format
+and the budget the person's credits actually buy.
+
+**The video price question is answered.** Twenty credits buys $0.3447. A four
+second 720p vertical clip on `google/veo-3.1-lite` costs **$0.12**, 35% of that.
+The range published on the pricing page is safe.
+
+**Providers price clips four different ways**, verified live:
+
+| Shape | Example | Handled |
+| --- | --- | --- |
+| `duration_seconds_*`, dollars per second | Veo, Kling, MiniMax | yes |
+| `cents_per_second_output` plus a minimum per generation | Runway | yes |
+| `video_tokens`, dollars per generated token | Seedance, Sora, Grok | **excluded** |
+| nothing usable published | several | excluded |
+
+**Token-priced models are deliberately excluded.** Their cost depends on the
+clip that comes out, not the one requested, so they cannot be quoted before
+generation. A quote we cannot make is a credit reservation we would be guessing
+at, and the entire point of the quote is that the person sees the real number
+before agreeing. `clipPriceUsd` returns null rather than zero so an unpriceable
+model can never silently become a selection.
+
+**A tier never substitutes across tiers.** If nothing in a tier's list is
+affordable it reports itself unavailable. Quietly serving a cheaper model would
+mean charging for Premium and delivering Draft.
+
+**Open decision.** Premium currently resolves to the same model as Standard,
+because the genuinely better model costs $0.80 against a $0.3447 allowance.
+Either raise the video credit weight for a Premium tier, or drop the tier.
+
+**Verified.** `npm run media:verify` checks every tier against the provider's
+live prices. Run it after any pricing change and before trusting the pricing page.
+
+---
+
 ## 2026-08-05 · Decision · A run outlives the connection that started it
 
 Agent work used to live entirely inside its HTTP request. When the connection
