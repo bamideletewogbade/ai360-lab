@@ -1,5 +1,6 @@
 import { getOptionalAuthContext } from '@/lib/auth'
 import { loadRun } from '@/lib/agent/store'
+import { rateLimit, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, requestLogger } from '@/lib/observability'
 
 export const runtime = 'nodejs'
@@ -25,6 +26,14 @@ export async function GET(
 ) {
   const log = requestLogger(request, '/api/agent/runs')
   try {
+    // Generous, because this is how someone on a bad connection gets their work
+    // back. Throttling recovery would punish exactly the situation it exists for.
+    const limited = rateLimit(request, 'action', { minute: 40, daily: 600 }, await resolveRequester(request))
+    if (limited) {
+      log.finish(limited.status, { outcome: 'rate_limited' })
+      return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })
+    }
+
     const context = await getOptionalAuthContext()
     if (!context) {
       log.finish(401, { outcome: 'auth_required' })

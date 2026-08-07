@@ -61,9 +61,37 @@ export function supportsFormat(model: VideoModelEntry, format: ClipFormat) {
  * generation would be a guess, and the whole point of the quote is that the
  * person sees the real number before agreeing to it.
  */
+/**
+ * Prices measured by generating a real clip, for models that publish only a
+ * per-token rate.
+ *
+ * A token rate cannot be turned into a clip price without knowing how many
+ * tokens a clip produces, so the only honest way to quote one is to generate a
+ * clip in the exact Studio format and record what it cost. These figures come
+ * from doing that on 2026-08-06.
+ *
+ * Re-measure whenever a model version changes. A stale figure here is worse
+ * than no figure, because it would be quoted with confidence.
+ */
+export const MEASURED_CLIP_USD: Record<string, { usd: number; measuredOn: string }> = {
+  'bytedance/seedance-2.0-fast': { usd: 0.4838, measuredOn: '2026-08-06' },
+}
+
 export function clipPriceUsd(model: VideoModelEntry, format: ClipFormat = STUDIO_CLIP): number | null {
   const skus = model.pricing_skus ?? {}
   const seconds = format.durationSeconds
+
+  // A measured price only applies to the format it was measured in.
+  const measured = model.id ? MEASURED_CLIP_USD[model.id] : undefined
+  if (
+    measured
+    && format.durationSeconds === STUDIO_CLIP.durationSeconds
+    && format.resolution === STUDIO_CLIP.resolution
+    && format.aspectRatio === STUDIO_CLIP.aspectRatio
+    && format.withAudio === STUDIO_CLIP.withAudio
+  ) {
+    return measured.usd
+  }
 
   // Per second, most specific sku first.
   const perSecond = number(
@@ -81,7 +109,8 @@ export function clipPriceUsd(model: VideoModelEntry, format: ClipFormat = STUDIO
     return Number((Math.max(centsPerSecond * seconds, minimumCents) / 100).toFixed(4))
   }
 
-  // Token priced. Real, but not predictable before the clip exists.
+  // Token priced with no measurement on file. Real, but not predictable before
+  // the clip exists, so it cannot be quoted.
   return null
 }
 

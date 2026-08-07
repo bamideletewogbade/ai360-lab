@@ -157,7 +157,15 @@ export async function POST(request: Request) {
   const limited = rateLimit(
     request,
     rateScope,
-    body.action === 'quote' ? { minute: 8, daily: 50 } : body.action === 'status' ? { minute: 8, daily: 100 } : { minute: 1, daily: 3 },
+    // Checking on a job is a cheap read, not a paid generation, and it has to
+    // outlast the job it is watching. A clip takes about 80 seconds, so a limit
+    // of 8 a minute froze the progress display a third of the way through.
+    // Generation itself stays tightly limited, because that is what costs money.
+    body.action === 'quote'
+      ? { minute: 8, daily: 50 }
+      : body.action === 'status'
+        ? { minute: 40, daily: 600 }
+        : { minute: 1, daily: 3 },
     requester,
   )
   if (limited) {

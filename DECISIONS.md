@@ -69,6 +69,104 @@ $0.0063 and 18.5 seconds.
 
 ---
 
+## 2026-08-07 · Decision · The Create coordinator runs specialists, some at the same time
+
+`src/lib/studio/coordinator.ts` executes a pack: stages in sequence, specialists
+inside a stage concurrently, each seeing what earlier stages produced. Streams
+progress over `/api/studio/pack` as NDJSON, the same shape the agent uses.
+
+**The parallelism is real, not decorative.** Verified live: in the marketing
+pack the copywriter and the calendar both completed at the same second. This
+matters because the progress view is meant to show work happening, and an
+animation over a single long request would be a lie about what the product does.
+
+**Verified end to end, 7 August 2026.**
+
+| Pack | Specialists | Time | Cost | Of reserved budget |
+| --- | --- | ---: | ---: | ---: |
+| Name and domain | Namer, then Domains | 22s | $0.0098 | 19% |
+| Marketing pack | Researcher, Campaign, then Copywriter and Calendar together | 43s | $0.0544 | 39% |
+
+The naming pack checked sixteen domains and reported them honestly: `.com`
+candidates taken, every `.com.gh` returned as cannot confirm rather than guessed.
+
+**Design choices worth keeping.**
+
+- A pack is reserved once up front, not charged per specialist, because it is
+  one purchase to the person paying for it.
+- Only the researcher and the domain checker are given tools. Every other
+  specialist is called with none defined, the same schema-level rule the agent
+  uses.
+- The domain checker is not a model. The namer ends its output with a
+  `DOMAINS:` line, and the checker asks real registries.
+- A specialist that fails marks its own section failed and the rest of the pack
+  continues, so one bad stage does not lose the whole thing.
+- The run outlives its connection, like the agent.
+- Sections are streamed as each completes, so the first output is readable long
+  before the pack finishes.
+
+**Still open.** The progress view is not in the interface. `StudioWorkspace`
+still runs its original single hardcoded flow, so the coordinator is reachable
+by API but not yet by a person.
+
+---
+
+## 2026-08-07 · Incident · Video progress went blank part way through every clip
+
+**What happened.** During an end to end run, the status display stopped updating
+about a third of the way through generation and stayed blank for forty seconds.
+
+**Cause.** Our own rate limit. `studio_video_status` allowed 8 checks a minute,
+halved to 4 for anyone not signed in. A clip takes about 80 seconds, so a UI
+polling every 5 seconds is throttled after 4 checks.
+
+**Fix.** Cheap reads and expensive work now have separate budgets. Checking on a
+job is a read that costs nothing and is allowed 40 a minute; generating a clip
+still costs money and is still 1 a minute. The same reasoning was applied to
+`/api/agent/runs/[runId]`, where throttling recovery would punish exactly the
+situation it exists for.
+
+**Only found by running a real generation and watching it.** No unit test would
+have caught a limit that is correct in isolation and wrong against the duration
+of the thing it monitors.
+
+---
+
+## 2026-08-07 · Decision · Seedance is quoted from a measurement, and it is not cheap
+
+The catalogue lists `bytedance/seedance-2.0-fast` at $0.0538, which reads as the
+cheapest video option available. That is a per-token rate, not a clip price.
+
+**Generating one real clip in the Studio format cost $0.4838.** That is four
+times `veo-3.1-lite` at $0.12, and 140% of what twenty credits buys. Using it
+would need the video weight raised from 20 credits to about 29.
+
+**Token priced models are now quoted from a measurement** rather than excluded
+outright. `MEASURED_CLIP_USD` records the figure and the date it was taken. A
+measured price only applies to the exact format it was measured in, because cost
+scales with the clip, and an unmeasured token priced model still returns null.
+
+**Re-measure when a model version changes.** A stale figure here is worse than
+no figure, because it would be quoted with confidence.
+
+---
+
+## 2026-08-07 · Verified · Full product run against live providers
+
+| Path | Time | Cost | Result |
+| --- | ---: | ---: | --- |
+| Chat | 7.4s | negligible | answers |
+| Chat in Twi | — | negligible | replied in Twi to an English question |
+| Research agent | 17.4s | $0.0063 | 67 streamed chunks, 4 sources |
+| Image | 15.1s | $0.0026 | 1.6 MB image returned |
+| Video quote | instant | — | $0.12 quoted before anything ran |
+| Video generation | 79s | $0.1200 | clip completed, download ready |
+
+Seven of seven passed. `openai/gpt-image-1-mini` works despite being absent from
+the default models listing, so it is not the broken default it first appeared.
+
+---
+
 ## 2026-08-06 · Decision · Create produces six outcomes, not one
 
 Studio was a single hardcoded outcome: a brand and launch pack of exactly eight

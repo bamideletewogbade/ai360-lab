@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  clipPriceUsd, isMediaTier, isVideoSelection, MEDIA_TIERS, selectVideoModel,
-  STUDIO_CLIP, supportsFormat, VIDEO_TIER_PREFERENCES,
+  clipPriceUsd, isMediaTier, isVideoSelection, MEASURED_CLIP_USD, MEDIA_TIERS,
+  selectVideoModel, STUDIO_CLIP, supportsFormat, VIDEO_TIER_PREFERENCES,
 } from '../src/lib/media/video-catalogue.ts'
 
 /**
@@ -60,10 +60,30 @@ test('a cents-per-second price respects the minimum charge per generation', () =
   assert.equal(clipPriceUsd(RUNWAY, { ...STUDIO_CLIP, durationSeconds: 1 }), 0.56)
 })
 
-test('a token-priced model cannot be quoted and is excluded', () => {
-  // The cost depends on the generated clip, not the requested duration, so a
-  // quote would be a guess. The whole point of the quote is that it is not.
-  assert.equal(clipPriceUsd(SEEDANCE_FAST, STUDIO_CLIP), null)
+test('a token-priced model is quoted from a measured clip, not from its token rate', () => {
+  // Generating one real clip on 2026-08-06 cost $0.4838. The published token
+  // rate of $0.0000056 says nothing usable about that on its own.
+  assert.equal(clipPriceUsd(SEEDANCE_FAST, STUDIO_CLIP), 0.4838)
+  assert.ok(MEASURED_CLIP_USD['bytedance/seedance-2.0-fast']?.measuredOn, 'a measurement must record when it was taken')
+})
+
+test('a measured price is not reused for a format it was not measured in', () => {
+  // Cost scales with the clip, so a 15 second version is not the same price.
+  assert.equal(clipPriceUsd(SEEDANCE_FAST, { ...STUDIO_CLIP, durationSeconds: 15 }), null)
+  assert.equal(clipPriceUsd(SEEDANCE_FAST, { ...STUDIO_CLIP, resolution: '480p' }), null)
+})
+
+test('a token-priced model with no measurement cannot be quoted', () => {
+  const unmeasured = { ...SEEDANCE_FAST, id: 'bytedance/seedance-2.0' }
+  assert.equal(clipPriceUsd(unmeasured, STUDIO_CLIP), null)
+})
+
+test('the measured Seedance price is above what twenty credits buys', () => {
+  // Recorded because the catalogue listing makes it look like the cheapest
+  // option, and it is in fact four times the price of veo-3.1-lite.
+  const budget = 0.3447
+  assert.ok(clipPriceUsd(SEEDANCE_FAST, STUDIO_CLIP)! > budget)
+  assert.ok(clipPriceUsd(VEO_LITE, STUDIO_CLIP)! < budget)
 })
 
 test('a model is only offered when it supports the exact clip requested', () => {
