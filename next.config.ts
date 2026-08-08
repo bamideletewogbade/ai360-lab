@@ -26,6 +26,12 @@ const nextConfig: NextConfig = {
         source: '/',
         headers: [...securityHeaders, freshAppShell],
       },
+      {
+        // Pricing is a commercial contract surface. Do not let the CDN serve a
+        // catalog from an earlier deployment after the source of truth changes.
+        source: '/pricing',
+        headers: [...securityHeaders, freshAppShell],
+      },
       { source: '/(.*)', headers: securityHeaders },
     ]
   },
