@@ -1,12 +1,13 @@
-import type { Metadata } from 'next'
 import { SiteNav } from '@/components/SiteNav'
 import { SiteFooter } from '@/components/SiteFooter'
+import { publicPageMetadata } from '@/lib/seo'
 import styles from '../legal.module.css'
 
-export const metadata: Metadata = {
+export const metadata = publicPageMetadata({
+  path: '/terms',
   title: 'Terms',
-  description: 'Terms for using AI 360 Lab.',
-}
+  description: 'Terms for responsible use, approvals, generated content, payments and service availability in AI360 Lab.',
+})
 
 export default function TermsPage() {
   return (
@@ -19,8 +20,8 @@ export default function TermsPage() {
           <p className={styles.updated}>Last updated August 3, 2026</p>
 
           <section>
-            <h2>Using AI 360 Lab</h2>
-            <p>AI 360 Lab is an experimental learning and productivity service from AI 360 and the Accra Innovation Centre. You may use it for lawful personal, educational and business tasks, subject to the usage limits shown by the service.</p>
+            <h2>Using AI360 Lab</h2>
+            <p>AI360 Lab is an experimental learning and productivity service from AI360 and the Accra Innovation Centre. You may use it for lawful personal, educational and business tasks, subject to the usage limits shown by the service.</p>
           </section>
 
           <section>

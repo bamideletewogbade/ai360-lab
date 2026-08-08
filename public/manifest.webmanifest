@@ -1,7 +1,7 @@
 {
-  "name": "AI 360 Lab",
-  "short_name": "AI 360 Lab",
-  "description": "Research, plan, create and complete useful work with AI 360.",
+  "name": "AI360 Lab",
+  "short_name": "AI360 Lab",
+  "description": "Research, plan, create and complete useful work with AI360.",
   "start_url": "/app",
   "display": "standalone",
   "background_color": "#f7f6f2",

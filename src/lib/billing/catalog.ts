@@ -21,7 +21,7 @@ export const BILLING_PLANS: BillingPlan[] = [
     slug: 'explorer',
     name: 'Explorer',
     eyebrow: 'Start free',
-    audience: 'For trying AI 360 and handling occasional everyday tasks.',
+    audience: 'For trying AI360 and handling occasional everyday tasks.',
     monthlyPriceGhs: 0,
     annualMonthlyPriceGhs: 0,
     includedCredits: 5,

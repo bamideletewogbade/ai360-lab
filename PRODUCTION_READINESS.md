@@ -1,8 +1,8 @@
-# AI 360 Lab production readiness
+# AI360 Lab production readiness
 
 Last reviewed: 2026-08-08
 
-This document is the release truth for AI 360 Lab. A feature is only marked
+This document is the release truth for AI360 Lab. A feature is only marked
 ready when its code, configuration, external service and failure path have been
 verified. A polished screen alone is not considered production-ready.
 
@@ -11,8 +11,10 @@ verified. A polished screen alone is not considered production-ready.
 **Current release state: private pilot candidate, not yet ready for unrestricted public use.**
 
 The product experience is functional in guest mode and the core AI routes are
-implemented. The remaining launch blockers are identity credentials, a durable
-production database, distributed cost controls and live verification of the
+implemented. Supabase Postgres is the only application data plane and its
+credit runtime has been verified. The remaining launch blockers include live
+identity verification, runtime database connectivity from the production host,
+a durable queue, distributed cost controls, monitoring and verification of
 external media and payment providers.
 
 ## Audit snapshot: 2026-08-08
@@ -57,8 +59,8 @@ external media and payment providers.
 | Google and email/password sign-in | Supported by Clerk UI | Enable both in Clerk; production Google OAuth credentials | End-to-end auth test pending | Blocked |
 | Last-used sign-in hint | Supported natively by Clerk | Enable for the existing Clerk instance | Visual test pending | Blocked |
 | Personal and organization tenancy | Implemented in application contracts | Clerk Organizations settings and keys | Cross-tenant integration tests pending | Private pilot |
-| Cloud conversations and projects | Implemented for MySQL | MySQL credentials and migrated schema | Database unavailable locally | Blocked |
-| Supabase Postgres target | Initial schema, RLS and pooler client prepared | Supabase project, region and connection strings | Runtime data-route cutover pending | In progress |
+| Cloud conversations and projects | Implemented on Supabase Postgres | Clerk plus `DATABASE_URL` | Repository checks pass; live production-host and tenant-isolation verification pending | Private pilot |
+| Supabase Postgres data plane | Runtime repositories, migrations, RLS and pooler client implemented | Supabase project and connection strings | Credit and data verification pass; Hostinger connectivity pending | Pilot-ready |
 | Usage ledger and cost records | Schema and write contracts implemented | Durable database | Live reconciliation test pending | In progress |
 | Rate limiting | Identity-aware burst/day limits; per workspace when signed in, network address as an anonymous backstop | None | Still process-local, so limits reset on restart and do not coordinate across instances | Pilot-ready, not production-scale |
 | Anonymous access to expensive work | Agent, Studio, image and video require an identified workspace whenever Clerk is configured | Clerk keys | End-to-end test pending live keys | Implemented |
@@ -89,7 +91,7 @@ external media and payment providers.
 
 - [ ] Add Clerk test keys locally and live keys to Hostinger.
 - [ ] Configure `aithreesixty.tech` as the production root and allow only the
-  required AI 360 subdomains.
+  required AI360 subdomains.
 - [ ] Enable Google plus verified email/password.
 - [ ] Enable the native last-used-method hint.
 - [ ] Configure the production Clerk webhook and replay a test event.

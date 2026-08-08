@@ -1,11 +1,12 @@
-import type { Metadata } from 'next'
 import { HowItWorks } from '@/components/HowItWorks'
+import { publicPageMetadata } from '@/lib/seo'
 
-export const metadata: Metadata = {
-  title: 'How it works',
-  description:
-    'What happens between asking and receiving in AI 360 Lab: model routing, approvals, what a credit buys, and the things the Lab deliberately will not do.',
-}
+export const metadata = publicPageMetadata({
+  path: '/how-it-works',
+  title: 'How AI360 Lab works',
+  description: 'Learn how AI360 Lab routes tasks, researches current sources, handles approvals, protects your control and turns goals into usable outcomes.',
+  keywords: ['how AI agents work', 'AI research with sources', 'human approval AI', 'AI360 workflow'],
+})
 
 export default function HowItWorksPage() {
   return <HowItWorks />

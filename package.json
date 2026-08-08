@@ -1,7 +1,7 @@
 {
   "name": "ai360-lab",
   "version": "0.1.0",
-  "description": "AI 360 Lab — open AI practice. A clean, streaming chat over OpenRouter with primary + fallback routing (the AI gateway pattern). Standalone, deployable to lab.aithreesixty.tech.",
+  "description": "AI360 Lab - open AI practice. A clean, streaming chat over OpenRouter with primary + fallback routing (the AI gateway pattern). Standalone, deployable to lab.aithreesixty.tech.",
   "private": true,
   "type": "module",
   "scripts": {

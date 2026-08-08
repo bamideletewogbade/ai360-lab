@@ -76,7 +76,6 @@
 .panelCopy { margin: 12px 0 30px; color: var(--grey); font-size: 1.037rem; line-height: 1.6; }
 .formFrame { width: 100%; min-height: 320px; }
 .setupNotice { display: grid; min-height: 310px; place-items: center; align-content: center; border: 1px solid #dedcd5; border-radius: 16px; background: var(--paper); padding: 42px; text-align: center; }
-.setupNotice > span { display: grid; width: 42px; height: 42px; place-items: center; margin-bottom: 18px; border-radius: 12px; background: var(--ink); color: #fff; animation: auth-pulse 2.4s ease-in-out infinite; }
 .setupNotice b { font-family: var(--font-heading); font-size: 1.15rem; }
 .setupNotice p { max-width: 330px; margin: 10px 0 20px; color: var(--grey); font-size: 0.9rem; line-height: 1.6; }
 .setupNotice a { border-radius: 9px; background: var(--ink); padding: 12px 16px; color: #fff; font-size: 0.85rem; font-weight: 750; text-decoration: none; transition: transform .18s ease, background .18s ease; }

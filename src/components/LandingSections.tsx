@@ -14,7 +14,7 @@ const OUTCOMES = [
 
 export function LandingProof() {
   return (
-    <section className="landing-proof" aria-label="What makes AI 360 different">
+    <section className="landing-proof" aria-label="What makes AI360 different">
       <span><b>Live when it matters</b><small>Current sources when today’s facts can change the answer</small></span>
       <span><b>Built around your context</b><small>Works with your documents, voice, language and goals</small></span>
       <span><b>You stay in control</b><small>Review the plan, the cost and every important action</small></span>
@@ -34,9 +34,9 @@ export function LandingMission() {
       />
       <div className="mission-shade" />
       <div className="mission-copy">
-        <p><span>✦</span> Our mission</p>
+        <p>Our mission</p>
         <h2 id="mission-title">{BRAND.mission}</h2>
-        <p>Built from Accra for students, builders, families, teams and public servants. AI 360 turns access to intelligence into the confidence and capacity to act.</p>
+        <p>Built from Accra for students, builders, families, teams and public servants. AI360 turns access to intelligence into the confidence and capacity to act.</p>
         <blockquote>“{BRAND.vision}”</blockquote>
         <Link href="/what-you-can-make">See what that looks like in real life <span aria-hidden="true">↗</span></Link>
       </div>
@@ -48,7 +48,7 @@ export function LandingOutcomes() {
   return (
     <section className="landing-section outcomes" id="outcomes">
       <div className="landing-section-head">
-        <p><span>✦</span> What you can move forward</p>
+        <p>What you can move forward</p>
         <h2>One place.<br />Many ways to move.</h2>
         <span>AI should expand what people can do, not ask them to learn a new language first. Choose the outcome that feels closest to yours. <Link href="/what-you-can-make">Explore real examples and costs ↗</Link></span>
       </div>
@@ -63,9 +63,9 @@ export function LandingOutcomes() {
       </div>
       <div className="launch-proof">
         <div className="launch-proof-copy">
-          <p><span>✦</span> Create and launch</p>
+          <p>Create and launch</p>
           <h3>A direction you approve. An outcome people can see.</h3>
-          <p>Studio turns one business goal into a reviewed brand direction and coordinated campaign assets. This is a real four-second output—not a stock placeholder—created only after the plan and quoted cost are approved.</p>
+          <p>Studio turns one business goal into a reviewed brand direction and coordinated campaign assets. This is a real four-second output, not a stock placeholder. It is created only after the plan and quoted cost are approved.</p>
           <ol className="launch-proof-steps" aria-label="How Studio creates the outcome">
             <li><span>01</span><b>Bring the business goal</b></li>
             <li><span>02</span><b>Review the direction</b></li>
@@ -106,7 +106,7 @@ export function LandingProcess() {
   return (
     <section className="landing-process" id="how">
       <div className="process-copy">
-        <p><span>✦</span> From intention to action</p>
+        <p>From intention to action</p>
         <h2>From “I need to…”<br />to “it’s ready.”</h2>
         <div className="process-actions">
           <Link className="process-primary" href="/app">Start with your goal <span aria-hidden="true">↗</span></Link>
@@ -115,9 +115,9 @@ export function LandingProcess() {
       </div>
       <ol className="process-list">
         <li><span>01</span><div><b>Bring the real goal</b><small>Say what you need in ordinary language. No model names or prompt formulas.</small></div></li>
-        <li><span>02</span><div><b>AI 360 chooses the path</b><small>A quick answer, current research, a structured workflow or a creative build.</small></div></li>
+        <li><span>02</span><div><b>AI360 chooses the path</b><small>A quick answer, current research, a structured workflow or a creative build.</small></div></li>
         <li><span>03</span><div><b>See and shape the work</b><small>Follow progress, ask for changes and approve anything important or expensive.</small></div></li>
-        <li><span>04</span><div><b>Leave with something usable</b><small>Put the answer, plan, document or asset to work—and return when it needs to evolve.</small></div></li>
+        <li><span>04</span><div><b>Leave with something usable</b><small>Put the answer, plan, document or asset to work. Return when it needs to evolve.</small></div></li>
       </ol>
     </section>
   )

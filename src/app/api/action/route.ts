@@ -125,7 +125,7 @@ export async function POST(request: Request) {
     const calendar = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//AI Three Sixty//AI 360 Lab//EN',
+      'PRODID:-//AI360//AI360 Lab//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
       'BEGIN:VEVENT',

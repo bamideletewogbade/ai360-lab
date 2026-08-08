@@ -86,14 +86,14 @@ const MAX_VIDEO_BYTES = 8 * 1024 * 1024
 const TASKS = [
   { icon: 'Aa', label: 'Write an SMS', prompt: 'Draft a friendly SMS reminding parents about PTA this Friday at 3pm.' },
   { icon: '≡', label: 'Summarize a document', prompt: 'Summarize this document into key points and clear next steps.' },
-  { icon: '↗', label: 'Draft a proposal', prompt: 'Write a short business proposal for a smoothie stand in Accra.' },
-  { icon: '✓', label: 'Plan my week', prompt: 'Help me build a practical plan for my week. Ask what commitments and priorities I have.' },
+  { icon: 'PR', label: 'Draft a proposal', prompt: 'Write a short business proposal for a smoothie stand in Accra.' },
+  { icon: 'WK', label: 'Plan my week', prompt: 'Help me build a practical plan for my week. Ask what commitments and priorities I have.' },
 ]
 const AGENT_TASKS = [
-  { icon: '⌕', label: 'Research and report', prompt: 'Research this topic using reliable current sources and create a concise report with practical recommendations: ' },
+  { icon: 'RS', label: 'Research and report', prompt: 'Research this topic using reliable current sources and create a concise report with practical recommendations: ' },
   { icon: '⇄', label: 'Compare documents', prompt: 'Compare the attached documents, identify the important differences, and recommend the best next steps.' },
   { icon: 'Aa', label: 'Create a proposal', prompt: 'Research what is needed and create a practical, professional proposal for: ' },
-  { icon: '✓', label: 'Build an action plan', prompt: 'Turn this outcome into a researched, step-by-step action plan with priorities, risks and next actions: ' },
+  { icon: 'AP', label: 'Build an action plan', prompt: 'Turn this outcome into a researched, step-by-step action plan with priorities, risks and next actions: ' },
 ]
 
 const MODE_META: Record<Experience, {
@@ -111,7 +111,7 @@ const MODE_META: Record<Experience, {
     description: 'Answers & ideas',
     eyebrow: 'Everyday intelligence',
     heading: <>Turn a thought into<br />something useful.</>,
-    intro: 'Ask a question, shape an idea, or bring a task. AI 360 chooses the right intelligence and helps you move forward.',
+    intro: 'Ask a question, shape an idea, or bring a task. AI360 chooses the right intelligence and helps you move forward.',
     mark: 'A',
   },
   agent: {
@@ -120,17 +120,17 @@ const MODE_META: Record<Experience, {
     description: 'Research & action',
     eyebrow: 'Outcome-focused agent',
     heading: <>Give us the outcome.<br />We will work the steps.</>,
-    intro: 'Set a goal and let AI 360 research the web, inspect your materials, reason through the work and return a checked deliverable.',
-    mark: '✦',
+    intro: 'Set a goal and let AI360 research the web, inspect your materials, reason through the work and return a checked deliverable.',
+    mark: 'R',
   },
   studio: {
     label: 'Build',
     short: 'Create business assets',
     description: 'Campaign studio',
-    eyebrow: 'AI 360 production studio',
+    eyebrow: 'AI360 production studio',
     heading: <>Build the assets that<br />move your business.</>,
     intro: 'Go from a brand brief to a coordinated launch pack, then review, refine, approve and produce each asset.',
-    mark: '◆',
+    mark: 'C',
   },
 }
 
@@ -235,8 +235,8 @@ const EXPERIENCES: Array<{
   hint: string
 }> = [
   { id: 'chat', mark: 'A', label: 'Quick', caption: 'Answers and ideas', hint: 'Ask anything. Fastest and cheapest.' },
-  { id: 'agent', mark: '✦', label: 'Research', caption: 'Current and sourced', hint: 'Searches the live web and cites what it used.' },
-  { id: 'studio', mark: '◆', label: 'Create', caption: 'Projects and assets', hint: 'Build a campaign, brand or set of assets.' },
+  { id: 'agent', mark: 'R', label: 'Research', caption: 'Current and sourced', hint: 'Searches the live web and cites what it used.' },
+  { id: 'studio', mark: 'C', label: 'Create', caption: 'Projects and assets', hint: 'Build a campaign, brand or set of assets.' },
 ]
 
 /** Sidebar grouping. A campaign project is not the same kind of thing as a chat. */
@@ -246,8 +246,8 @@ const SIDEBAR_GROUPS: Array<{
   mark: string
   match: (experience?: Experience) => boolean
 }> = [
-  { id: 'projects', label: 'Projects', mark: '◆', match: (experience) => experience === 'studio' },
-  { id: 'conversations', label: 'Conversations', mark: '✦', match: (experience) => experience !== 'studio' },
+  { id: 'projects', label: 'Projects', mark: 'P', match: (experience) => experience === 'studio' },
+  { id: 'conversations', label: 'Conversations', mark: 'C', match: (experience) => experience !== 'studio' },
 ]
 
 const AGENT_DEPTH_HINTS: Record<AgentDepth, string> = {
@@ -1164,12 +1164,15 @@ function LabWorkspace({
     <div className="lab-shell">
       <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
         <div className="side-head">
-          <img src="/logo-white.png" alt="AI Three Sixty" className="wordmark" />
+          <img src="/logo-white.png" alt="AI360" className="wordmark" />
           <button className="icon-button close-side" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">×</button>
         </div>
         <button className="new-chat" onClick={newChat}><span>＋</span><span>Start something</span></button>
         <label className="history-search">
-          <span>⌕</span>
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+            <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats" />
         </label>
         {/* Projects and conversations are different objects with different
@@ -1185,7 +1188,7 @@ function LabWorkspace({
                 {items.map((conversation) => (
                   <div className={`history-item${conversation.id === active.id ? ' active' : ''}`} key={conversation.id}>
                     <button className="history-main" onClick={() => { setActiveId(conversation.id); setSidebarOpen(false) }}>
-                      <span className="history-spark">{group.mark}</span>
+                      <span className="history-mark">{group.mark}</span>
                       <span>{conversation.title}</span>
                     </button>
                     <button className="history-more" onClick={() => renameChat(conversation.id)} title="Rename">✎</button>
@@ -1219,9 +1222,9 @@ function LabWorkspace({
         <header className="lab-top">
           <div className="lab-top-left">
             <button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open conversations">☰</button>
-            <Link className="lab-brand" href="/" aria-label="AI 360 Lab home">
+            <Link className="lab-brand" href="/" aria-label="AI360 Lab home">
               <img src="/icon-mark-black.png" alt="" />
-              <span><b>AI 360</b> LAB</span>
+              <span><b>AI360</b> LAB</span>
             </Link>
           </div>
           <div className="experience-switch" role="group" aria-label="What do you want to do">
@@ -1275,12 +1278,11 @@ function LabWorkspace({
           <main className="lab-main" ref={scrollRef}>
           {messages.length === 0 ? (
             <div className="lab-empty">
-              <div className="sparkle-field" aria-hidden="true"><i>✦</i><i>✦</i><i>✦</i><i>✦</i><i>✦</i></div>
               <img src="/icon-mark-black.png" alt="" className="hero-icon" />
-              <p className="eyebrow"><span>✦</span>{modeMeta.eyebrow}</p>
+              <p className="eyebrow">{modeMeta.eyebrow}</p>
               <h1>{modeMeta.heading}</h1>
               <p className="intro">{modeMeta.intro}</p>
-              <div className="capability-strip" aria-label="AI 360 capabilities">
+              <div className="capability-strip" aria-label="AI360 capabilities">
                 <span><i>01</i><b>Current</b><small>Searches the live web</small></span>
                 <span><i>02</i><b>Multimodal</b><small>Reads files and media</small></span>
                 <span><i>03</i><b>Ready to use</b><small>Exports polished work</small></span>
@@ -1318,7 +1320,7 @@ function LabWorkspace({
                   </div>
                   <div className="message-body">
                     <span className="who">
-                      {message.role === 'user' ? 'You' : message.agent ? 'AI 360 Agent' : 'AI 360 Lab'}
+                      {message.role === 'user' ? 'You' : message.agent ? 'AI360 Agent' : 'AI360 Lab'}
                     </span>
                     {message.attachments?.map((file) => (
                       <div className="message-file" key={file.name}>
@@ -1356,13 +1358,13 @@ function LabWorkspace({
                     {message.agentSteps?.length ? (
                       <div className="agent-run">
                         <div className="agent-run-head">
-                          <span className="agent-orbit">✦</span>
+                          <span className="agent-orbit">RUN</span>
                           <span><b>Agent run</b><small>{message.agentDone ? 'Completed' : 'Working through the task'}</small></span>
                         </div>
                         <div className="agent-steps">
-                          {message.agentSteps.map((step) => (
+                          {message.agentSteps.map((step, stepIndex) => (
                             <div className={`agent-step ${step.status}`} key={step.id}>
-                              <span>{step.status === 'complete' ? '✓' : step.status === 'failed' ? '×' : step.status === 'pending' ? '·' : '✦'}</span>
+                              <span>{step.status === 'complete' ? '✓' : step.status === 'failed' ? '×' : String(stepIndex + 1).padStart(2, '0')}</span>
                               <span>{step.label}</span>
                             </div>
                           ))}
@@ -1375,7 +1377,6 @@ function LabWorkspace({
                       <span className="agent-wait">The agent is working. You can continue browsing this conversation.</span>
                     ) : (
                       <span className="thinking">
-                        <span className="thinking-spark">✦</span>
                         <span className="thinking-copy">
                           <b>{ACTIVITY_STATUS.chat[statusIndex]?.label}</b>
                           <small>{ACTIVITY_STATUS.chat[statusIndex]?.detail}</small>
@@ -1557,7 +1558,7 @@ function LabWorkspace({
               ) : (
                 <span className="tool-label">
                   {attachment ? 'File attached' : 'Add a file or record your voice'}
-                  <span className="web-ready" title="AI 360 searches and reads current web pages when accuracy depends on today">
+                  <span className="web-ready" title="AI360 searches and reads current web pages when accuracy depends on today">
                     <i /> Live intelligence
                   </span>
                 </span>
@@ -1582,7 +1583,7 @@ function LabWorkspace({
           {fileError && <div className="file-error">{fileError}</div>}
           <div className="composer-note">
             AI can make mistakes. Check important information.
-            <span>Built with care by AI 360 · Accra Innovation Center</span>
+            <span>Built with care by AI360 · Accra Innovation Center</span>
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
           </div>
@@ -1603,7 +1604,7 @@ function LabWorkspace({
                 <b>No silent actions</b>
                 <span>
                   {actionDraft.kind === 'email'
-                    ? 'This opens a draft in your email app. AI 360 will not send it.'
+                    ? 'This opens a draft in your email app. AI360 will not send it.'
                     : actionDraft.kind === 'calendar'
                       ? 'This downloads a calendar invite for you to review and import.'
                       : 'This saves the task only inside this browser conversation.'}

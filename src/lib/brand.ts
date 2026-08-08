@@ -1,4 +1,10 @@
 export const BRAND = {
+  name: 'AI360',
+  productName: 'AI360 Lab',
+  studioName: 'AI360 Studio',
+  legacyNames: ['AI Three Sixty', 'AI 360'] as const,
+  siteUrl: 'https://lab.aithreesixty.tech',
+  companyUrl: 'https://aithreesixty.tech',
   promise: 'Bring the goal. Leave with something you can use.',
   mission: 'Make powerful intelligence practical, local and useful to everyone.',
   vision: 'A future where the distance between an idea and the ability to act on it keeps getting smaller.',
@@ -16,13 +22,14 @@ export const PUBLIC_NAV_LINKS: readonly PublicNavLink[] = [
   { href: '/what-you-can-make', label: 'What you can do', current: 'what' },
   { href: '/how-it-works', label: 'How it works', current: 'how' },
   { href: '/pricing', label: 'Plans', current: 'pricing' },
-  { href: 'https://aithreesixty.tech', label: 'About AI 360', external: true },
+  { href: 'https://aithreesixty.tech', label: 'About AI360', external: true },
 ]
 
 export const PUBLIC_FOOTER_LINKS = [
   { href: '/what-you-can-make', label: 'What you can do' },
   { href: '/how-it-works', label: 'How it works' },
   { href: '/pricing', label: 'Plans' },
+  { href: '/changelog', label: 'Changelog' },
   { href: '/privacy', label: 'Privacy' },
   { href: '/terms', label: 'Terms' },
 ] as const

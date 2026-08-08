@@ -57,7 +57,7 @@ export function HeroVision() {
   return (
     <div
       className="hero-vision"
-      aria-label="AI 360 helps different people turn goals into real momentum"
+      aria-label="AI360 helps different people turn goals into real momentum"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
@@ -67,7 +67,7 @@ export function HeroVision() {
 
       <div className="vision-stage">
         <header className="vision-header">
-          <span><i /> AI 360 · LIVE</span>
+          <span><i /> AI360 · LIVE</span>
           <b>ONE GOAL → REAL MOMENTUM</b>
           <small>{String(active + 1).padStart(2, '0')} / {String(VISIONS.length).padStart(2, '0')}</small>
         </header>
@@ -91,7 +91,7 @@ export function HeroVision() {
             <span className="core-ring ring-two" />
             <span className="core-pulse" />
             <div className="core-mark"><Image src="/icon-white.png" width={48} height={48} alt="" /></div>
-            <small>AI 360</small>
+            <small>AI360</small>
           </div>
 
           <article className="vision-outcome" key={`outcome-${active}`}>
@@ -109,8 +109,8 @@ export function HeroVision() {
         </div>
 
         <footer className="vision-footer">
-          <p><span>✦</span><b>Intelligence should meet you where you are.</b></p>
-          <div className="vision-selector" role="group" aria-label="Explore AI 360 stories">
+          <p><b>Intelligence should meet you where you are.</b></p>
+          <div className="vision-selector" role="group" aria-label="Explore AI360 stories">
             {VISIONS.map((item, index) => (
               <button
                 type="button"
@@ -125,8 +125,8 @@ export function HeroVision() {
         </footer>
       </div>
 
-      <div className="vision-float vision-float-one"><span>∞</span><p><b>Built for real life</b><small>Many starting points, one place</small></p></div>
-      <div className="vision-float vision-float-two"><span>✦</span><p><b>Human in control</b><small>You review the important parts</small></p></div>
+      <div className="vision-float vision-float-one"><span>01</span><p><b>Built for real life</b><small>Many starting points, one place</small></p></div>
+      <div className="vision-float vision-float-two"><span>02</span><p><b>Human in control</b><small>You review the important parts</small></p></div>
     </div>
   )
 }

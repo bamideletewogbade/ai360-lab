@@ -1,12 +1,13 @@
-import type { Metadata } from 'next'
 import { SiteNav } from '@/components/SiteNav'
 import { SiteFooter } from '@/components/SiteFooter'
+import { publicPageMetadata } from '@/lib/seo'
 import styles from '../legal.module.css'
 
-export const metadata: Metadata = {
+export const metadata = publicPageMetadata({
+  path: '/privacy',
   title: 'Privacy',
-  description: 'How AI 360 Lab handles conversations, files and voice recordings.',
-}
+  description: 'How AI360 Lab handles conversations, files, voice recordings, generated media and operational information.',
+})
 
 export default function PrivacyPage() {
   return (
@@ -20,7 +21,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2>What the Lab handles</h2>
-            <p>AI 360 Lab processes the prompts, files and recordings you choose to provide so it can answer questions, research topics, analyze materials and prepare exports.</p>
+            <p>AI360 Lab processes the prompts, files and recordings you choose to provide so it can answer questions, research topics, analyze materials and prepare exports.</p>
             <ul>
               <li>Conversation history is saved in your browser on your current device.</li>
               <li>Prompts and supported attachments are sent through our server to the configured AI provider.</li>
@@ -32,12 +33,12 @@ export default function PrivacyPage() {
 
           <section>
             <h2>Live web research</h2>
-            <p>When a question or project depends on current public information, AI 360 Lab may automatically create a search query and retrieve relevant public webpages through the configured AI and search providers. Search queries can be derived from what you ask, so do not include confidential or sensitive information in requests that may require web research.</p>
+            <p>When a question or project depends on current public information, AI360 Lab may automatically create a search query and retrieve relevant public webpages through the configured AI and search providers. Search queries can be derived from what you ask, so do not include confidential or sensitive information in requests that may require web research.</p>
           </section>
 
           <section>
             <h2>What we do not do</h2>
-            <p>We do not sell your prompts, use advertising trackers, or expose the service API key to your browser. AI 360 Lab does not silently generate paid media, send messages, publish posts or change external systems.</p>
+            <p>We do not sell your prompts, use advertising trackers, or expose the service API key to your browser. AI360 Lab does not silently generate paid media, send messages, publish posts or change external systems.</p>
           </section>
 
           <section>
@@ -47,7 +48,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2>Payments and billing records</h2>
-            <p>When payments are activated, the selected payment provider will collect and process Mobile Money or card details. AI 360 should not store your Mobile Money PIN or full card number. We will retain the payment reference, amount, currency, status, plan, billing period and necessary audit records for account access, reconciliation, refunds, fraud prevention and legal obligations.</p>
+            <p>When payments are activated, the selected payment provider will collect and process Mobile Money or card details. AI360 should not store your Mobile Money PIN or full card number. We will retain the payment reference, amount, currency, status, plan, billing period and necessary audit records for account access, reconciliation, refunds, fraud prevention and legal obligations.</p>
           </section>
 
           <section>
@@ -57,7 +58,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2>Questions</h2>
-            <p className={styles.note}>For privacy questions, contact AI 360 through <a href="https://aithreesixty.tech">aithreesixty.tech</a>.</p>
+            <p className={styles.note}>For privacy questions, contact AI360 through <a href="https://aithreesixty.tech">aithreesixty.tech</a>.</p>
           </section>
         </article>
       </div>

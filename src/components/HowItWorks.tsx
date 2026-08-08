@@ -18,7 +18,7 @@ const STEPS = [
   {
     mark: '02',
     title: 'It picks the approach',
-    copy: 'You are not asked to choose a model. AI 360 reads what the task needs and routes it, using a faster model for a quick answer and a stronger one where the work justifies it.',
+    copy: 'You are not asked to choose a model. AI360 reads what the task needs and routes it, using a faster model for a quick answer and a stronger one where the work justifies it.',
     detail: [
       'Current information triggers a live search',
       'A long document is read before it answers',
@@ -73,7 +73,7 @@ export function HowItWorks() {
 
       <header className={styles.hero}>
         <div>
-          <p className={styles.kicker}><span>✦</span> How it works</p>
+          <p className={styles.kicker}>How it works</p>
           <h1>You stay in<br /><em>control of it.</em></h1>
           <p className={styles.lead}>
             AI is easy to sell and hard to trust. So here is exactly what happens between the moment you

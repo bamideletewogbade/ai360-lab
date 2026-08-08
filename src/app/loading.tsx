@@ -4,7 +4,7 @@ export default function Loading() {
       <div className="route-loading-visual" aria-hidden="true">
         <span>AI</span><i /><i /><i />
       </div>
-      <p><b>AI 360</b> LAB</p>
+      <p><b>AI360</b> LAB</p>
       <small>Preparing your next step</small>
     </main>
   )

@@ -9,11 +9,11 @@ export function WorkflowDemo() {
       </div>
       <div className={`${styles.workflowRoute} ${styles.workflowRouteIn}`} aria-hidden="true"><i /><i /><i /></div>
       <div className={styles.workflowSystem}>
-        <div className={styles.workflowSystemHead}><span><i /> AI 360 is working</span><small>Right tool, automatically</small></div>
+        <div className={styles.workflowSystemHead}><span><i /> AI360 is working</span><small>Right tool, automatically</small></div>
         <ol>
           <li><span>✓</span><div><b>Understand the brief</b><small>Audience, offer and outcome</small></div><em>Done</em></li>
-          <li><span>↗</span><div><b>Check the market</b><small>Current sources attached</small></div><em>Live</em></li>
-          <li><span>◇</span><div><b>Shape the campaign</b><small>Direction waits for your review</small></div><em>Next</em></li>
+          <li><span>2</span><div><b>Check the market</b><small>Current sources attached</small></div><em>Live</em></li>
+          <li><span>3</span><div><b>Shape the campaign</b><small>Direction waits for your review</small></div><em>Next</em></li>
         </ol>
       </div>
       <div className={`${styles.workflowRoute} ${styles.workflowRouteOut}`} aria-hidden="true"><i /><i /><i /></div>

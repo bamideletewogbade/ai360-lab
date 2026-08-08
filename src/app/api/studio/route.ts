@@ -40,7 +40,7 @@ type ContentPart =
   | { type: 'image_url'; image_url: { url: string } }
   | { type: 'file'; file: { filename: string; file_data: string } }
 
-const STUDIO_PROMPT = `You are AI 360 Studio, a practical brand strategist, campaign planner and production coordinator for small businesses.
+const STUDIO_PROMPT = `You are AI360 Studio, a practical brand strategist, campaign planner and production coordinator for small businesses.
 
 Create useful, specific deliverables that can be used immediately. Consider the realities of businesses in Ghana and Africa when relevant, including WhatsApp, Facebook, Instagram, TikTok, SMS, Google Business Profile and printable materials.
 
@@ -291,7 +291,7 @@ export async function POST(request: Request) {
   const key = process.env.OPENROUTER_API_KEY
   if (!key) {
     log.finish(503, { outcome: 'not_configured' })
-    return Response.json({ error: 'AI 360 Studio is not configured', requestId: log.requestId }, {
+    return Response.json({ error: 'AI360 Studio is not configured', requestId: log.requestId }, {
       status: 503,
       headers: log.headers(),
     })
@@ -330,7 +330,7 @@ export async function POST(request: Request) {
             Authorization: `Bearer ${key}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-            'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI 360 Lab',
+            'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',
           },
           body: JSON.stringify({
             model,
@@ -339,7 +339,7 @@ export async function POST(request: Request) {
               {
                 role: 'system',
                 content:
-                  'You are the research scout for AI 360 Studio. Use live tools only when useful. Find a small number of current public facts that materially improve this business campaign. Prefer authoritative or primary sources. Summarize findings concisely with descriptive Markdown links. Never invent a source.',
+                  'You are the research scout for AI360 Studio. Use live tools only when useful. Find a small number of current public facts that materially improve this business campaign. Prefer authoritative or primary sources. Summarize findings concisely with descriptive Markdown links. Never invent a source.',
               },
               {
                 role: 'user',
@@ -403,7 +403,7 @@ export async function POST(request: Request) {
             Authorization: `Bearer ${key}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-            'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI 360 Lab',
+            'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',
           },
           body: providerPayload,
         })

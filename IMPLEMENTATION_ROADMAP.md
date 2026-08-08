@@ -1,8 +1,8 @@
-# AI 360 Lab implementation roadmap
+# AI360 Lab implementation roadmap
 
 Last updated: 2026-08-04
 
-This is the living delivery checklist for shared AI 360 identity, organization-ready workspaces, durable projects, and bounded multi-agent execution. Update the checkboxes and status table as work is completed.
+This is the living delivery checklist for shared AI360 identity, organization-ready workspaces, durable projects, and bounded multi-agent execution. Update the checkboxes and status table as work is completed.
 
 Companion references:
 
@@ -12,16 +12,16 @@ Companion references:
 
 ## Product outcome
 
-AI 360 Lab should help an individual or team move from an outcome to a reviewed deliverable through a visible, controlled process:
+AI360 Lab should help an individual or team move from an outcome to a reviewed deliverable through a visible, controlled process:
 
 `brief -> plan -> delegated work -> verification -> human approval -> production -> reusable assets`
 
 ## Architecture decisions
 
-- [x] Reuse the existing AI 360 Clerk application for `aithreesixty.tech` and `lab.aithreesixty.tech`.
+- [x] Reuse the existing AI360 Clerk application for `aithreesixty.tech` and `lab.aithreesixty.tech`.
 - [x] Keep personal accounts available. Organization membership must be optional.
-- [x] Treat Clerk Organizations as team or customer workspaces, not as the AI 360 Lab product boundary.
-- [x] Keep the existing AI 360 Organization for internal staff and pilot administration.
+- [x] Treat Clerk Organizations as team or customer workspaces, not as the AI360 Lab product boundary.
+- [x] Keep the existing AI360 Organization for internal staff and pilot administration.
 - [x] Start with Clerk's `org:admin` and `org:member` roles.
 - [x] Keep the agent runtime model-independent. Kimi K3 can be a coordinator option, not a permanent hard dependency.
 - [x] Use bounded orchestration before attempting a large swarm.
@@ -84,7 +84,7 @@ Why: every conversation, campaign, generated file, agent run and cost must have 
 - [ ] Set Organization membership to **optional**.
 - [ ] Keep automatic first-Organization creation disabled.
 - [ ] Keep public user-created Organizations disabled during the pilot.
-- [ ] Keep the internal AI 360 Organization at a limited membership size.
+- [ ] Keep the internal AI360 Organization at a limited membership size.
 - [ ] Confirm `aithreesixty.tech` and `lab.aithreesixty.tech` are accepted production origins/domains.
 - [ ] Add the existing Clerk production keys to Hostinger environment variables. Never paste secret keys into source control or chat.
 
@@ -104,7 +104,7 @@ Why: every conversation, campaign, generated file, agent run and cost must have 
 
 ### Phase 1 acceptance gate
 
-- [ ] An existing AI 360 learner can open Lab with the same identity.
+- [ ] An existing AI360 learner can open Lab with the same identity.
 - [ ] A personal user can save and resume work.
 - [ ] An organization member can switch into a team workspace.
 - [ ] Personal and organization records remain isolated.
@@ -213,7 +213,7 @@ Why: users should understand what is happening, what it costs and when their inp
 
 Why: adding more agents multiplies possible failures, costs and misleading claims. Quality must be measured before scale.
 
-- [ ] Create at least 20 representative AI 360 tasks across research, campaigns, documents and production.
+- [ ] Create at least 20 representative AI360 tasks across research, campaigns, documents and production.
 - [ ] Define task-specific success criteria before running each evaluation.
 - [ ] Grade factuality, citation support, completeness, usefulness and brand alignment.
 - [ ] Verify real environment outcomes for actions, not merely the final text claim.
@@ -231,7 +231,7 @@ Why: adding more agents multiplies possible failures, costs and misleading claim
 
 Why: subscriptions should be based on measured cost and reliable entitlements, not guesses.
 
-- [ ] Run the coordinator behind a feature flag with AI 360 staff first.
+- [ ] Run the coordinator behind a feature flag with AI360 staff first.
 - [ ] Pilot with a small set of learners and businesses.
 - [ ] Collect structured feedback at the end of completed projects.
 - [x] Publish a proposed four-tier pilot catalog: Explorer, Everyday, Builder and Team.
@@ -247,7 +247,7 @@ Why: subscriptions should be based on measured cost and reliable entitlements, n
 
 ### MojoPay activation gate
 
-Why: MojoPay is the preferred Ghana payment edge, but AI 360 must not invent a provider contract or activate access from a browser redirect.
+Why: MojoPay is the preferred Ghana payment edge, but AI360 must not invent a provider contract or activate access from a browser redirect.
 
 - [ ] Obtain sandbox and production merchant credentials directly from MojoPay.
 - [ ] Confirm Mobile Money networks, cards, settlement schedule, transaction fees and refund fees.
@@ -276,7 +276,7 @@ Only after this passes should Studio persistence and the coordinator runtime be 
 ## Inputs required from the project owner
 
 - [ ] Confirm Organization membership is set to optional in Clerk.
-- [ ] Confirm whether the Organization in the screenshot should be named `AI 360 Internal`.
+- [ ] Confirm whether the Organization in the screenshot should be named `AI360 Internal`.
 - [ ] Add production Clerk keys directly to Hostinger.
 - [ ] Keep the dedicated Hostinger MySQL credentials available until the
   Supabase migration and reconciliation pass.
@@ -289,12 +289,12 @@ Only after this passes should Studio persistence and the coordinator runtime be 
 | Date | Decision or milestone | Evidence |
 | --- | --- | --- |
 | 2026-08-01 | Shared Clerk application selected | Existing learners need one identity across the main site and Lab |
-| 2026-08-01 | Optional Organization membership selected | AI 360 serves both individuals and teams |
+| 2026-08-01 | Optional Organization membership selected | AI360 serves both individuals and teams |
 | 2026-08-01 | Bounded coordinator selected | Better cost control, observability and evaluation than an immediate large swarm |
 | 2026-08-01 | First specialist team selected | Researcher, Strategist and Verifier cover evidence, decisions and quality control |
 | 2026-08-01 | Workspace ownership foundation implemented | Server-derived personal and organization keys now scope conversation persistence |
 | 2026-08-03 | Ghana-first hybrid pricing revised | GH₵0 Explorer, GH₵125 Everyday, GH₵300 Builder and GH₵900 Team protect accessibility without hiding the real cost of agent and media work |
-| 2026-08-03 | MojoPay selected behind an adapter | Mobile Money should lead checkout, while AI 360 retains provider-neutral billing and entitlement records |
+| 2026-08-03 | MojoPay selected behind an adapter | Mobile Money should lead checkout, while AI360 retains provider-neutral billing and entitlement records |
 | 2026-08-04 | Clerk + Supabase production boundary selected | Clerk owns identity; portable Postgres, RLS and Storage provide the durable data plane |
 | 2026-08-04 | Production preflight and readiness endpoint added | Releases must expose missing dependencies instead of silently degrading |
 | 2026-08-04 | Layer-first quality budgets adopted | Performance, latency, accessibility, security and cost are acceptance criteria for every feature |

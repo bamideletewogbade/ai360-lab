@@ -41,11 +41,11 @@ if (process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true') {
 }
 
 if (!configured('CLERK_AUTHORIZED_PARTIES')) {
-  warnings.push('CLERK_AUTHORIZED_PARTIES is not set; production-safe AI 360 defaults will be used.')
+  warnings.push('CLERK_AUTHORIZED_PARTIES is not set; production-safe AI360 defaults will be used.')
 }
 warnings.push('External error monitoring is not integrated; errors only appear in runtime logs. A DSN alone will not enable monitoring.')
 
-console.log('AI 360 Lab production preflight')
+console.log('AI360 Lab production preflight')
 for (const warning of warnings) console.log(`WARN  ${warning}`)
 for (const error of errors) console.error(`ERROR ${error}`)
 console.log(errors.length ? `BLOCKED (${errors.length} issue${errors.length === 1 ? '' : 's'})` : 'READY')

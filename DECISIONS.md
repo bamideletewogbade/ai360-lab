@@ -4,8 +4,8 @@ Choices that would otherwise be re-argued, and faults that must never be
 rediscovered. Newest first. Each entry records what was decided, why, and what
 would have to change for the decision to be revisited.
 
-The team-facing version of this, with the measured numbers and the layer by
-layer architecture, is the Technical Workbook.
+The team-facing operating guide is `TECHNICAL_HANDBOOK.md`; measured numbers and
+the layer-by-layer architecture remain in this log and `SYSTEM_ARCHITECTURE.md`.
 
 ---
 
@@ -156,10 +156,10 @@ no figure, because it would be quoted with confidence.
 | Path | Time | Cost | Result |
 | --- | ---: | ---: | --- |
 | Chat | 7.4s | negligible | answers |
-| Chat in Twi | — | negligible | replied in Twi to an English question |
+| Chat in Twi | - | negligible | replied in Twi to an English question |
 | Research agent | 17.4s | $0.0063 | 67 streamed chunks, 4 sources |
 | Image | 15.1s | $0.0026 | 1.6 MB image returned |
-| Video quote | instant | — | $0.12 quoted before anything ran |
+| Video quote | instant | - | $0.12 quoted before anything ran |
 | Video generation | 79s | $0.1200 | clip completed, download ready |
 
 Seven of seven passed. `openai/gpt-image-1-mini` works despite being absent from

@@ -10,7 +10,7 @@ export function WorkspaceBoot({ authLoaded, signedIn }: { authLoaded: boolean; s
   return (
     <main className="session-bridge" role="status" aria-live="polite">
       <div className="session-brand">
-        <Image src="/logo-black.png" width={154} height={38} alt="AI Three Sixty" priority />
+        <Image src="/logo-black.png" width={154} height={38} alt="AI360" priority />
         <span>LAB</span>
       </div>
       <div className="session-orbit" aria-hidden="true">

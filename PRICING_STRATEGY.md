@@ -1,4 +1,4 @@
-# AI 360 pricing strategy
+# AI360 pricing strategy
 
 Last reviewed: 2026-08-04
 
@@ -35,7 +35,7 @@ four weeks of observed activation, cost, retention and willingness-to-pay data.
   generation.
 - A shared Team pool follows the global workspace pattern while per-member caps
   prevent one person from consuming an organization's allowance.
-- OpenRouter exposes model-level prices and routing information, so AI 360 can
+- OpenRouter exposes model-level prices and routing information, so AI360 can
   route simple work to efficient models and reserve premium models for tasks
   where quality justifies the cost. OpenRouter currently applies a platform fee
   to pay-as-you-go usage, which must be included in landed cost.
@@ -56,7 +56,7 @@ four weeks of observed activation, cost, retention and willingness-to-pay data.
 - Mojo Payments is a Ghana-licensed Enhanced Payment Service Provider. Its
   public product material advertises one-time and recurring collections,
   verification, web checkout and direct debit for mobile wallets and bank
-  accounts. That fits AI 360's intended local payment edge.
+  accounts. That fits AI360's intended local payment edge.
   [MojoPay company information](https://mojo-pay.com/about-us),
   [collections](https://mojo-pay.com/services/collections) and
   [direct debit](https://mojo-pay.com/services/direct-debit).
@@ -131,7 +131,7 @@ higher cost ratio on the upper plans and say so here, or reduce the allowance to
 320 and 865 credits respectively. A test pins the current expectation, so an
 allowance cannot drift across the line unnoticed.
 
-Free credits are not free to AI 360. Every Explorer account carries GH₵1.30 of
+Free credits are not free to AI360. Every Explorer account carries GH₵1.30 of
 monthly cost, so a thousand dormant free accounts is GH₵1,300 a month. Expire
 unused free credits monthly, as published, and reclaim inactive grants.
 

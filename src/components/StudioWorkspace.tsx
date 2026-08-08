@@ -120,7 +120,7 @@ const ASSET_ICONS: Record<StudioAsset['type'], string> = {
   social: '◫',
   flyer: '▤',
   direct: '→',
-  logo: '◇',
+  logo: 'LG',
   video: '▶',
 }
 const EMPTY_INTAKE: Intake = {
@@ -152,7 +152,7 @@ const BUILD_AGENTS: BuildAgent[] = [
   },
   {
     id: 'campaign',
-    mark: '↗',
+    mark: 'CTA',
     name: 'Campaign Strategist',
     role: 'Connects the goal, big idea, channels and measures.',
     working: 'Designing the campaign route and primary call to action',
@@ -305,7 +305,7 @@ function StudioBuildRoom({
       </div>
 
       <footer className="build-room-foot">
-        <span className="studio-spinner">✦</span>
+        <span className="studio-spinner" aria-hidden="true" />
         <span>
           <b>{complete ? 'Pack assembled and checked' : `${activeAgent.name} is on it`}</b>
           <small>{complete ? 'One moment while Studio prepares your workspace.' : `Elapsed ${elapsed}s. You can leave this tab open while the team works.`}</small>
@@ -858,7 +858,7 @@ export function StudioWorkspace({
       return
     }
     const shareData = {
-      title: `${project?.intake.businessName || 'AI 360 Studio'}: ${asset.title}`,
+      title: `${project?.intake.businessName || 'AI360 Studio'}: ${asset.title}`,
       text: asset.content,
     }
     try {
@@ -983,7 +983,7 @@ export function StudioWorkspace({
         <div className="studio-dashboard">
           <header className="studio-dashboard-head">
             <div>
-              <span className="studio-kicker">AI 360 Studio · Project home</span>
+              <span className="studio-kicker">AI360 Studio · Project home</span>
               <h1>Your work,<br />moving forward.</h1>
               <p>Turn a business goal into a coordinated campaign, then return to improve, approve and produce each asset.</p>
             </div>
@@ -1026,7 +1026,7 @@ export function StudioWorkspace({
             </section>
           ) : (
             <section className="studio-empty-projects">
-              <span className="empty-orbit"><i>AI</i><i>✦</i></span>
+              <span className="empty-orbit"><i>AI</i></span>
               <div>
                 <span className="studio-kicker">Your first outcome starts here</span>
                 <h2>Bring the goal. Studio assembles the team.</h2>
@@ -1096,7 +1096,7 @@ export function StudioWorkspace({
       <main className="studio-main" ref={mainRef}>
         <div className="studio-intake build-active">
           <section className="studio-intro build-intro">
-            <span className="studio-kicker">AI 360 Studio · Coordinated build</span>
+            <span className="studio-kicker">AI360 Studio · Coordinated build</span>
             <h1>A small team.<br />One complete outcome.</h1>
             <p>
               Each specialist works on one part of the launch pack, then passes
@@ -1121,7 +1121,7 @@ export function StudioWorkspace({
         <div className="studio-intake">
           <section className="studio-intro">
             <button className="studio-back" onClick={openDashboard}>← Project home</button>
-            <span className="studio-kicker">AI 360 Studio · Guided project</span>
+            <span className="studio-kicker">AI360 Studio · Guided project</span>
             <h1>Build a complete<br />marketing launch pack.</h1>
             <p>
               Tell us about the business once. Studio will create the brand foundation,
@@ -1212,7 +1212,7 @@ export function StudioWorkspace({
 
             {error && <div className="studio-error">{error}</div>}
             <button className="studio-create" onClick={createProject} disabled={busy}>
-              {busy ? <><span className="studio-spinner">✦</span> Building your launch pack…</> : <>Create marketing launch pack <span>→</span></>}
+              {busy ? <><span className="studio-spinner" aria-hidden="true" /> Building your launch pack…</> : <>Create marketing launch pack <span>→</span></>}
             </button>
             <p className="studio-form-note">Studio creates drafts for your review. Nothing is published automatically.</p>
           </section>
@@ -1313,7 +1313,7 @@ export function StudioWorkspace({
                               <video src={media.url} controls playsInline />
                             ) : (
                               <div className="media-progress">
-                                <span className="studio-spinner">{media.status === 'failed' ? '!' : '✦'}</span>
+                                <span className={media.status === 'failed' ? '' : 'studio-spinner'} aria-hidden="true">{media.status === 'failed' ? '!' : ''}</span>
                                 <span>
                                   <b>{media.status === 'failed' ? 'Production stopped' : media.kind === 'video' ? 'Producing your video' : 'Designing your visual'}</b>
                                   <small>{media.error || (media.kind === 'video' ? 'This can take a few minutes. You can keep working while Studio checks progress.' : 'Creating one downloadable draft from the approved direction.')}</small>
@@ -1379,7 +1379,7 @@ export function StudioWorkspace({
                         </div>
                         {canRender && asset.status !== 'approved' ? (
                           <div className="asset-production-hint">
-                            <span>◇</span>
+                            <span>Locked</span>
                             <span>
                               <b>Production unlocks after approval</b>
                               <small>Review this direction, then approve it to create the downloadable {asset.type === 'video' ? 'video' : 'design'}.</small>
@@ -1394,7 +1394,7 @@ export function StudioWorkspace({
             </div>
 
             <section className="execution-next live">
-              <span className="execution-mark">✦</span>
+              <span className="execution-mark">ON</span>
               <span>
                 <b>Studio production is live</b>
                 <small>Approve an asset, then create its design or video. Approved copy can be shared from any device.</small>

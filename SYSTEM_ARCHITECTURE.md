@@ -1,10 +1,10 @@
-# AI 360 system architecture and quality budgets
+# AI360 system architecture and quality budgets
 
 Last reviewed: 2026-08-08
 
 ## Operating principle
 
-AI 360 improves one layer at a time while keeping the whole outcome visible.
+AI360 improves one layer at a time while keeping the whole outcome visible.
 Every feature proposal must answer:
 
 1. Why does this improve a user outcome?
@@ -79,7 +79,7 @@ flowchart LR
 | Agent runtime | Make multi-step work durable, bounded and explainable | Fixed plan/execute/verify pipeline with schema-level tool isolation, per-run cost and deadline ceilings, and runs, tasks, events and artifacts persisted at each boundary | Add a queue and worker so a run survives process restart; add task dependencies and approvals when work becomes side-effecting |
 | Model gateway | Balance quality, latency and cost without vendor lock-in | OpenRouter model selection and usage logging | Route by capability and provider health; add model eval gates before changing defaults |
 | Tools and retrieval | Ground answers and execute useful work | Web research, uploads, voice, image, video and exports | Add permissioned tool registry, malware scanning and prompt-injection isolation before broad connectors |
-| Data | Preserve truth, ownership, state and billing evidence | Supabase-ready Postgres schema with RLS and indexes | Cut routes from MySQL repository by repository; partition only after table and query metrics justify it |
+| Data | Preserve truth, ownership, state and billing evidence | Supabase Postgres is the only data plane, with RLS, indexes and runtime repositories | Verify production-host connectivity and tenant isolation; partition only after table and query metrics justify it |
 | Asset storage | Store large private files outside relational tables | Private Supabase bucket defined; metadata schema prepared | Signed URLs, lifecycle rules, checksums and CDN; separate hot and archival retention when storage cost warrants it |
 | Billing and payments | Convert variable AI cost into understandable access | Versioned plans, payment attempts, subscriptions and ledger | MojoPay signed webhooks, atomic reservations and reconciliation before enabling checkout |
 | Observability and evaluation | Detect failures and prove that changes improve outcomes | Request, token, cost and latency logging | Central tracing, alerts, product analytics and representative eval suite before public scale |
@@ -111,9 +111,9 @@ broadband networks, not only from a developer laptop.
 - Clerk is the identity and session authority.
 - Supabase Postgres is the durable application truth.
 - Supabase Storage holds private binaries; Postgres holds metadata and ownership.
-- MojoPay confirms money movement; AI 360 owns plans, entitlements and the
+- MojoPay confirms money movement; AI360 owns plans, entitlements and the
   append-only credit history.
-- OpenRouter and media providers execute model work; AI 360 owns routing,
+- OpenRouter and media providers execute model work; AI360 owns routing,
   budgets, user approvals and usage evidence.
 - Browser storage is guest recovery, never the authoritative signed-in record.
 

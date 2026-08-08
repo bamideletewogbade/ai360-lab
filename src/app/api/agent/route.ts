@@ -1,4 +1,4 @@
-﻿import { isChatMode, routeFor, type ChatMode } from '@/lib/models'
+import { isChatMode, routeFor, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
@@ -56,7 +56,7 @@ function plainText(value: string) {
 }
 
 function actionSuggestions(messages: Msg[], result: string) {
-  const request = [...messages].reverse().find((message) => message.role === 'user')?.content ?? 'AI 360 follow-up'
+  const request = [...messages].reverse().find((message) => message.role === 'user')?.content ?? 'AI360 follow-up'
   const topic = request.replace(/\s+/g, ' ').trim().slice(0, 90)
   const summary = plainText(result).slice(0, 5_000)
   return [
@@ -68,7 +68,7 @@ function actionSuggestions(messages: Msg[], result: string) {
       status: 'proposed',
       payload: {
         recipient: '',
-        subject: `AI 360 follow-up: ${topic}`,
+        subject: `AI360 follow-up: ${topic}`,
         body: summary,
       },
     },
@@ -250,7 +250,7 @@ export async function POST(request: Request) {
           context: requester.context,
           apiKey: key,
           siteUrl: process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-          siteName: process.env.OPENROUTER_SITE_NAME || 'AI 360 Lab',
+          siteName: process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',
           emit: (event) => send(event as unknown as Record<string, unknown>),
           log,
         })

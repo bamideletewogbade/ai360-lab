@@ -1,4 +1,4 @@
-# AI 360 Lab Class Demo
+# AI360 Lab Class Demo
 
 ## Before learners arrive
 

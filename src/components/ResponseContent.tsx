@@ -24,8 +24,8 @@ function polishProse(text: string) {
     .map((segment) => {
       if (segment.startsWith('```')) return segment
       let clean = segment
-        .replace(/(\d)\s*[–]\s*(\d)/g, '$1 to $2')
-        .replace(/\s*[—–]\s*/g, ', ')
+        .replace(/(\d)\s*[\u2013]\s*(\d)/g, '$1 to $2')
+        .replace(/\s*[\u2013\u2014]\s*/g, ', ')
         .replace(/【\s*\d+\s*†[^】]+】/g, '')
         .replace(/\[\s*(?:source|citation)\s*:?\s*\d+\s*]/gi, '')
         .replace(/[ \t]+([,.;:!?])/g, '$1')
@@ -60,7 +60,7 @@ export function ResponseContent({ content }: { content: string }) {
             </a>
           ),
           blockquote: ({ children }) => (
-            <blockquote><span className="quote-spark" aria-hidden="true">✦</span>{children}</blockquote>
+            <blockquote>{children}</blockquote>
           ),
           code: ({ children, className }) => (
             <code className={className} data-language={cleanLanguageLabel(className)}>
@@ -72,7 +72,6 @@ export function ResponseContent({ content }: { content: string }) {
       >
         {polishProse(content)}
       </ReactMarkdown>
-      <span className="response-finish" aria-hidden="true">✦</span>
     </div>
   )
 }

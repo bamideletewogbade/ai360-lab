@@ -1,4 +1,4 @@
-﻿import { providerPreferences, REASONING_BUDGET, routeFor, type ChatMode } from '@/lib/models'
+import { providerPreferences, REASONING_BUDGET, routeFor, type ChatMode } from '@/lib/models'
 import { citationSources, RESEARCH_TOOLS } from '@/lib/live-tools'
 import { FEATURE_WEIGHTS, usdBudgetForCredits } from '@/lib/billing/credits'
 import {
@@ -102,7 +102,7 @@ Never invent a source, URL, statistic or completed action.
 Never claim to send, publish, buy, delete or modify anything outside this conversation.
 For medical, legal, financial or employment matters, state the limits and recommend qualified review.`
 
-const PLANNER_PROMPT = `You are the planner for AI 360 Agent. Break the user's goal into the smallest set of research tasks that genuinely need separate investigation.
+const PLANNER_PROMPT = `You are the planner for AI360 Agent. Break the user's goal into the smallest set of research tasks that genuinely need separate investigation.
 
 Return ONLY a JSON object of the form {"tasks":[{"objective":"..."}]}.
 Use one task when the goal is simple. Use at most ${MAX_TASKS}.
@@ -111,7 +111,7 @@ Keep each objective under 140 characters so it can be read at a glance.
 Never use em dashes or en dashes. Use periods, commas, colons or parentheses.
 Do not answer the goal. Only plan it.`
 
-const VERIFIER_PROMPT = `You are the verifier for AI 360 Agent. You are given a user's goal and a draft answer.
+const VERIFIER_PROMPT = `You are the verifier for AI360 Agent. You are given a user's goal and a draft answer.
 
 Return ONLY a JSON object of the form {"sound": true|false, "issues":["..."]}.
 Mark sound as false only for material problems: the goal is not actually answered, a factual claim looks unsupported, a stated source does not back the claim, or a dangerous omission exists.
@@ -392,7 +392,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
     try {
       const text = await call({
         stage: `execute:${taskId}`,
-        system: `You are a researcher for AI 360 Agent. Investigate exactly this objective and report what you found, with evidence.\n\nObjective: ${objective}\n\nUse your search and page-reading tools when current information matters. Cite what you used. Report findings only, not a final answer to the wider goal.\n\n${SYSTEM_VOICE}`,
+        system: `You are a researcher for AI360 Agent. Investigate exactly this objective and report what you found, with evidence.\n\nObjective: ${objective}\n\nUse your search and page-reading tools when current information matters. Cite what you used. Report findings only, not a final answer to the wider goal.\n\n${SYSTEM_VOICE}`,
         messages: input.messages,
         maxTokens: EXECUTE_TOKENS, withTools: true,
         model: executeModel, fallbacks: executeFallbacks,
@@ -417,7 +417,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
   let firstChunk = true
   let draft = await call({
     stage: 'synthesise',
-    system: `You are AI 360 Agent. Produce the final answer to the user's goal using only the research findings supplied. Lead with the result, then the evidence, then practical next steps. Keep the citation links that appear in the findings, near the claims they support.\n\n${voice}`,
+    system: `You are AI360 Agent. Produce the final answer to the user's goal using only the research findings supplied. Lead with the result, then the evidence, then practical next steps. Keep the citation links that appear in the findings, near the claims they support.\n\n${voice}`,
     messages: [...input.messages, { role: 'assistant', content: findingsBlock }],
     maxTokens: SYNTHESIS_TOKENS, withTools: false,
     model: executeModel, fallbacks: executeFallbacks,
@@ -458,7 +458,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
         let firstRevisionChunk = true
         draft = await call({
           stage: 'revise',
-          system: `You are AI 360 Agent. Correct the draft to resolve the listed issues. Change only what the issues require. Do not remove citations. Return the corrected answer in full.\n\n${voice}`,
+          system: `You are AI360 Agent. Correct the draft to resolve the listed issues. Change only what the issues require. Do not remove citations. Return the corrected answer in full.\n\n${voice}`,
           messages: [{
             role: 'user',
             content: `Goal:\n${input.goal}\n\nDraft:\n${draft}\n\nIssues to resolve:\n${verdict.issues.map((issue) => `- ${issue}`).join('\n')}`,

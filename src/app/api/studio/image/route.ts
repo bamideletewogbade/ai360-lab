@@ -162,7 +162,7 @@ export async function POST(request: Request) {
           Authorization: `Bearer ${key}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-          'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI 360 Lab',
+          'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',
         },
         body: JSON.stringify({
           model,

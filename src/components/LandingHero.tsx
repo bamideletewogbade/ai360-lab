@@ -42,9 +42,9 @@ export function LandingHero() {
   return (
     <section className="landing-hero">
       <div className="hero-copy">
-        <p className="landing-kicker"><span>✦</span> Intelligence that meets you where you are</p>
+        <p className="landing-kicker">Intelligence that meets you where you are</p>
         <h1>Bring the goal.<br /><em>Leave ready to move.</em></h1>
-        <p className="landing-lead">Understand what matters. Decide with evidence. Create with confidence. AI 360 helps you finish the work—not just talk about it.</p>
+        <p className="landing-lead">Understand what matters. Decide with evidence. Create with confidence. AI360 helps you finish the work, not just talk about it.</p>
 
         <form className="landing-composer" action="/app" method="get" onSubmit={begin}>
           <label htmlFor="landing-goal">What do you want to move forward?</label>
@@ -64,7 +64,7 @@ export function LandingHero() {
           />
           <input type="hidden" name="mode" value={mode} />
           <div className="composer-actions">
-            <span><b>✦</b> No special prompts. Start in your own words.</span>
+            <span>No special prompts. Start in your own words.</span>
             <button type="submit">Take the first step <b aria-hidden="true">↗</b></button>
           </div>
         </form>

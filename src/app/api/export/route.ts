@@ -35,7 +35,7 @@ function cleanText(text: string) {
   return text
     .replace(/\[([^\]]+)]\((https?:\/\/[^)]+)\)/g, '$1 ($2)')
     .replace(/[*_`~]/g, '')
-    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/\s*[\u2013\u2014]\s*/g, ', ')
     .replace(/【\s*\d+\s*†[^】]+】/g, '')
     .trim()
 }
@@ -124,7 +124,7 @@ function parseMarkdown(markdown: string): ExportBlock[] {
 }
 
 function safeFilename(title: string, extension: string) {
-  const base = cleanText(title || 'AI 360 Lab response')
+  const base = cleanText(title || 'AI360 Lab response')
     .replace(/[^a-z0-9]+/gi, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 60)
@@ -137,7 +137,7 @@ async function buildDocx(title: string, blocks: ExportBlock[]) {
   const children: Array<Paragraph | Table> = [
     new Paragraph({
       spacing: { before: 0, after: 100 },
-      children: [new TextRun({ text: 'AI 360 LAB', bold: true, size: 18, font: 'Arial', color: '56595C' })],
+      children: [new TextRun({ text: 'AI360 LAB', bold: true, size: 18, font: 'Arial', color: '56595C' })],
     }),
     new Paragraph({
       spacing: { before: 0, after: 120 },
@@ -317,7 +317,7 @@ async function buildDocx(title: string, blocks: ExportBlock[]) {
               new Paragraph({
                 alignment: AlignmentType.RIGHT,
                 children: [
-                  new TextRun({ text: 'Created with AI 360 Lab   |   ', size: 16, font: 'Arial', color: '777777' }),
+                  new TextRun({ text: 'Created with AI360 Lab   |   ', size: 16, font: 'Arial', color: '777777' }),
                   new TextRun({ children: [PageNumber.CURRENT], size: 16, font: 'Arial', color: '777777' }),
                 ],
               }),
@@ -450,7 +450,7 @@ async function buildPdf(title: string, blocks: ExportBlock[]) {
   }
 
   states.forEach((item, pageIndex) => {
-    item.page.drawText(`Created with AI 360 Lab   |   ${pageIndex + 1} of ${states.length}`, {
+    item.page.drawText(`Created with AI360 Lab   |   ${pageIndex + 1} of ${states.length}`, {
       x: 410,
       y: 31,
       size: 7.5,
@@ -485,7 +485,7 @@ export async function POST(request: Request) {
       headers: log.headers(),
     })
   }
-  const title = cleanText(body.title || 'AI 360 Lab response').slice(0, 140)
+  const title = cleanText(body.title || 'AI360 Lab response').slice(0, 140)
   const content = typeof body.content === 'string' ? body.content.slice(0, 100_000) : ''
   if (!content) {
     log.finish(400, { outcome: 'missing_content' })

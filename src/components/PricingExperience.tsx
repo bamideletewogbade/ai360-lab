@@ -25,18 +25,18 @@ export function PricingExperience() {
 
       <header className={styles.hero}>
         <div className={styles.heroCopy}>
-          <p className={styles.kicker}><span>✦</span> Simple plans · flexible payment</p>
+          <p className={styles.kicker}>Simple plans · flexible payment</p>
           <h1>Start free.<br /><em>Pay your way.</em></h1>
           <p>{BILLING_ENABLED
-            ? 'Get 5 credits every month to explore AI 360. When you need more, choose a plan and pay securely with Mobile Money or card. You will see the complete amount before you confirm.'
-            : 'Get 5 credits every month to explore AI 360. Paid plans are shown for transparency and will open after payment verification for the private pilot is complete.'}</p>
+            ? 'Get 5 credits every month to explore AI360. When you need more, choose a plan and pay securely with Mobile Money or card. You will see the complete amount before you confirm.'
+            : 'Get 5 credits every month to explore AI360. Paid plans are shown for transparency and will open after payment verification for the private pilot is complete.'}</p>
           <div className={styles.paymentTrust}>
             <span><i className={styles.freeDot} /> 5 free credits monthly</span>
             <span><i className={styles.momoDot} /> {BILLING_ENABLED ? 'Mobile Money or card' : 'Payments opening after pilot verification'}</span>
             <span><i /> No surprise overage bills</span>
           </div>
         </div>
-        <div className={styles.paymentScene} aria-label="Mobile Money and card payments become AI 360 work credits">
+        <div className={styles.paymentScene} aria-label="Mobile Money and card payments become AI360 work credits">
           <div className={styles.sceneGrid} />
           <div className={styles.paymentChoices}>
             <div className={styles.choiceCard}>
@@ -52,7 +52,7 @@ export function PricingExperience() {
           </div>
           <div className={styles.flowLine}><i /><i /><i /></div>
           <div className={styles.creditWallet}>
-            <div><span>AI 360</span><small>WORK WALLET</small></div>
+            <div><span>AI360</span><small>WORK WALLET</small></div>
             <strong>120</strong>
             <p>credits ready</p>
             <div className={styles.walletMeter}><i /></div>
@@ -69,7 +69,7 @@ export function PricingExperience() {
 
       <section className={styles.pricingSection} aria-labelledby="plans-title">
         <div className={styles.sectionHead}>
-          <div><p><span>✦</span> AI 360 plans</p><h2 id="plans-title">Choose the pace that fits.</h2></div>
+          <div><p>AI360 plans</p><h2 id="plans-title">Choose the pace that fits.</h2></div>
           <div className={styles.cadence} role="group" aria-label="Billing period">
             <button className={cadence === 'monthly' ? styles.active : ''} onClick={() => setCadence('monthly')}>Monthly</button>
             <button className={cadence === 'annual' ? styles.active : ''} onClick={() => setCadence('annual')}>Annual <span>save up to 17%</span></button>
@@ -105,9 +105,9 @@ export function PricingExperience() {
 
       <section className={styles.creditSection}>
         <div className={styles.creditIntro}>
-          <p><span>✦</span> Why work credits?</p>
+          <p>Why work credits?</p>
           <h2>Simple for people.<br />Measured underneath.</h2>
-          <p>You should not have to calculate technical tokens. AI 360 uses one understandable credit balance and shows an estimate before more demanding work begins.</p>
+          <p>You should not have to calculate technical tokens. AI360 uses one understandable credit balance and shows an estimate before more demanding work begins.</p>
         </div>
         <div className={styles.creditRules}>
           <article><span>01</span><b>Everyday work stays light</b><p>Writing, learning and short conversations use fewer credits.</p></article>
@@ -127,7 +127,7 @@ export function PricingExperience() {
 
       <section className={styles.templatesSection}>
         <div className={styles.sectionHead}>
-          <div><p><span>✦</span> More than model access</p><h2>Templates that help people finish.</h2></div>
+          <div><p>More than model access</p><h2>Templates that help people finish.</h2></div>
           <p>Start with a ready-made path for the outcome you need. Each template guides the brief, the work, the checks and the expected credit range.</p>
         </div>
         <div className={styles.templateGrid}>
@@ -139,7 +139,7 @@ export function PricingExperience() {
 
       <section className={styles.paymentSection}>
         <div className={styles.paymentCopy}>
-          <p><span>✦</span> Before you pay</p>
+          <p>Before you pay</p>
           <h2>{BILLING_ENABLED ? <>Review everything.<br />Then decide.</> : <>Payment is designed.<br />Verification comes first.</>}</h2>
           <p>{BILLING_ENABLED
             ? 'Checkout will repeat your selected plan, credits, billing period and complete amount. Nothing is charged until you choose a payment method and confirm.'
@@ -161,15 +161,15 @@ export function PricingExperience() {
       </section>
 
       <section className={styles.faqSection}>
-        <div><p><span>✦</span> Important questions</p><h2>Clear before checkout.</h2></div>
+        <div><p>Important questions</p><h2>Clear before checkout.</h2></div>
         <div className={styles.faqs}>
           <details><summary>Why not promise unlimited AI?<span>+</span></summary><p>Model, research, image and video costs vary. An allowance keeps entry prices low and prevents one unusually expensive workflow from raising prices for everyone.</p></details>
-          <details><summary>Will Mobile Money renew automatically?<span>+</span></summary><p>Checkout will say clearly whether your payment can renew automatically. If your wallet requires approval for each payment, AI 360 will remind you and you will confirm the renewal yourself.</p></details>
+          <details><summary>Will Mobile Money renew automatically?<span>+</span></summary><p>Checkout will say clearly whether your payment can renew automatically. If your wallet requires approval for each payment, AI360 will remind you and you will confirm the renewal yourself.</p></details>
           <details><summary>Will I see the complete price before paying?<span>+</span></summary><p>Yes. The final review shows the amount due today, billing period, renewal date and any applicable tax or payment fee before you confirm.</p></details>
           <details><summary>Can I cancel or change my plan?<span>+</span></summary><p>Yes. The account area will show your current plan, next renewal and cancellation options. Changing or cancelling a plan will not create a surprise charge.</p></details>
           <details><summary>Can a student or programme receive a discount?<span>+</span></summary><p>Yes. Sponsored seats and verified education or community programmes should receive controlled allowances rather than a permanent blanket discount with no funding source.</p></details>
           <details><summary>Do the five free credits roll over?<span>+</span></summary><p>No. They reset on the first day of each month and unused free credits expire. This keeps the free tier generous enough to test real work without creating an open-ended cost.</p></details>
-          <details><summary>What happens when credits finish?<span>+</span></summary><p>People can wait for renewal, buy a top-up or move to a larger plan. AI 360 will not silently create an overage bill for individuals.</p></details>
+          <details><summary>What happens when credits finish?<span>+</span></summary><p>People can wait for renewal, buy a top-up or move to a larger plan. AI360 will not silently create an overage bill for individuals.</p></details>
         </div>
       </section>
 

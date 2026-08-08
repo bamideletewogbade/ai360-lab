@@ -56,7 +56,7 @@ try {
     `
     console.log(`Applied ${migrationFile}`)
   }
-  console.log('AI 360 Lab Postgres schema is ready.')
+  console.log('AI360 Lab Postgres schema is ready.')
 } finally {
   await sql.end()
 }

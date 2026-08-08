@@ -1,0 +1,293 @@
+# AI360 Lab technical handbook
+
+Last reviewed: 2026-08-08
+
+This is the canonical entry point for engineers and operators picking up AI360
+Lab. It explains what the product is, how the system is divided, how work moves
+through it and how to verify a safe release. It does not turn planned work into
+shipped work.
+
+## 1. Product and release truth
+
+AI360 Lab is a practical AI workspace for people and teams who need to research
+current information, understand difficult material, make a decision, prepare a
+document or produce coordinated campaign assets. AI360 Studio is the creative
+production mode inside the Lab.
+
+Use these names consistently:
+
+| Meaning | Canonical name |
+| --- | --- |
+| Organization and brand | AI360 |
+| Product | AI360 Lab |
+| Creative workspace | AI360 Studio |
+
+The current release state is **private pilot candidate**. Public pages and guest
+workflows run. The code contains signed-in persistence, credits, agent and
+Studio workflows, but production launch remains gated by live identity checks,
+runtime database connectivity, durable background work, shared rate limiting,
+monitoring and verified payment-provider behavior. The exact checklist lives in
+[`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md).
+
+When documents disagree, use this authority order:
+
+1. Running code, migrations and passing tests.
+2. `PRODUCTION_READINESS.md` for current release status.
+3. This handbook for system operation and onboarding.
+4. `DECISIONS.md` for why a decision was made and when to revisit it.
+5. Specialized architecture, deployment and pricing documents.
+
+Fix contradictions when they are discovered. Do not preserve two competing
+descriptions of the same runtime.
+
+## 2. Local setup
+
+Requirements:
+
+- Node.js 22.x, matching `.nvmrc` and `package.json`
+- npm
+- Provider credentials only for the flow being exercised
+
+```bash
+npm install
+Copy-Item .env.example .env.local
+npm run dev
+```
+
+Open `http://localhost:3000`. Guest UI and local browser recovery work without
+Clerk. OpenRouter calls require `OPENROUTER_API_KEY`. Signed-in persistence and
+credit operations require Clerk and `DATABASE_URL`.
+
+Before changing Next.js code, read the relevant guide under
+`node_modules/next/dist/docs/`. This repository uses Next.js 16 and its APIs and
+conventions must not be assumed from an older version.
+
+## 3. System map
+
+```mermaid
+flowchart LR
+  Person["Person or team"] --> Web["Next.js public site and workspace"]
+  Web --> Identity["Clerk identity and organization context"]
+  Web --> Routes["Route handlers: validation and policy"]
+  Routes --> Services["Agent, Studio, billing and workspace services"]
+  Services --> Models["OpenRouter model gateway"]
+  Services --> Tools["Search, files, voice, image, video and export tools"]
+  Services --> Data["Supabase Postgres"]
+  Tools --> Storage["Supabase private Storage target"]
+  Services --> Payments["Provider-neutral payments boundary"]
+  Models --> Telemetry["Redacted usage, cost and reliability events"]
+  Tools --> Telemetry
+```
+
+The deployable application is currently one Next.js service. Keep code
+composable inside that boundary. Split a service only when measured scaling,
+security or failure-isolation needs justify another deployment.
+
+## 4. Routes and discoverability
+
+Public, indexable pages:
+
+- `/`: product mission and primary outcomes
+- `/what-you-can-make`: representative use cases and output examples
+- `/how-it-works`: routing, research, approval and production workflow
+- `/pricing`: plans, credits and current checkout availability
+- `/changelog`: public, outcome-focused product updates
+- `/privacy` and `/terms`: public policies
+
+Private or utility surfaces:
+
+- `/app`: workspace; must remain `noindex, nofollow`
+- `/sign-in` and `/sign-up`: Clerk account flows
+- `/api/*`: server routes; never public search results
+- `/api/health`: process liveness
+- `/api/ready`: release dependencies and configuration readiness
+
+Search and agent discovery are implemented through per-page metadata, canonical
+URLs, Open Graph fields, JSON-LD, `robots.txt`, `sitemap.xml` and `llms.txt`.
+Update these when a new public page or materially different capability ships.
+
+## 5. Composable architecture
+
+| Layer | Owns | Primary locations |
+| --- | --- | --- |
+| Brand and product content | Canonical names, public links, plan and outcome definitions | `src/lib/brand.ts`, registries under `src/lib` |
+| UI components | One visible idea, responsive behavior and local interaction | `src/components`, `src/app/*` pages and CSS modules |
+| Route handlers | HTTP parsing, authorization, rate limits and response translation | `src/app/api` |
+| Application services | Complete use cases and workflow policy | `src/lib/agent`, `src/lib/studio`, `src/lib/billing` |
+| Provider adapters | Provider request shape, timeout, failover and normalization | `src/lib/models.ts`, `src/lib/live-tools.ts`, media modules |
+| Repositories | Durable aggregates and atomic invariants | `src/lib/workspace-db.ts`, agent and billing stores |
+| Infrastructure | Database pool, configuration, logs and deployment checks | `src/lib/postgres.ts`, `runtime-config.ts`, `observability.ts`, `scripts` |
+
+A component should have one reason to change, an explicit contract and a focused
+verification path. Route handlers must not absorb provider policy or SQL
+orchestration. Repositories must not contain interface copy. Optimize a layer
+only after its behavior is correct and observable, then measure the composed
+user flow before changing topology.
+
+## 6. Core flows
+
+### Guest and signed-in work
+
+Guests can explore the workspace and recover supported local work from browser
+storage. Clerk is the only identity authority. Signed-in users receive a
+personal workspace or an optional organization workspace, and every private
+database operation must be scoped to that workspace.
+
+### Chat and research
+
+The route validates the request, resolves identity, applies a limit and selects
+a model route. Current-information work can use server-side search tools.
+Provider keys and provider routing policy stay on the server. Streams carry
+request references so a visible failure can be matched to redacted logs.
+
+### Agent runtime
+
+The agent plans, executes, synthesizes, verifies and may revise within explicit
+time and cost ceilings. Runs, tasks, events, artifacts and checkpoints are
+written to Postgres at boundaries. State survives a failed request, but work is
+not yet replayed automatically after a process restart. A durable queue and
+worker are a public-scale gate.
+
+### Studio production
+
+Studio converts an approved direction into a defined pack of outcomes.
+Specialists inside a compatible stage may run concurrently; stages with
+dependencies run in sequence. Image and video production require asset approval
+and a provider-cost confirmation. A payment redirect or client response never
+grants credits.
+
+### Credits
+
+Paid work reserves a conservative amount before the provider call, then settles
+actual cost or releases the hold. Ledger operations are idempotent and live in
+Supabase Postgres. Monthly plan allowance is granted lazily on first touch of a
+new period; purchased credits survive allowance rollover.
+
+## 7. Data, identity and providers
+
+Supabase Postgres is the only application database. The ordered migrations are:
+
+1. `database/postgres/0001_initial.sql`
+2. `0002_runtime_foundation.sql`
+3. `0003_credit_runtime.sql`
+4. `0004_credit_allowance.sql`
+5. `0005_resumable_runs.sql`
+
+Use `DATABASE_URL` for the Hostinger runtime and `DIRECT_URL` for migrations.
+The Hostinger runtime should use the Supabase shared session pooler on port
+5432 when the direct hostname is unreachable over IPv4. RLS is defense in depth;
+server-side workspace authorization remains mandatory.
+
+Provider boundaries:
+
+- Clerk: users, sessions and organizations
+- Supabase Postgres: durable application truth
+- Supabase Storage: intended private binary storage with signed access
+- OpenRouter: model and media gateway
+- MojoPay adapter: present but deliberately disabled until contract, sandbox,
+  signature and reconciliation checks pass
+
+Never put secrets in `NEXT_PUBLIC_*`. Never log prompts, file contents,
+recordings, cookies, authorization headers, full generated media or provider
+keys.
+
+## 8. Configuration
+
+`.env.example` is the complete configuration template. Important groups are:
+
+| Group | Required for |
+| --- | --- |
+| `OPENROUTER_*` | live chat, research, agent and Studio provider work |
+| `NEXT_PUBLIC_CLERK_*`, `CLERK_*` | signed-in identity and lifecycle sync |
+| `DATABASE_URL`, `DIRECT_URL`, `DATABASE_*` | persistence, migrations and credits |
+| `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_*` | private asset storage when connected |
+| `NEXT_PUBLIC_BILLING_ENABLED`, payment secrets | verified checkout only |
+| `AI360_RATE_*` | pilot request limits |
+| search verification tokens | search-console ownership verification |
+
+Treat `NEXT_PUBLIC_APP_URL` as canonical. Production is
+`https://lab.aithreesixty.tech`.
+
+## 9. Verification and release
+
+Run for every meaningful change:
+
+```bash
+npm run lint
+npm test
+npm run build
+```
+
+Run before a production deployment:
+
+```bash
+npm audit --omit=dev
+npm run prod:check
+npm run db:postgres:verify
+npm run data:verify
+npm run credits:verify
+npm run runs:verify
+npm run media:verify
+npm run domains:verify
+```
+
+Some checks require live credentials and must report that limitation rather
+than being described as passing. After deployment:
+
+1. Confirm `/api/health` returns 200.
+2. Confirm `/api/ready` returns 200. A 503 means the release is not ready.
+3. Smoke test public pages at narrow mobile, tablet and desktop widths.
+4. Test sign-up, sign-in, sign-out and two-workspace isolation with live Clerk.
+5. Run one representative chat, research, Studio image and quoted video flow.
+6. Verify `robots.txt`, `sitemap.xml`, `llms.txt`, canonical tags and workspace
+   `noindex` behavior.
+
+Follow [`HOSTINGER_DEPLOYMENT.md`](HOSTINGER_DEPLOYMENT.md) for the production
+procedure. Health proves the process is alive; readiness proves dependencies
+are usable.
+
+## 10. Security and operational rules
+
+- Validate input and authorize workspace ownership on the server.
+- Reserve credits before expensive work and preserve 402, 409 and 503 meanings.
+- Keep publishing, paid production and other consequential actions behind an
+  explicit approval.
+- Use request IDs and structured redacted logs for diagnosis.
+- Add a migration; do not edit an applied production migration.
+- Use signed URLs and lifecycle rules before moving private assets to Storage.
+- Do not enable billing before verified webhooks, retries, reversals, refunds
+  and ledger reconciliation pass.
+- Do not launch unrestricted long-running work before durable queue replay and
+  cancellation exist.
+
+Known public-scale gaps are tracked only in `PRODUCTION_READINESS.md`, including
+shared rate limiting, a durable worker, monitoring and alerting, private asset
+retention, load testing, backup restoration and operational policies.
+
+## 11. Keeping knowledge current
+
+For each material release:
+
+1. Update the code and tests.
+2. Record architectural or provider decisions in `DECISIONS.md` when future
+   engineers would otherwise re-argue or rediscover them.
+3. Update `PRODUCTION_READINESS.md` when a gate or capability status changes.
+4. Update this handbook only when system operation, boundaries or onboarding
+   change.
+5. Add an entry to `src/lib/changelog.ts` when users gain a meaningful outcome,
+   a material limitation is removed, or a trust and safety property changes.
+
+The public changelog must use plain language and one of three honest labels:
+`Now`, `Pilot` or `Foundation`. Do not publish commit hashes, private customer
+information, exploit details, generic maintenance or future work as shipped.
+
+## 12. First-day checklist
+
+- Read this handbook and the current production-readiness gates.
+- Run the local app in guest mode.
+- Run lint, tests and build before editing.
+- Trace one UI action through its route, service, repository and provider
+  boundary.
+- Read the newest entries in `DECISIONS.md` before changing model routing,
+  credits, media pricing or orchestration.
+- Never infer production readiness from a polished screen or a green build.

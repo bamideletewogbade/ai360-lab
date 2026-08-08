@@ -17,7 +17,7 @@ const CONTENT: Record<AuthMode, {
     eyebrow: 'Welcome back',
     title: 'Pick up where you left off.',
     copy: 'Return to your conversations, projects and finished work from any device.',
-    alternate: 'New to AI 360 Lab?',
+    alternate: 'New to AI360 Lab?',
     alternateHref: '/sign-up',
     alternateAction: 'Create a free account',
   },
@@ -74,15 +74,15 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
   return (
     <main className={`${styles.shell} ${mode === 'sign-in' ? styles.signIn : styles.signUp}`}>
-      <Link href="/" className={styles.brand} aria-label="AI 360 Lab home">
-        <Image src="/logo-black.png" width={180} height={44} alt="AI Three Sixty" priority />
+      <Link href="/" className={styles.brand} aria-label="AI360 Lab home">
+        <Image src="/logo-black.png" width={180} height={44} alt="AI360" priority />
         <span>LAB</span>
       </Link>
 
       <section className={styles.story}>
         <div className={styles.orbit} aria-hidden="true"><i /><i /><i /></div>
         <div className={styles.storyContent}>
-          <p className={styles.kicker}><span>✦</span> One place to move forward</p>
+          <p className={styles.kicker}>One place to move forward</p>
           <h1>{content.title}</h1>
           <p className={styles.lead}>{content.copy}</p>
 
@@ -92,7 +92,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             <article><span>03</span><div><b>Make it yours</b><small>Build a workspace around what you want to learn or accomplish.</small></div></article>
           </div>
 
-          <div className={styles.audiences} aria-label="Ways people use AI 360 Lab">
+          <div className={styles.audiences} aria-label="Ways people use AI360 Lab">
             <span>Learn</span><span>Work</span><span>Create</span><span>Organise</span><span>Serve</span>
           </div>
 
@@ -112,10 +112,10 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             <span>Workspace</span>
           </div>
           <p className={styles.eyebrow}>{content.eyebrow}</p>
-          <h2>{mode === 'sign-in' ? 'Sign in to AI 360 Lab' : 'Create your AI 360 account'}</h2>
+          <h2>{mode === 'sign-in' ? 'Sign in to AI360 Lab' : 'Create your AI360 account'}</h2>
           <p className={styles.panelCopy}>
             {mode === 'sign-in'
-              ? 'Use the same account you use across AI 360.'
+              ? 'Use the same account you use across AI360.'
               : 'Start free. You can explore before deciding what to save.'}
           </p>
 
@@ -128,7 +128,6 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               )
             ) : (
               <div className={styles.setupNotice} role="status">
-                <span>✦</span>
                 <b>Account access is being connected</b>
                 <p>You can still explore the Lab as a guest. Sign-in will appear here once the secure account service is enabled.</p>
                 <Link href="/app">Continue as a guest</Link>

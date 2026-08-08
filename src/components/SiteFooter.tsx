@@ -22,11 +22,11 @@ export function SiteFooter() {
       <div className={styles.shell}>
         <div className={styles.lead}>
           <div className={styles.intro}>
-            <Image className={styles.logo} src="/logo-white.png" width={176} height={44} alt="AI Three Sixty" />
-            <p className={styles.eyebrow}>AI 360 Lab × Accra Innovation Centre</p>
+            <Image className={styles.logo} src="/logo-white.png" width={176} height={44} alt="AI360" />
+            <p className={styles.eyebrow}>AI360 Lab × Accra Innovation Centre</p>
             <h2>Built in Accra.<br />Ready for real work.</h2>
             <p className={styles.summary}>
-              Bring the goal. The Lab helps you research, decide and make the work—while you stay in control.
+              Bring the goal. The Lab helps you research, decide and make the work while you stay in control.
             </p>
             <div className={styles.actions}>
               <Link className={styles.primaryAction} href="/app">Start with a goal <span aria-hidden="true">↗</span></Link>
@@ -56,9 +56,10 @@ export function SiteFooter() {
           </div>
 
           <div className={styles.linkGroup}>
-            <h3>AI 360</h3>
-            <a href="https://aithreesixty.tech" target="_blank" rel="noreferrer">About AI 360</a>
+            <h3>AI360</h3>
+            <a href="https://aithreesixty.tech" target="_blank" rel="noreferrer">About AI360</a>
             <Link href="/app">Open the Lab</Link>
+            <Link href="/changelog">Changelog</Link>
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
           </div>
@@ -79,7 +80,7 @@ export function SiteFooter() {
         </div>
 
         <div className={styles.bottom}>
-          <p>© {new Date().getFullYear()} AI 360 · Accra Innovation Centre</p>
+          <p>© {new Date().getFullYear()} AI360 · Accra Innovation Centre</p>
           <p>Intelligence that moves with you.</p>
         </div>
       </div>

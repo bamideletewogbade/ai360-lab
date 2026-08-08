@@ -160,10 +160,10 @@ export function WhatYouCanMake() {
 
       <header className={styles.hero}>
         <div>
-          <p className={styles.kicker}><span>✦</span> What you can make</p>
+          <p className={styles.kicker}>What you can make</p>
           <h1>Not a chatbot.<br /><em>Finished work.</em></h1>
           <p className={styles.lead}>
-            Most AI tools hand you text and leave the rest to you. AI 360 is built around the thing you
+            Most AI tools hand you text and leave the rest to you. AI360 is built around the thing you
             were actually trying to produce: the brief, the application, the artwork, the plan you can
             act on.
           </p>
@@ -228,7 +228,7 @@ export function WhatYouCanMake() {
           <div className={styles.campaignProofCopy}>
             <span>Generated campaign example · Sankofa Harvest</span>
             <h3>From “launch this drink” to a creative direction a customer can recognise.</h3>
-            <p>This is not decoration. It shows the visual standard behind “make a campaign graphic”: a specific product, art direction and format shaped from the approved brand—not an unrelated stock image.</p>
+            <p>This is not decoration. It shows the visual standard behind “make a campaign graphic”: a specific product, art direction and format shaped from the approved brand, not an unrelated stock image.</p>
             <dl>
               <div><dt>Brief</dt><dd>Modern hibiscus and ginger drink for busy people in Accra</dd></div>
               <div><dt>Direction</dt><dd>Warm, grounded, unmistakably local; premium without becoming distant</dd></div>

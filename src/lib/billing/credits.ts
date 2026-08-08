@@ -3,7 +3,7 @@
  *
  * One credit represents a bounded amount of useful work, not a fixed token
  * exchange rate. Customers see credits; this module is the only place that
- * knows what a credit costs AI 360 to honour.
+ * knows what a credit costs AI360 to honour.
  *
  * The conversion is derived from the guardrail in PRICING_STRATEGY.md: AI and
  * tool cost should stay at or below 25% of collected subscription revenue. The
@@ -52,7 +52,7 @@ export function providerFeeRate() {
 }
 
 /**
- * What a provider charge of `usd` actually costs AI 360 once the platform fee,
+ * What a provider charge of `usd` actually costs AI360 once the platform fee,
  * the exchange rate and the foreign-exchange buffer are applied.
  */
 export function landedCostGhs(usd: number) {

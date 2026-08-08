@@ -164,7 +164,6 @@
 .vision-thinking i { width: clamp(10px, 2vw, 28px); height: 1px; background: #3d3f41; }
 .vision-footer { position: relative; z-index: 6; min-height: 56px; display: flex; align-items: center; gap: 18px; padding: 0 18px; border-top: 1px solid #343638; background: #151617; }
 .vision-footer p { display: flex; align-items: center; gap: 8px; margin: 0; white-space: nowrap; }
-.vision-footer p span { animation: vision-spark 2.2s ease-in-out infinite; }
 .vision-footer p b { font-size: 0.613rem; }
 .vision-selector { display: flex; flex: 1; justify-content: flex-end; gap: 6px; }
 .vision-selector button { position: relative; width: 28px; height: 6px; overflow: hidden; border: 0; border-radius: 999px; background: #3b3d3f; padding: 0; color: transparent; cursor: pointer; transition: width .4s var(--landing-ease), background .3s; }
@@ -278,7 +277,6 @@
 @keyframes vision-core { 50% { transform: rotate(3deg) scale(.92); box-shadow: 0 0 0 13px rgba(16,17,18,.55), 0 0 60px rgba(247,246,242,.2); } }
 @keyframes vision-ring { 0% { opacity: 0; transform: scale(.7); } 45% { opacity: .55; } 100% { opacity: 0; transform: scale(1.25); } }
 @keyframes vision-signal { from { left: 0; opacity: 0; } 15%, 80% { opacity: 1; } to { left: 100%; opacity: 0; } }
-@keyframes vision-spark { 50% { opacity: .4; transform: rotate(45deg) scale(.75); } }
 @keyframes vision-float { 50% { transform: translateY(-8px); } }
 
 /* Keep the parent brand's enlarged desktop rhythm without the full 125% scale. */

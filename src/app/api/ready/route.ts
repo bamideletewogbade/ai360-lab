@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
   return Response.json({
     status: ready ? 'ready' : 'not_ready',
-    service: 'AI 360 Lab',
+    service: 'AI360 Lab',
     databaseProvider,
     databaseConnection,
     checks: readiness.checks,

@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   return Response.json(
     {
       status: 'ok',
-      service: 'AI 360 Lab',
+      service: 'AI360 Lab',
       environment: process.env.NODE_ENV,
       uptimeSeconds: Math.round(process.uptime()),
       requestId,
