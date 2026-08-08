@@ -1,9 +1,9 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
 import { BILLING_PLANS, CREDIT_GUIDE, CREDIT_TOP_UPS, planPrice, type BillingCadence } from '@/lib/billing/catalog'
+import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
 import styles from '@/app/pricing/pricing.module.css'
 
@@ -13,6 +13,8 @@ const TEMPLATE_GROUPS = [
   { mark: '03', name: 'Create and launch', examples: 'Brand launch, campaign builder, event pack', access: 'Builder' },
   { mark: '04', name: 'Serve a community', examples: 'NGO proposal, outreach plan, impact report', access: 'Builder + Team' },
 ]
+
+const BILLING_ENABLED = process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true'
 
 export function PricingExperience() {
   const [cadence, setCadence] = useState<BillingCadence>('monthly')
@@ -25,10 +27,12 @@ export function PricingExperience() {
         <div className={styles.heroCopy}>
           <p className={styles.kicker}><span>✦</span> Simple plans · flexible payment</p>
           <h1>Start free.<br /><em>Pay your way.</em></h1>
-          <p>Get 5 credits every month to explore AI 360. When you need more, choose a plan and pay securely with Mobile Money or card. You will see the complete amount before you confirm.</p>
+          <p>{BILLING_ENABLED
+            ? 'Get 5 credits every month to explore AI 360. When you need more, choose a plan and pay securely with Mobile Money or card. You will see the complete amount before you confirm.'
+            : 'Get 5 credits every month to explore AI 360. Paid plans are shown for transparency and will open after payment verification for the private pilot is complete.'}</p>
           <div className={styles.paymentTrust}>
             <span><i className={styles.freeDot} /> 5 free credits monthly</span>
-            <span><i className={styles.momoDot} /> Mobile Money or card</span>
+            <span><i className={styles.momoDot} /> {BILLING_ENABLED ? 'Mobile Money or card' : 'Payments opening after pilot verification'}</span>
             <span><i /> No surprise overage bills</span>
           </div>
         </div>
@@ -88,13 +92,15 @@ export function PricingExperience() {
                 <ul>{plan.features.map((feature) => <li key={feature}><span>✓</span>{feature}</li>)}</ul>
                 <div className={styles.templates}><small>Example templates</small><p>{plan.templateExamples.join(' · ')}</p></div>
                 <Link href={paid ? `/sign-up?plan=${plan.slug}&cadence=${cadence}` : '/app'} className={paid ? styles.choose : styles.start}>
-                  {paid ? `Choose ${plan.name}` : 'Start free'} <span>↗</span>
+                  {paid ? (BILLING_ENABLED ? `Choose ${plan.name}` : `Join the ${plan.name} pilot`) : 'Start free'} <span>↗</span>
                 </Link>
               </article>
             )
           })}
         </div>
-        <p className={styles.pilotNote}>Prices are shown in Ghana cedis. Before payment, you will see the full amount due today, billing period, renewal terms and any applicable taxes or fees.</p>
+        <p className={styles.pilotNote}>{BILLING_ENABLED
+          ? 'Prices are shown in Ghana cedis. Before payment, you will see the full amount due today, billing period, renewal terms and any applicable taxes or fees.'
+          : 'Paid checkout is not open yet. Joining a paid-plan pilot does not charge you; payment will only open after the provider and webhook flow pass verification.'}</p>
       </section>
 
       <section className={styles.creditSection}>
@@ -134,8 +140,10 @@ export function PricingExperience() {
       <section className={styles.paymentSection}>
         <div className={styles.paymentCopy}>
           <p><span>✦</span> Before you pay</p>
-          <h2>Review everything.<br />Then decide.</h2>
-          <p>Checkout will repeat your selected plan, credits, billing period and complete amount. Nothing is charged until you choose a payment method and confirm.</p>
+          <h2>{BILLING_ENABLED ? <>Review everything.<br />Then decide.</> : <>Payment is designed.<br />Verification comes first.</>}</h2>
+          <p>{BILLING_ENABLED
+            ? 'Checkout will repeat your selected plan, credits, billing period and complete amount. Nothing is charged until you choose a payment method and confirm.'
+            : 'This is the checkout experience planned for launch. It remains disabled while signatures, retries, reversals and reconciliation are verified in the provider sandbox.'}</p>
           <div className={styles.methodRow}><span>MTN MoMo</span><span>Telecel Cash</span><span>AT Money</span><span>Visa</span><span>Mastercard</span></div>
         </div>
         <div className={styles.checkoutReview}>
@@ -165,11 +173,7 @@ export function PricingExperience() {
         </div>
       </section>
 
-      <footer className={styles.footer}>
-        <Image src="/logo-black.png" width={146} height={36} alt="AI Three Sixty" />
-        <p>Fair access needs clear limits, familiar payments and useful outcomes.</p>
-        <div><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/app">Try AI 360</Link></div>
-      </footer>
+      <SiteFooter className={styles.footer} showLogo />
     </main>
   )
 }

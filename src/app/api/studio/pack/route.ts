@@ -94,8 +94,11 @@ export async function POST(request: Request) {
   // front rather than charged per specialist.
   const credit = await openCreditGate({ request, requester, feature: 'agent', requestId: log.requestId })
   if (credit.denied) {
-    log.finish(402, { outcome: 'insufficient_credits', packId: pack.id })
-    return new Response(credit.denied.body, { status: 402, headers: log.headers(credit.denied.headers) })
+    log.finish(credit.denied.status, { outcome: 'credit_denied', packId: pack.id })
+    return new Response(credit.denied.body, {
+      status: credit.denied.status,
+      headers: log.headers(credit.denied.headers),
+    })
   }
   const gate = credit.gate
 

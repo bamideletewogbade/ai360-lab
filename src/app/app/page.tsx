@@ -373,6 +373,7 @@ function LabWorkspace({
     const params = new URLSearchParams(window.location.search)
     const incomingPrompt = params.get('prompt')?.trim() || ''
     const incomingMode = params.get('mode')
+    const draftOnly = params.get('draft') === '1'
     const nextExperience: Experience = incomingMode === 'studio'
       ? 'studio'
       : incomingMode === 'agent'
@@ -396,7 +397,8 @@ function LabWorkspace({
             item.id === active.id ? handoffConversation : item
           )))
         }
-        void send(incomingPrompt, null, [], nextExperience, handoffConversation)
+        if (draftOnly) setInput(incomingPrompt)
+        else void send(incomingPrompt, null, [], nextExperience, handoffConversation)
       } else {
         selectExperience(nextExperience)
       }

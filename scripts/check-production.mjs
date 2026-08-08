@@ -43,7 +43,7 @@ if (process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true') {
 if (!configured('CLERK_AUTHORIZED_PARTIES')) {
   warnings.push('CLERK_AUTHORIZED_PARTIES is not set; production-safe AI 360 defaults will be used.')
 }
-if (!configured('SENTRY_DSN')) warnings.push('SENTRY_DSN is not configured; errors only appear in runtime logs.')
+warnings.push('External error monitoring is not integrated; errors only appear in runtime logs. A DSN alone will not enable monitoring.')
 
 console.log('AI 360 Lab production preflight')
 for (const warning of warnings) console.log(`WARN  ${warning}`)

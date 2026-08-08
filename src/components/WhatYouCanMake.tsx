@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
 import { FEATURE_WEIGHTS } from '@/lib/billing/credits'
 import styles from '@/app/marketing.module.css'
@@ -257,15 +258,7 @@ export function WhatYouCanMake() {
         </div>
       </section>
 
-      <footer className={styles.footer}>
-        <p>AI 360 Lab <span>·</span> Intelligence that helps you finish the work.</p>
-        <div>
-          <Link href="/how-it-works">How it works</Link>
-          <Link href="/pricing">Pricing</Link>
-          <Link href="/privacy">Privacy</Link>
-          <Link href="/terms">Terms</Link>
-        </div>
-      </footer>
+      <SiteFooter className={styles.footer} />
     </main>
   )
 }

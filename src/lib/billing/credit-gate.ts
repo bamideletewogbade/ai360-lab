@@ -6,10 +6,9 @@ import { reserveCredits, settleReservation } from '@/lib/billing/credit-reposito
  * The seam between a route and the credit engine.
  *
  * A route opens a gate before doing paid work and settles it afterward. The
- * gate is deliberately forgiving about being switched off: when no durable
- * database is configured, or the caller is anonymous, it becomes a no-op so
- * the Lab still runs and demos exactly as it does today. Enforcement turns on
- * by configuration, not by a code change.
+ * Anonymous demo traffic remains a no-op. Once a request has an authenticated
+ * workspace, however, the ledger is mandatory: paid provider work must never
+ * fail open because the billing database is missing or a request is replayed.
  */
 
 export type CreditGate = {
@@ -36,6 +35,29 @@ const OPEN_GATE: CreditGate = {
 export type CreditGateResult =
   | { denied: Response; gate?: undefined }
   | { denied?: undefined; gate: CreditGate }
+
+export function creditGateFailureResponse(
+  failure: Exclude<Awaited<ReturnType<typeof reserveCredits>>, { ok: true }>,
+) {
+  if (failure.reason === 'insufficient_credits') {
+    return Response.json({
+      error: 'You do not have enough credits for this task.',
+      status: 'insufficient_credits',
+      required: failure.required,
+      available: failure.balance.available,
+    }, { status: 402, headers: { 'Cache-Control': 'no-store' } })
+  }
+  if (failure.reason === 'already_reserved') {
+    return Response.json({
+      error: 'This request is already being processed. Check the existing result before trying again.',
+      status: 'duplicate_request',
+    }, { status: 409, headers: { 'Cache-Control': 'no-store' } })
+  }
+  return Response.json({
+    error: 'Credit verification is temporarily unavailable. No work was started and no credits were used.',
+    status: 'credit_service_unavailable',
+  }, { status: 503, headers: { 'Cache-Control': 'no-store' } })
+}
 
 /**
  * A retried request should reuse its hold rather than reserve twice. Clients
@@ -67,18 +89,7 @@ export async function openCreditGate(input: {
   })
 
   if (!reservation.ok) {
-    if (reservation.reason === 'insufficient_credits') {
-      return {
-        denied: Response.json({
-          error: 'You do not have enough credits for this task.',
-          status: 'insufficient_credits',
-          required: reservation.required,
-          available: reservation.balance.available,
-        }, { status: 402, headers: { 'Cache-Control': 'no-store' } }),
-      }
-    }
-    // A missing database or an already-settled retry must not block real work.
-    return { gate: OPEN_GATE }
+    return { denied: creditGateFailureResponse(reservation) }
   }
 
   let settled = false

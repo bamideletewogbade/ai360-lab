@@ -185,6 +185,18 @@
 .landing-proof b { font-family: var(--font-heading); font-size: 0.912rem; }
 .landing-proof small { margin-top: 5px; color: var(--institutional-grey); font-size: 0.737rem; line-height: 1.5; }
 
+.landing-mission { position: relative; width: min(100%, var(--landing-max)); min-height: clamp(560px, 56vw, 760px); display: flex; align-items: center; overflow: hidden; margin: 0 auto; border-bottom: 1px solid var(--landing-line); background: #e9e5dc; isolation: isolate; }
+.landing-mission > img { z-index: -3; object-fit: cover; object-position: center; }
+.mission-shade { position: absolute; z-index: -2; inset: 0; background: linear-gradient(90deg, rgba(247,246,242,.99) 0%, rgba(247,246,242,.96) 30%, rgba(247,246,242,.62) 49%, rgba(247,246,242,.04) 72%); }
+.mission-copy { width: min(57%, 850px); padding: clamp(62px, 8vw, 130px) var(--landing-pad); }
+.mission-copy > p:first-child { display: flex; align-items: center; gap: 9px; margin: 0 0 22px; color: var(--institutional-grey); font-size: .8rem; font-weight: 800; letter-spacing: .17em; text-transform: uppercase; }
+.mission-copy > p:first-child span { color: var(--ai-black); }
+.mission-copy h2 { max-width: 780px; margin: 0; color: var(--deep-charcoal); font-family: var(--font-heading); font-size: clamp(2.65rem, 4.5vw, 5.45rem); line-height: .98; letter-spacing: -.06em; }
+.mission-copy > p:not(:first-child) { max-width: 650px; margin: 28px 0 0; color: var(--institutional-grey); font-size: clamp(1rem, 1.25vw, 1.2rem); line-height: 1.72; }
+.mission-copy blockquote { max-width: 660px; margin: 28px 0 30px; padding-left: 20px; border-left: 2px solid var(--ai-black); color: var(--deep-charcoal); font-family: var(--font-heading); font-size: clamp(1.05rem, 1.35vw, 1.32rem); font-weight: 650; line-height: 1.55; letter-spacing: -.02em; }
+.mission-copy > a { display: inline-flex; min-height: 48px; align-items: center; gap: 18px; border: 1px solid var(--ai-black); border-radius: 9px; background: var(--ai-black); padding: 0 18px; color: var(--warm-white); font-size: .862rem; font-weight: 750; transition: transform .25s var(--landing-ease), background .2s; }
+.mission-copy > a:hover { transform: translateY(-2px); background: var(--deep-charcoal); }
+
 .landing-section { width: min(100%, var(--landing-max)); margin: 0 auto; padding: clamp(86px, 9vw, 150px) var(--landing-pad); }
 .landing-section-head { display: grid; grid-template-columns: 1fr minmax(300px, 1.1fr) minmax(260px, .65fr); gap: clamp(26px, 4vw, 72px); align-items: end; margin-bottom: 43px; }
 .landing-section-head > p { align-self: start; margin-top: 7px; }
@@ -252,6 +264,7 @@
   .landing-hero::before { display: none; }
   .hero-copy { max-width: 850px; }
   .hero-vision { width: min(860px, 100%); justify-self: center; }
+  .mission-copy { width: 68%; }
   .landing-section-head { grid-template-columns: .7fr 1.3fr; }
   .landing-section-head > span { grid-column: 2; }
   .outcome-grid { grid-template-columns: repeat(2, 1fr); }
@@ -287,6 +300,11 @@
   .landing-proof > span:first-child { border-left: 1px solid var(--landing-line); }
   .landing-proof > span:nth-child(2) { border-right: 1px solid var(--landing-line); }
   .landing-proof > span:nth-child(-n+2) { border-bottom: 1px solid var(--landing-line); }
+  .landing-mission { min-height: 790px; align-items: flex-end; }
+  .landing-mission > img { object-position: 64% center; }
+  .mission-shade { background: linear-gradient(0deg, rgba(247,246,242,1) 0%, rgba(247,246,242,.98) 40%, rgba(247,246,242,.38) 68%, rgba(247,246,242,.04) 100%); }
+  .mission-copy { width: 100%; padding: 330px 16px 64px; }
+  .mission-copy h2 { font-size: clamp(2.5rem, 11vw, 4.2rem); }
   .landing-section { padding: 82px 16px; }
   .landing-section-head { grid-template-columns: 1fr; gap: 18px; }
   .landing-section-head > span { grid-column: auto; }
@@ -312,6 +330,8 @@
   .landing-proof { grid-template-columns: 1fr; }
   .landing-proof > span { min-height: 82px; border-right: 1px solid var(--landing-line); border-bottom: 1px solid var(--landing-line); }
   .landing-proof > span:last-child { border-bottom: 0; }
+  .landing-mission { min-height: 820px; }
+  .mission-copy { padding-top: 315px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -13,20 +13,20 @@ export const metadata: Metadata = {
     default: 'AI 360 Lab',
     template: '%s | AI 360 Lab',
   },
-  description: 'Learn, decide, create and complete useful work with AI 360 Lab from the Accra Innovation Center.',
+  description: 'Intelligence that meets you where you are and helps you finish what matters, built from Accra.',
   manifest: '/manifest.webmanifest',
   openGraph: {
     type: 'website',
     url: 'https://lab.aithreesixty.tech',
     title: 'AI 360 Lab',
-    description: 'An accessible AI workspace for learning, work, everyday life and public impact.',
+    description: 'Bring the goal. Understand, decide, create and leave ready to move.',
     siteName: 'AI 360 Lab',
     images: [{ url: '/og.png', width: 1706, height: 907, alt: 'AI 360 Lab' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'AI 360 Lab',
-    description: 'An accessible AI workspace for learning, work, everyday life and public impact.',
+    description: 'Bring the goal. Understand, decide, create and leave ready to move.',
     images: ['/og.png'],
   },
   appleWebApp: {

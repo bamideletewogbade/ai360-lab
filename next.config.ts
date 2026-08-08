@@ -17,6 +17,7 @@ const freshAppShell = {
 }
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   async headers() {
     return [
       {

@@ -292,8 +292,11 @@ export async function POST(request: Request) {
       request, requester, feature: 'video', requestId: log.requestId, quotedUsd: quote.costUsd,
     })
     if (credit.denied) {
-      log.finish(402, { outcome: 'insufficient_credits', estimatedCostUsd: quote.costUsd })
-      return new Response(credit.denied.body, { status: 402, headers: log.headers(credit.denied.headers) })
+      log.finish(credit.denied.status, { outcome: 'credit_denied', estimatedCostUsd: quote.costUsd })
+      return new Response(credit.denied.body, {
+        status: credit.denied.status,
+        headers: log.headers(credit.denied.headers),
+      })
     }
     const gate = credit.gate
 

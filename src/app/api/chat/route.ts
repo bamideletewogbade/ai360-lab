@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
       })
     : { gate: undefined, denied: undefined }
   if (credit.denied) {
-    log.finish(402, { outcome: 'insufficient_credits' })
+    log.finish(credit.denied.status, { outcome: 'credit_denied' })
     return responseWithRequestId(credit.denied, log.requestId)
   }
   const gate = credit.gate

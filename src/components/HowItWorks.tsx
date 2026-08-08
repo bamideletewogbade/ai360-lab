@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
 import styles from '@/app/marketing.module.css'
 
@@ -166,15 +167,7 @@ export function HowItWorks() {
         </div>
       </section>
 
-      <footer className={styles.footer}>
-        <p>AI 360 Lab <span>·</span> Intelligence that helps you finish the work.</p>
-        <div>
-          <Link href="/what-you-can-make">What you can make</Link>
-          <Link href="/pricing">Pricing</Link>
-          <Link href="/privacy">Privacy</Link>
-          <Link href="/terms">Terms</Link>
-        </div>
-      </footer>
+      <SiteFooter className={styles.footer} />
     </main>
   )
 }

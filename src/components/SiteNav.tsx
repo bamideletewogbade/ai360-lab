@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { Show, UserButton } from '@clerk/nextjs'
+import { PUBLIC_NAV_LINKS } from '@/lib/brand'
 
 const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
 
@@ -13,13 +14,6 @@ const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
  * page, which is how pricing ended up with fewer links, no sign-in and a
  * different call to action after the landing nav was made session aware.
  */
-const LINKS: Array<{ href: string; label: string; current?: SiteNavCurrent; external?: boolean }> = [
-  { href: '/what-you-can-make', label: 'What you can make', current: 'what' },
-  { href: '/how-it-works', label: 'How it works', current: 'how' },
-  { href: '/pricing', label: 'Pricing', current: 'pricing' },
-  { href: 'https://aithreesixty.tech', label: 'AI 360 home', external: true },
-]
-
 export type SiteNavCurrent = 'home' | 'what' | 'how' | 'pricing' | 'legal'
 
 export function SiteNav({ current = 'home' }: { current?: SiteNavCurrent }) {
@@ -30,7 +24,7 @@ export function SiteNav({ current = 'home' }: { current?: SiteNavCurrent }) {
         <span>LAB</span>
       </Link>
       <div className="landing-links">
-        {LINKS.map((link) => (
+        {PUBLIC_NAV_LINKS.map((link) => (
           link.external
             ? <a href={link.href} key={link.href}>{link.label}</a>
             : (
@@ -68,7 +62,7 @@ function SignedOutActions() {
   return (
     <>
       <Link href="/sign-in" className="landing-sign-in">Sign in</Link>
-      <Link href="/app" className="landing-open">Try AI 360 <span aria-hidden="true">↗</span></Link>
+      <Link href="/app" className="landing-open">Start free <span aria-hidden="true">↗</span></Link>
     </>
   )
 }

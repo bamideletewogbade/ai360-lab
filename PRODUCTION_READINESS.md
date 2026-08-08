@@ -1,6 +1,6 @@
 # AI 360 Lab production readiness
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-08
 
 This document is the release truth for AI 360 Lab. A feature is only marked
 ready when its code, configuration, external service and failure path have been
@@ -14,6 +14,29 @@ The product experience is functional in guest mode and the core AI routes are
 implemented. The remaining launch blockers are identity credentials, a durable
 production database, distributed cost controls and live verification of the
 external media and payment providers.
+
+## Audit snapshot: 2026-08-08
+
+- `npm test`: 100/100 pass.
+- `npm run lint` and `npm run build`: pass on Next.js 16.3.0.
+- `npm audit --omit=dev`: zero known production dependency vulnerabilities.
+- Live public-provider checks: domains 6/6 and video catalogue 4/4 pass.
+- Browser smoke test: landing, onboarding and Quick/Research/Create workspace
+  navigation work; security headers are present; health returns 200 and
+  readiness correctly returns 503 while required services are unavailable.
+- The configured Supabase direct hostname resolves only to IPv6 from this
+  environment and the database verification scripts cannot connect. Replace
+  the runtime URL with the Supabase session-pooler URL before the live data
+  checks can be repeated from an IPv4-only host.
+- Clerk and the canonical application URL are absent locally, so sign-in,
+  webhook and tenant-isolation flows remain unverified.
+- The local shell is Node 24.15.0 while the supported production runtime is
+  Node 22.x (`engines` and `.nvmrc`). CI and Hostinger must use Node 22.
+- Credit enforcement now fails closed for authenticated work when the ledger is
+  unavailable or an idempotency key is replayed. Paid routes preserve the
+  resulting 402/409/503 status instead of collapsing every denial to 402.
+- The pricing page now says checkout is closed while billing is disabled,
+  instead of presenting the planned Mobile Money/card flow as already live.
 
 ## Capability matrix
 
@@ -87,8 +110,9 @@ external media and payment providers.
 - [ ] Connect Hostinger through Supabase's shared session pooler (port 5432).
 - [ ] Use the transaction pooler (port 6543) only if the API moves to a
   serverless or short-lived runtime.
-- [ ] Replace MySQL-specific repositories one route at a time.
-- [ ] Migrate and reconcile existing records before switching reads.
+- [x] Replace MySQL-specific repositories; Postgres is the only data plane.
+- [x] Confirm there were no authenticated MySQL records to migrate before the
+  cutover, as recorded in `DECISIONS.md`.
 - [ ] Pass personal and organization tenant-isolation tests.
 - [ ] Confirm daily backups and perform a documented restore rehearsal.
 

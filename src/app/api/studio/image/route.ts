@@ -139,8 +139,11 @@ export async function POST(request: Request) {
     request, requester, feature: 'image', requestId: log.requestId,
   })
   if (credit.denied) {
-    log.finish(402, { outcome: 'insufficient_credits', kind: body.kind })
-    return new Response(credit.denied.body, { status: 402, headers: log.headers(credit.denied.headers) })
+    log.finish(credit.denied.status, { outcome: 'credit_denied', kind: body.kind })
+    return new Response(credit.denied.body, {
+      status: credit.denied.status,
+      headers: log.headers(credit.denied.headers),
+    })
   }
   const gate = credit.gate
 

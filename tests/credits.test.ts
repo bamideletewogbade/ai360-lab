@@ -13,6 +13,7 @@ import {
   settleCredits,
   usdBudgetForCredits,
 } from '../src/lib/billing/credits.ts'
+import { creditGateFailureResponse } from '../src/lib/billing/credit-gate.ts'
 
 test('landed cost includes the platform fee and the exchange buffer, not just the raw provider charge', () => {
   const raw = 1
@@ -73,6 +74,22 @@ test('missing provider cost falls back to the reservation instead of charging ze
   const settlement = settleCredits({ estimate, measuredUsd: null, outcome: 'success' })
   assert.equal(settlement.charged, estimate.reserve)
   assert.equal(settlement.released, 0)
+})
+
+test('authenticated paid work fails closed when the ledger is unavailable', async () => {
+  const response = creditGateFailureResponse({ ok: false, reason: 'database_not_configured' })
+  assert.equal(response.status, 503)
+  assert.equal((await response.json()).status, 'credit_service_unavailable')
+})
+
+test('an idempotent replay cannot start paid provider work twice', async () => {
+  const response = creditGateFailureResponse({
+    ok: false,
+    reason: 'already_reserved',
+    reservationId: 'res_existing',
+  })
+  assert.equal(response.status, 409)
+  assert.equal((await response.json()).status, 'duplicate_request')
 })
 
 test('chat is classified by what the request actually asks for', () => {

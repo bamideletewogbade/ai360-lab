@@ -57,7 +57,7 @@ export function HeroVision() {
   return (
     <div
       className="hero-vision"
-      aria-label="AI 360 turns different people’s goals into useful outcomes"
+      aria-label="AI 360 helps different people turn goals into real momentum"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
@@ -68,7 +68,7 @@ export function HeroVision() {
       <div className="vision-stage">
         <header className="vision-header">
           <span><i /> AI 360 · LIVE</span>
-          <b>ONE GOAL → USEFUL WORK</b>
+          <b>ONE GOAL → REAL MOMENTUM</b>
           <small>{String(active + 1).padStart(2, '0')} / {String(VISIONS.length).padStart(2, '0')}</small>
         </header>
 
@@ -125,7 +125,7 @@ export function HeroVision() {
         </footer>
       </div>
 
-      <div className="vision-float vision-float-one"><span>∞</span><p><b>For everyone</b><small>One platform, many ambitions</small></p></div>
+      <div className="vision-float vision-float-one"><span>∞</span><p><b>Built for real life</b><small>Many starting points, one place</small></p></div>
       <div className="vision-float vision-float-two"><span>✦</span><p><b>Human in control</b><small>You review the important parts</small></p></div>
     </div>
   )

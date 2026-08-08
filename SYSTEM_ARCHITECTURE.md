@@ -1,6 +1,6 @@
 # AI 360 system architecture and quality budgets
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-08
 
 ## Operating principle
 
@@ -16,6 +16,39 @@ Every feature proposal must answer:
 Performance, accessibility, observability, security and cost are acceptance
 criteria from the first implementation. They are not a cleanup phase after the
 product is finished.
+
+## Composability standard
+
+The smallest useful part is not the smallest possible file. It is the smallest
+unit with one reason to change, a clear input/output contract and a focused way
+to verify it.
+
+| Part | Owns | Must not own |
+| --- | --- | --- |
+| Content registry | Product language, labels, links and outcome definitions | Rendering state or provider calls |
+| UI section | One visible user idea and its interactions | Cross-page policy or data persistence |
+| Route handler | HTTP validation, identity, limits and response translation | Provider-specific business logic or SQL orchestration |
+| Application service | One complete use case and its policy sequence | Framework request/response objects |
+| Provider adapter | Authentication, request shape, timeout and provider response normalization | Product pricing or workspace authorization |
+| Repository | One durable aggregate and its atomic invariants | UI language or provider behavior |
+| Pure policy module | Routing, pricing, permissions or state transition decisions | I/O of any kind |
+
+Optimize in that same order of scope:
+
+1. Make the component contract correct and observable.
+2. Remove unnecessary work inside that component.
+3. Measure the complete user flow that composes those parts.
+4. Optimize cross-layer latency, cost and reliability only after the slow or
+   fragile boundary is known.
+5. Change system topology only when measurements justify a new deployment or
+   failure boundary.
+
+The public UI now follows this shape: shared brand content and links,
+independent hero/mission/proof/outcome/process sections, and one shared public
+footer. The next decomposition priorities are the large Studio and export route
+handlers, followed by a shared OpenRouter adapter for duplicated headers,
+timeouts, error normalization and usage capture. These refactors should preserve
+the existing route contracts and be completed one boundary at a time.
 
 ## System map
 
