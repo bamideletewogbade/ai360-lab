@@ -64,20 +64,39 @@ export function LandingOutcomes() {
       <div className="launch-proof">
         <div className="launch-proof-copy">
           <p><span>✦</span> Create and launch</p>
-          <h3>A direction you approve.<br />An outcome people can see.</h3>
-          <p>Studio turns one business goal into a brand direction, campaign and coordinated assets. This four-second social reel is the kind of finished output—not a stock placeholder—you can create after reviewing the plan and accepting the quoted cost.</p>
+          <h3>A direction you approve. An outcome people can see.</h3>
+          <p>Studio turns one business goal into a reviewed brand direction and coordinated campaign assets. This is a real four-second output—not a stock placeholder—created only after the plan and quoted cost are approved.</p>
+          <ol className="launch-proof-steps" aria-label="How Studio creates the outcome">
+            <li><span>01</span><b>Bring the business goal</b></li>
+            <li><span>02</span><b>Review the direction</b></li>
+            <li><span>03</span><b>Approve production</b></li>
+          </ol>
           <Link href={workspaceHref('Create a brand and launch campaign for this idea: ', 'studio')}>Build a campaign in Studio <span aria-hidden="true">↗</span></Link>
         </div>
-        <ContextVideo
-          className="launch-proof-video"
-          src="/studio-outcome-reel.mp4"
-          poster="/studio-outcome-reel-poster.webp"
-          eyebrow="Generated campaign example"
-          title="Sankofa Harvest launch reel"
-          caption="One approved scene, rendered as a silent vertical clip for social media."
-          overlayLabel="Sankofa Harvest"
-          overlaySubline="Hibiscus · Ginger · Accra"
-        />
+        <div className="launch-proof-stage">
+          <div className="launch-proof-trace">
+            <div>
+              <span>01 · Brief</span>
+              <blockquote>“Launch a modern hibiscus drink for busy people in Accra.”</blockquote>
+            </div>
+            <i aria-hidden="true"><span /><span /><span /></i>
+            <div>
+              <span>02 · Approved direction</span>
+              <b>Warm. Grounded. Unmistakably local.</b>
+              <small>Audience, message and visual system locked before production.</small>
+            </div>
+          </div>
+          <ContextVideo
+            className="launch-proof-video"
+            src="/studio-outcome-reel.mp4"
+            poster="/studio-outcome-reel-poster.webp"
+            eyebrow="03 · Generated outcome"
+            title="Sankofa Harvest launch reel"
+            caption="One approved scene, rendered as a silent vertical clip for social media."
+            overlayLabel="Sankofa Harvest"
+            overlaySubline="Hibiscus · Ginger · Accra"
+          />
+        </div>
       </div>
     </section>
   )
@@ -89,8 +108,10 @@ export function LandingProcess() {
       <div className="process-copy">
         <p><span>✦</span> From intention to action</p>
         <h2>From “I need to…”<br />to “it’s ready.”</h2>
-        <Link href="/app">Start with your goal <span aria-hidden="true">↗</span></Link>
-        <p className="process-more"><Link href="/how-it-works">See how routing, approvals, credits and safety work ↗</Link></p>
+        <div className="process-actions">
+          <Link className="process-primary" href="/app">Start with your goal <span aria-hidden="true">↗</span></Link>
+          <Link className="process-detail" href="/how-it-works">See how routing, approvals, credits and safety work <span aria-hidden="true">↗</span></Link>
+        </div>
       </div>
       <ol className="process-list">
         <li><span>01</span><div><b>Bring the real goal</b><small>Say what you need in ordinary language. No model names or prompt formulas.</small></div></li>

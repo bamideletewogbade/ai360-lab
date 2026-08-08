@@ -121,18 +121,12 @@
 .secondary { display: inline-flex; min-height: 50px; align-items: center; gap: 14px; padding: 0 22px; border: 1px solid var(--line-dark); border-radius: 10px; background: transparent; color: var(--black); font-size: 14px; font-weight: 800; text-decoration: none; transition: border-color .2s, transform .25s var(--ease); }
 .secondary:hover { transform: translateY(-2px); border-color: var(--black); }
 
-.footer { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 24px; padding: 34px clamp(24px, 6vw, 96px); border-top: 1px solid var(--line); }
-.footer p { margin: 0; color: var(--grey); font-size: 14px; }
-.footer div { display: flex; flex-wrap: wrap; gap: 20px; }
-.footer a { color: var(--charcoal); font-size: 14px; text-decoration: none; }
-.footer a:hover { color: var(--black); }
 
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; }
   .scenarios, .darkGrid, .limits { grid-template-columns: 1fr; }
   .step { grid-template-columns: 54px 1fr; }
   .stepDetail { grid-column: 2; }
-  .footer { grid-template-columns: 1fr; }
   .campaignProof { grid-template-columns: 1fr; }
   .campaignProofImage { min-height: min(620px, 125vw); }
 }

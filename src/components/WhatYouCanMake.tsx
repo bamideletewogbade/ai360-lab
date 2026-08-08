@@ -277,7 +277,7 @@ export function WhatYouCanMake() {
         </div>
       </section>
 
-      <SiteFooter className={styles.footer} />
+      <SiteFooter />
     </main>
   )
 }

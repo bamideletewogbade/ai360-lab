@@ -173,7 +173,7 @@ export function PricingExperience() {
         </div>
       </section>
 
-      <SiteFooter className={styles.footer} showLogo />
+      <SiteFooter />
     </main>
   )
 }

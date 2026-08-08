@@ -12,7 +12,7 @@ export function LabLanding() {
       <LandingMission />
       <LandingOutcomes />
       <LandingProcess />
-      <SiteFooter className="landing-footer" showLogo />
+      <SiteFooter />
     </main>
   )
 }

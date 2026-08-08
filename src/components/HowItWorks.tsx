@@ -169,7 +169,7 @@ export function HowItWorks() {
         </div>
       </section>
 
-      <SiteFooter className={styles.footer} />
+      <SiteFooter />
     </main>
   )
 }

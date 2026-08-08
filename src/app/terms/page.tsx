@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { SiteNav } from '@/components/SiteNav'
+import { SiteFooter } from '@/components/SiteFooter'
 import styles from '../legal.module.css'
 
 export const metadata: Metadata = {
@@ -19,7 +20,7 @@ export default function TermsPage() {
 
           <section>
             <h2>Using AI 360 Lab</h2>
-            <p>AI 360 Lab is an experimental learning and productivity service from AI 360 and the Accra Innovation Center. You may use it for lawful personal, educational and business tasks, subject to the usage limits shown by the service.</p>
+            <p>AI 360 Lab is an experimental learning and productivity service from AI 360 and the Accra Innovation Centre. You may use it for lawful personal, educational and business tasks, subject to the usage limits shown by the service.</p>
           </section>
 
           <section>
@@ -50,6 +51,7 @@ export default function TermsPage() {
           </section>
         </article>
       </div>
+      <SiteFooter />
     </main>
   )
 }

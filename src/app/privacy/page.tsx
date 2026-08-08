@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { SiteNav } from '@/components/SiteNav'
+import { SiteFooter } from '@/components/SiteFooter'
 import styles from '../legal.module.css'
 
 export const metadata: Metadata = {
@@ -60,6 +61,7 @@ export default function PrivacyPage() {
           </section>
         </article>
       </div>
+      <SiteFooter />
     </main>
   )
 }
