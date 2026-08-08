@@ -280,6 +280,7 @@
   .landing-section-head { grid-template-columns: .7fr 1.3fr; }
   .landing-section-head > span { grid-column: 2; }
   .outcome-grid { grid-template-columns: repeat(2, 1fr); }
+  .landing-process { grid-template-columns: 1fr; gap: 55px; }
 }
 
 @media (max-width: 760px) {
@@ -322,7 +323,7 @@
   .landing-section-head > span { grid-column: auto; }
   .outcome-grid { grid-template-columns: 1fr; }
   .outcome-card { min-height: 235px; }
-  .landing-process { grid-template-columns: 1fr; gap: 55px; padding: 82px 16px; }
+  .landing-process { padding: 82px 16px; }
   .landing-footer { flex-wrap: wrap; gap: 12px 20px; padding: 24px 16px; }
   .landing-footer p { flex-basis: calc(100% - 140px); }
   .landing-footer div { width: 100%; margin: 0; padding-top: 15px; border-top: 1px solid var(--landing-line); }

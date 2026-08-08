@@ -846,6 +846,11 @@ button { color: inherit; }
   .brand-panel { position: static; }
 }
 @media (max-width: 590px) {
+  .lab-top { height: auto; min-height: 108px; flex-basis: auto; grid-template-columns: auto 1fr auto; grid-template-areas: 'identity spacer account' 'modes modes modes'; grid-template-rows: 42px 44px; gap: 4px 10px; padding: 8px 12px 10px; }
+  .lab-top-left { grid-area: identity; }
+  .lab-top-right { grid-area: account; }
+  .experience-switch { grid-area: modes; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+  .experience-switch button { justify-content: center; width: 100%; padding-inline: 6px; text-align: center; }
   .onboarding-backdrop { padding: 10px; }
   .onboarding-card { max-height: calc(100dvh - 20px); padding: 22px 18px; border-radius: 18px; }
   .onboarding-kicker { margin-top: 33px; }
@@ -862,7 +867,6 @@ button { color: inherit; }
   .auth-sign-in::before { content: '↗'; font-size: 13px; }
   .lab-brand span { display: none; }
   .experience-switch { margin-left: 0; }
-  .experience-switch button { padding-inline: 8px; }
   .experience-switch .mode-mark { display: none; }
   .experience-switch .mode-copy { display: block; }
   .capability-strip { grid-template-columns: 1fr; max-width: 360px; }

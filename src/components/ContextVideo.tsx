@@ -45,17 +45,12 @@ export function ContextVideo({ src, poster, title, caption, eyebrow = 'Studio ou
 
   useEffect(() => {
     const video = videoRef.current
-    if (!video || reducedMotion || !nearby) return
-    if (visible) void video.play().catch(() => undefined)
-    else video.pause()
-  }, [nearby, reducedMotion, visible])
+    if (!video) return
 
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video || !manualPlay) return
-    video.load()
-    void video.play().catch(() => undefined)
-  }, [manualPlay])
+    const shouldPlay = nearby && visible && (!reducedMotion || manualPlay)
+    if (shouldPlay) void video.play().catch(() => undefined)
+    else video.pause()
+  }, [manualPlay, nearby, reducedMotion, visible])
 
   function playWithIntent() {
     setManualPlay(true)

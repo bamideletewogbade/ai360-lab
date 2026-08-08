@@ -82,6 +82,15 @@
 .workflowDemo figcaption { grid-column: 1 / -1; margin-top: 20px; color: #aeb0b2; font-size: 12px; line-height: 1.55; text-align: center; }
 @keyframes workflow-signal { from { left: 0; opacity: 0; } 15%, 80% { opacity: 1; } to { left: 100%; opacity: 0; } }
 
+/* The five-column demo needs 920px before its own padding. Collapse it before
+   tablet page gutters force the decision card into an unreadable sliver. */
+@media (max-width: 1160px) {
+  .workflowDemo { grid-template-columns: 1fr; gap: 16px; }
+  .workflowRoute { width: 1px; height: 38px; justify-self: center; background: linear-gradient(#45484a, #f3f1eb, #45484a); }
+  .workflowRoute i { top: auto; left: -3px; animation-name: workflow-signal-mobile; }
+  .workflowDemo figcaption { margin-top: 3px; text-align: left; }
+}
+
 /* Inverted panel */
 .dark { padding: clamp(64px, 8vw, 112px) clamp(24px, 6vw, 96px); background: #171819; color: var(--warm-white); }
 .dark .sectionHead h2 { color: var(--warm-white); }
@@ -121,10 +130,6 @@
   .footer { grid-template-columns: 1fr; }
   .campaignProof { grid-template-columns: 1fr; }
   .campaignProofImage { min-height: min(620px, 125vw); }
-  .workflowDemo { grid-template-columns: 1fr; gap: 16px; }
-  .workflowRoute { width: 1px; height: 38px; justify-self: center; background: linear-gradient(#45484a, #f3f1eb, #45484a); }
-  .workflowRoute i { top: auto; left: -3px; animation-name: workflow-signal-mobile; }
-  .workflowDemo figcaption { margin-top: 3px; text-align: left; }
 }
 @keyframes workflow-signal-mobile { from { top: 0; opacity: 0; } 15%, 80% { opacity: 1; } to { top: 100%; opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .workflowRoute i { animation: none; opacity: .6; } }
