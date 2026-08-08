@@ -1,5 +1,5 @@
 ﻿import { checkoutRequestSchema } from '@/lib/billing/checkout-contract'
-import { findBillingPlan, planPrice } from '@/lib/billing/catalog'
+import { findBillingPlan } from '@/lib/billing/catalog'
 import { getOptionalAuthContext } from '@/lib/auth'
 import { isPostgresConfigured } from '@/lib/postgres'
 import { errorDetails, requestLogger } from '@/lib/observability'
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         error: 'Payments are not open yet.',
         status: 'pilot_waitlist',
         plan: plan.slug,
-        amountGhs: planPrice(plan, parsed.data.cadence),
+        amountGhs: plan.monthlyPriceGhs,
       }, { status: 503, headers: log.headers({ 'Cache-Control': 'no-store' }) })
     }
 

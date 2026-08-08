@@ -1,5 +1,5 @@
 export type PaymentMethod = 'mobile_money' | 'card'
-export type PaymentCadence = 'monthly' | 'annual'
+export type PaymentCadence = 'monthly'
 
 export type CreateCheckoutInput = {
   idempotencyKey: string

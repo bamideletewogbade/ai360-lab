@@ -1,20 +1,18 @@
-export type BillingCadence = 'monthly' | 'annual'
-
 export type BillingPlan = {
   slug: 'explorer' | 'everyday' | 'builder' | 'team'
   name: string
   eyebrow: string
   audience: string
   monthlyPriceGhs: number
-  annualMonthlyPriceGhs: number
   includedCredits: number
   featured?: boolean
+  assisted?: boolean
   workspace: 'personal' | 'organization'
   features: string[]
   templateExamples: string[]
 }
 
-export const BILLING_CATALOG_VERSION = 'pilot-2026-08-v2'
+export const BILLING_CATALOG_VERSION = 'pilot-2026-08-v3'
 
 export const BILLING_PLANS: BillingPlan[] = [
   {
@@ -23,7 +21,6 @@ export const BILLING_PLANS: BillingPlan[] = [
     eyebrow: 'Start free',
     audience: 'For trying AI360 and handling occasional everyday tasks.',
     monthlyPriceGhs: 0,
-    annualMonthlyPriceGhs: 0,
     includedCredits: 5,
     workspace: 'personal',
     features: ['Five work credits reset each month', 'Everyday chat and learning help', 'Local conversation history', 'Basic document and voice input'],
@@ -35,7 +32,6 @@ export const BILLING_PLANS: BillingPlan[] = [
     eyebrow: 'Made for Ghana',
     audience: 'For students, graduates, parents and professionals using AI each week.',
     monthlyPriceGhs: 125,
-    annualMonthlyPriceGhs: 105,
     includedCredits: 120,
     featured: true,
     workspace: 'personal',
@@ -47,8 +43,7 @@ export const BILLING_PLANS: BillingPlan[] = [
     name: 'Builder',
     eyebrow: 'Create and execute',
     audience: 'For people producing campaigns, proposals, research and digital assets.',
-    monthlyPriceGhs: 300,
-    annualMonthlyPriceGhs: 250,
+    monthlyPriceGhs: 350,
     includedCredits: 400,
     workspace: 'personal',
     features: ['Everything in Everyday', 'Full agent and Studio workflows', 'Image generation allowance', 'Brand guide and project memory', 'Priority production queue'],
@@ -59,9 +54,9 @@ export const BILLING_PLANS: BillingPlan[] = [
     name: 'Team',
     eyebrow: 'Shared outcomes',
     audience: 'For businesses, schools, NGOs, programmes and public-service teams.',
-    monthlyPriceGhs: 900,
-    annualMonthlyPriceGhs: 750,
+    monthlyPriceGhs: 1_200,
     includedCredits: 1_400,
+    assisted: true,
     workspace: 'organization',
     features: ['Five members included', 'Shared projects and credit pool', 'Roles, approvals and usage controls', 'Organization agent templates', 'Reporting and priority support'],
     templateExamples: ['NGO proposal', 'Policy brief', 'Community outreach'],
@@ -84,8 +79,4 @@ export const CREDIT_GUIDE = [
 
 export function findBillingPlan(slug: string) {
   return BILLING_PLANS.find((plan) => plan.slug === slug)
-}
-
-export function planPrice(plan: BillingPlan, cadence: BillingCadence) {
-  return cadence === 'annual' ? plan.annualMonthlyPriceGhs : plan.monthlyPriceGhs
 }

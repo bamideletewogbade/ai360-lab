@@ -1,8 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
-import { BILLING_PLANS, CREDIT_GUIDE, CREDIT_TOP_UPS, planPrice, type BillingCadence } from '@/lib/billing/catalog'
+import { BILLING_PLANS, CREDIT_GUIDE, CREDIT_TOP_UPS } from '@/lib/billing/catalog'
 import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
 import styles from '@/app/pricing/pricing.module.css'
@@ -17,8 +16,6 @@ const TEMPLATE_GROUPS = [
 const BILLING_ENABLED = process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true'
 
 export function PricingExperience() {
-  const [cadence, setCadence] = useState<BillingCadence>('monthly')
-
   return (
     <main className={styles.shell}>
       <SiteNav current="pricing" />
@@ -70,37 +67,44 @@ export function PricingExperience() {
       <section className={styles.pricingSection} aria-labelledby="plans-title">
         <div className={styles.sectionHead}>
           <div><p>AI360 plans</p><h2 id="plans-title">Choose the pace that fits.</h2></div>
-          <div className={styles.cadence} role="group" aria-label="Billing period">
-            <button className={cadence === 'monthly' ? styles.active : ''} onClick={() => setCadence('monthly')}>Monthly</button>
-            <button className={cadence === 'annual' ? styles.active : ''} onClick={() => setCadence('annual')}>Annual <span>save up to 17%</span></button>
+          <div className={styles.pricingDecision}>
+            <span>Monthly pilot</span>
+            <p>One clear price. Annual billing opens only after renewal and refund operations are proven.</p>
           </div>
         </div>
 
         <div className={styles.planGrid}>
           {BILLING_PLANS.map((plan) => {
-            const price = planPrice(plan, cadence)
+            const price = plan.monthlyPriceGhs
             const paid = price > 0
+            const signupHref = `/sign-up?plan=${plan.slug}&cadence=monthly`
             return (
               <article className={`${styles.plan} ${plan.featured ? styles.featured : ''}`} key={plan.slug}>
                 {plan.featured && <span className={styles.recommended}>Best place to begin</span>}
                 <p className={styles.planEyebrow}>{plan.eyebrow}</p>
                 <h3>{plan.name}</h3>
                 <p className={styles.audience}>{plan.audience}</p>
-                <div className={styles.price}><span>GH₵</span><b>{price}</b><small>{paid ? '/ month' : 'forever'}</small></div>
-                {cadence === 'annual' && paid ? <p className={styles.billingNote}>GH₵{price * 12} billed yearly</p> : <p className={styles.billingNote}>Pay month to month</p>}
+                <div className={styles.price}><span>GH₵</span><b>{price.toLocaleString()}</b><small>{paid ? '/ month' : 'forever'}</small></div>
+                <p className={styles.billingNote}>{plan.assisted ? 'Five people included · assisted pilot' : paid ? 'Monthly pilot · no annual commitment' : 'No payment method required'}</p>
                 <div className={styles.creditLine}><span>{plan.includedCredits.toLocaleString()}</span><span>{plan.slug === 'explorer' ? 'free credits, reset monthly' : 'work credits included monthly'}</span></div>
                 <ul>{plan.features.map((feature) => <li key={feature}><span>✓</span>{feature}</li>)}</ul>
                 <div className={styles.templates}><small>Example templates</small><p>{plan.templateExamples.join(' · ')}</p></div>
-                <Link href={paid ? `/sign-up?plan=${plan.slug}&cadence=${cadence}` : '/app'} className={paid ? styles.choose : styles.start}>
-                  {paid ? (BILLING_ENABLED ? `Choose ${plan.name}` : `Join the ${plan.name} pilot`) : 'Start free'} <span>↗</span>
-                </Link>
+                {plan.assisted ? (
+                  <a href="mailto:info@accrainnovationcentre.com?subject=AI360%20Team%20pilot" className={styles.choose}>
+                    Request Team pilot <span>↗</span>
+                  </a>
+                ) : (
+                  <Link href={paid ? signupHref : '/app'} className={paid ? styles.choose : styles.start}>
+                    {paid ? (BILLING_ENABLED ? `Choose ${plan.name}` : `Join the ${plan.name} pilot`) : 'Start free'} <span>↗</span>
+                  </Link>
+                )}
               </article>
             )
           })}
         </div>
         <p className={styles.pilotNote}>{BILLING_ENABLED
-          ? 'Prices are shown in Ghana cedis. Before payment, you will see the full amount due today, billing period, renewal terms and any applicable taxes or fees.'
-          : 'Paid checkout is not open yet. Joining a paid-plan pilot does not charge you; payment will only open after the provider and webhook flow pass verification.'}</p>
+          ? 'Prices are monthly and shown in Ghana cedis. Before payment, you will see the full amount due today, renewal terms and any applicable taxes or fees. Team onboarding is assisted during the pilot.'
+          : 'Paid checkout is not open yet. Joining a paid-plan pilot does not charge you; payment will only open after the payment and reconciliation flow passes verification. Team onboarding is assisted.'}</p>
       </section>
 
       <section className={styles.creditSection}>
@@ -150,7 +154,7 @@ export function PricingExperience() {
           <div className={styles.reviewTop}><span>CHECKOUT PREVIEW</span><b>Clear before confirmation</b></div>
           <dl>
             <div><dt>Due today</dt><dd>Plan price plus clearly listed tax or fees</dd></div>
-            <div><dt>Billing</dt><dd>Monthly or annual, with the next renewal date</dd></div>
+            <div><dt>Billing</dt><dd>Monthly during the pilot, with the next renewal date</dd></div>
             <div><dt>Included</dt><dd>Your plan features and monthly work credits</dd></div>
             <div><dt>Credits</dt><dd>Reset, rollover and top-up rules shown plainly</dd></div>
             <div><dt>Payment</dt><dd>Your selected Mobile Money wallet or card</dd></div>
@@ -166,6 +170,7 @@ export function PricingExperience() {
           <details><summary>Why not promise unlimited AI?<span>+</span></summary><p>Model, research, image and video costs vary. An allowance keeps entry prices low and prevents one unusually expensive workflow from raising prices for everyone.</p></details>
           <details><summary>Will Mobile Money renew automatically?<span>+</span></summary><p>Checkout will say clearly whether your payment can renew automatically. If your wallet requires approval for each payment, AI360 will remind you and you will confirm the renewal yourself.</p></details>
           <details><summary>Will I see the complete price before paying?<span>+</span></summary><p>Yes. The final review shows the amount due today, billing period, renewal date and any applicable tax or payment fee before you confirm.</p></details>
+          <details><summary>Can I pay annually?<span>+</span></summary><p>Not during the first pilot. AI360 will prove monthly renewals, reversals and refunds before asking anyone to make a longer commitment.</p></details>
           <details><summary>Can I cancel or change my plan?<span>+</span></summary><p>Yes. The account area will show your current plan, next renewal and cancellation options. Changing or cancelling a plan will not create a surprise charge.</p></details>
           <details><summary>Can a student or programme receive a discount?<span>+</span></summary><p>Yes. Sponsored seats and verified education or community programmes should receive controlled allowances rather than a permanent blanket discount with no funding source.</p></details>
           <details><summary>Do the five free credits roll over?<span>+</span></summary><p>No. They reset on the first day of each month and unused free credits expire. This keeps the free tier generous enough to test real work without creating an open-ended cost.</p></details>

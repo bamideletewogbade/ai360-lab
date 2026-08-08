@@ -9,6 +9,28 @@ the layer-by-layer architecture remain in this log and `SYSTEM_ARCHITECTURE.md`.
 
 ---
 
+## 2026-08-08 · Decision · Public pricing is a monthly, research-calibrated pilot
+
+Explorer remains GH₵0 for 5 credits and Everyday remains GH₵125 for 120.
+Builder is GH₵350 for 400 credits. Team is GH₵1,200 for 1,400 shared credits,
+five people and assisted onboarding.
+
+**Why.** Everyday preserves the accessible Ghana-first entry point. The higher
+Builder and Team prices reduce their full-utilisation AI cost shares from 34.7%
+and 40.4% to 29.7% and 30.3%, while keeping enough credits to complete a useful
+project. Assisted Team onboarding lets us learn procurement, controls and
+support load before promising self-serve operation.
+
+**Operational boundary.** Annual purchasing is not accepted by the page or the
+checkout contract. It can return only after monthly renewal, reversal, refund
+and reconciliation flows are proven with real cohorts.
+
+**Revisit if.** Four weeks of cohort data shows activation, paid utilisation,
+contribution margin or willingness to pay outside the ranges in
+`PRICING_STRATEGY.md`.
+
+---
+
 ## 2026-08-05 · Incident · Chat could not answer a single message
 
 **What happened.** Every `/api/chat` request returned "The Lab could not reach
@@ -504,6 +526,6 @@ and the 25% cost target.
 **Why.** Otherwise nobody can say whether a plan makes money. Recorded in
 `PRICING_STRATEGY.md` with the working.
 
-**Known breach.** Builder and Team exceed the 25% target at full utilisation
-(34.7% and 40.4%). A test pins this so it cannot drift further unnoticed. The
-position needs a deliberate decision.
+**Superseded 2026-08-08.** Builder and Team exceeded the 25% target at full
+utilisation (34.7% and 40.4%). The research-calibrated v3 catalog reduced those
+shares to 29.7% and 30.3%; see the newer decision above.

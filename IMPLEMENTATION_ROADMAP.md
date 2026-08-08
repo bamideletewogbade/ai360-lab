@@ -293,7 +293,7 @@ Only after this passes should Studio persistence and the coordinator runtime be 
 | 2026-08-01 | Bounded coordinator selected | Better cost control, observability and evaluation than an immediate large swarm |
 | 2026-08-01 | First specialist team selected | Researcher, Strategist and Verifier cover evidence, decisions and quality control |
 | 2026-08-01 | Workspace ownership foundation implemented | Server-derived personal and organization keys now scope conversation persistence |
-| 2026-08-03 | Ghana-first hybrid pricing revised | GH₵0 Explorer, GH₵125 Everyday, GH₵300 Builder and GH₵900 Team protect accessibility without hiding the real cost of agent and media work |
+| 2026-08-08 | Research-calibrated monthly pilot pricing adopted | GH₵0 Explorer, GH₵125 Everyday, GH₵350 Builder and GH₵1,200 assisted Team balance accessible entry with safer upper-plan economics; annual purchasing waits for proven renewal and refund operations |
 | 2026-08-03 | MojoPay selected behind an adapter | Mobile Money should lead checkout, while AI360 retains provider-neutral billing and entitlement records |
 | 2026-08-04 | Clerk + Supabase production boundary selected | Clerk owns identity; portable Postgres, RLS and Storage provide the durable data plane |
 | 2026-08-04 | Production preflight and readiness endpoint added | Releases must expose missing dependencies instead of silently degrading |

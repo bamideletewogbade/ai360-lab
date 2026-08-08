@@ -5,7 +5,7 @@ const paidPlanSlugs = BILLING_PLANS.filter((plan) => plan.monthlyPriceGhs > 0).m
 
 export const checkoutRequestSchema = z.object({
   plan: z.enum(paidPlanSlugs as [typeof paidPlanSlugs[number], ...typeof paidPlanSlugs]),
-  cadence: z.enum(['monthly', 'annual']).default('monthly'),
+  cadence: z.literal('monthly').default('monthly'),
   paymentMethod: z.enum(['mobile_money', 'card']).default('mobile_money'),
   returnUrl: z.string().url().optional(),
 })

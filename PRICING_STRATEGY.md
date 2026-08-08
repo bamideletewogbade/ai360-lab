@@ -1,6 +1,6 @@
 # AI360 pricing strategy
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-08
 
 This is the internal commercial rationale behind the public pricing page. The
 public page should stay clear and customer-centred; provider costs, margins and
@@ -14,12 +14,15 @@ Keep the four-tier pilot catalog while measuring real usage:
 | --- | ---: | ---: | --- |
 | Explorer | GH₵0 | 5 | Experience one useful outcome without a card |
 | Everyday | GH₵125 | 120 | Weekly learning, writing, research and career work |
-| Builder | GH₵300 | 400 | Recurring agent, campaign and creative production |
-| Team | GH₵900 | 1,400 | Five-person shared work with controls and reporting |
+| Builder | GH₵350 | 400 | Recurring agent, campaign and creative production |
+| Team | GH₵1,200 | 1,400 | Five-person shared work with controls, reporting and assisted onboarding |
 
 These prices are a pilot hypothesis, not a permanent promise. Do not change the
 catalog from competitor screenshots or intuition alone. Reprice after at least
 four weeks of observed activation, cost, retention and willingness-to-pay data.
+All public plans are monthly during the first pilot. Annual purchasing remains
+unavailable until renewal, reversal and refund operations are proven with real
+monthly cohorts.
 
 ## Why this model can work
 
@@ -73,7 +76,7 @@ four weeks of observed activation, cost, retention and willingness-to-pay data.
 | Five free monthly credits | Removes payment friction and proves value | Reset monthly; no rollover or expensive video on the free grant |
 | Subscription allowance | Predictable revenue and predictable customer capacity | No silent individual overage |
 | One-time top-ups | Supports irregular Ghanaian cash flow and project bursts | Paid credits expire only after a clearly published period |
-| Annual discount | Improves cash flow and retention | Show the full annual charge, not only its monthly equivalent |
+| Monthly-only pilot | Makes the first commitment smaller and exposes renewal failures early | Add annual purchasing only after renewal, reversal and refund operations pass |
 | Team pool | Fits schools, NGOs, programmes and businesses | Per-member caps, roles and auditable use |
 | Sponsored seats | Extends access to learners and communities | A named sponsor funds a bounded allowance |
 
@@ -121,15 +124,15 @@ Measured at full utilisation of the included allowance:
 | --- | ---: | ---: | --- |
 | Explorer | GH₵1.30 | acquisition cost | n/a |
 | Everyday | GH₵31.20 | 25.0% | yes |
-| Builder | GH₵104.00 | 34.7% | **no** |
-| Team | GH₵364.00 | 40.4% | **no** |
+| Builder | GH₵104.00 | 29.7% | **no** |
+| Team | GH₵364.00 | 30.3% | **no** |
 
-Builder and Team are still profitable in absolute terms, and low utilisation may
-well keep them comfortable in practice. But both sit outside the guardrail this
-document sets, so the position must be a deliberate choice: either accept a
-higher cost ratio on the upper plans and say so here, or reduce the allowance to
-320 and 865 credits respectively. A test pins the current expectation, so an
-allowance cannot drift across the line unnoticed.
+Builder and Team remain outside the 25% target at full utilisation, but the
+research-calibrated prices narrow both breaches to roughly 30% while preserving
+allowances that can produce a complete outcome. Treat them as bounded cohort
+tests: inspect median and p90 cost, support load and willingness to pay before
+changing either the price or allowance. Team is assisted during the pilot so
+its operational cost and buying process are learned before self-serve checkout.
 
 Free credits are not free to AI360. Every Explorer account carries GH₵1.30 of
 monthly cost, so a thousand dormant free accounts is GH₵1,300 a month. Expire
