@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import { ContextVideo } from '@/components/ContextVideo'
 import { BRAND, workspaceHref } from '@/lib/brand'
 
 const OUTCOMES = [
@@ -59,6 +60,24 @@ export function LandingOutcomes() {
             <i aria-hidden="true">↗</i>
           </Link>
         ))}
+      </div>
+      <div className="launch-proof">
+        <div className="launch-proof-copy">
+          <p><span>✦</span> Create and launch</p>
+          <h3>A direction you approve.<br />An outcome people can see.</h3>
+          <p>Studio turns one business goal into a brand direction, campaign and coordinated assets. This four-second social reel is the kind of finished output—not a stock placeholder—you can create after reviewing the plan and accepting the quoted cost.</p>
+          <Link href={workspaceHref('Create a brand and launch campaign for this idea: ', 'studio')}>Build a campaign in Studio <span aria-hidden="true">↗</span></Link>
+        </div>
+        <ContextVideo
+          className="launch-proof-video"
+          src="/studio-outcome-reel.mp4"
+          poster="/studio-outcome-reel-poster.webp"
+          eyebrow="Generated campaign example"
+          title="Sankofa Harvest launch reel"
+          caption="One approved scene, rendered as a silent vertical clip for social media."
+          overlayLabel="Sankofa Harvest"
+          overlaySubline="Hibiscus · Ginger · Accra"
+        />
       </div>
     </section>
   )

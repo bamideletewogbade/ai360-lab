@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import Image from 'next/image'
 import { ResponseContent } from '@/components/ResponseContent'
 import { mergeProjects, setProjectArchived, sortProjects, upsertProject } from '@/lib/studio-projects'
 import { scopedStorageKey } from '@/lib/workspace'
@@ -1034,6 +1035,23 @@ export function StudioWorkspace({
               <button onClick={() => beginProject()}>Build my first project <span>→</span></button>
             </section>
           )}
+
+          <section className="studio-transformation" aria-labelledby="studio-transformation-title">
+            <div className="transformation-copy">
+              <span className="studio-kicker">Before → after · A real creative transformation</span>
+              <h2 id="studio-transformation-title">The brief stays visible.<br />The output becomes tangible.</h2>
+              <p>Studio does not hide the leap between your idea and the finished asset. Review the thinking, change the direction and approve it before production.</p>
+              <div className="transformation-brief">
+                <span>Before · Business goal</span>
+                <blockquote>“Launch a modern hibiscus and ginger drink for busy people in Accra.”</blockquote>
+                <small>Audience · Offer · Voice · Channel</small>
+              </div>
+            </div>
+            <figure className="transformation-output">
+              <Image src="/studio-campaign-output.webp" alt="After: a polished campaign image for a hibiscus and ginger drink" fill sizes="(max-width: 820px) 100vw, 38vw" />
+              <figcaption><span>After · Approved campaign direction</span><b>Warm, grounded and ready to adapt</b></figcaption>
+            </figure>
+          </section>
 
           <section className="studio-project-library">
             <div className="studio-section-head">

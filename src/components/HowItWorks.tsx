@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
+import { WorkflowDemo } from '@/components/WorkflowDemo'
 import styles from '@/app/marketing.module.css'
 
 const STEPS = [
@@ -100,6 +101,7 @@ export function HowItWorks() {
           <h2>Four steps, no jargon.</h2>
           <p>The same shape whether you are asking a question, researching a decision or producing a campaign.</p>
         </div>
+        <WorkflowDemo />
         <div className={styles.steps}>
           {STEPS.map((step) => (
             <article className={styles.step} key={step.mark}>

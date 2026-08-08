@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useState } from 'react'
 import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
@@ -222,6 +223,24 @@ export function WhatYouCanMake() {
             </article>
           ))}
         </div>
+
+        <article className={styles.campaignProof}>
+          <div className={styles.campaignProofCopy}>
+            <span>Generated campaign example · Sankofa Harvest</span>
+            <h3>From “launch this drink” to a creative direction a customer can recognise.</h3>
+            <p>This is not decoration. It shows the visual standard behind “make a campaign graphic”: a specific product, art direction and format shaped from the approved brand—not an unrelated stock image.</p>
+            <dl>
+              <div><dt>Brief</dt><dd>Modern hibiscus and ginger drink for busy people in Accra</dd></div>
+              <div><dt>Direction</dt><dd>Warm, grounded, unmistakably local; premium without becoming distant</dd></div>
+              <div><dt>Output</dt><dd>Original 4:5 campaign image, ready for copy and channel adaptations</dd></div>
+            </dl>
+            <Link href="/app?mode=studio&draft=1&prompt=Help%20me%20create%20a%20campaign%20for%20this%20business%3A%20" className={styles.secondary}>Create your campaign</Link>
+          </div>
+          <div className={styles.campaignProofImage}>
+            <Image src="/studio-campaign-output.webp" alt="Generated campaign photograph of a chilled hibiscus and ginger drink on terracotta stone" fill sizes="(max-width: 900px) 100vw, 42vw" />
+            <span>Generated in Studio</span>
+          </div>
+        </article>
       </section>
 
       <section className={styles.dark}>

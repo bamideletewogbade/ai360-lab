@@ -622,6 +622,18 @@ button { color: inherit; }
 .studio-empty-projects h2 { margin: 0; font-family: var(--font-heading); font-size: clamp(28px, 3vw, 42px); letter-spacing: -.045em; }
 .studio-empty-projects p { max-width: 650px; margin: 10px 0 0; color: var(--grey); font-size: 11px; line-height: 1.6; }
 .studio-empty-projects > button { position: relative; z-index: 1; }
+.studio-transformation { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, .72fr); gap: clamp(32px, 5vw, 72px); align-items: center; overflow: hidden; margin: 34px 0; border: 1px solid #d8d3ca; border-radius: 24px; background: #171819; color: #f7f6f2; }
+.transformation-copy { padding: clamp(30px, 4vw, 58px); }
+.transformation-copy h2 { margin: 16px 0 18px; font-family: var(--font-heading); font-size: clamp(31px, 3.5vw, 50px); line-height: 1; letter-spacing: -.05em; }
+.transformation-copy > p { max-width: 600px; margin: 0; color: #b8babd; font-size: 12px; line-height: 1.68; }
+.transformation-brief { margin-top: 27px; padding: 18px; border: 1px solid #45484a; border-radius: 14px; background: #222426; }
+.transformation-brief > span, .transformation-output figcaption span { color: #949799; font-size: 9px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
+.transformation-brief blockquote { margin: 12px 0; font-family: var(--font-heading); font-size: 17px; line-height: 1.4; }
+.transformation-brief small { color: #85888a; font-size: 9px; letter-spacing: .08em; }
+.transformation-output { position: relative; align-self: stretch; min-height: 520px; margin: 0; }
+.transformation-output img { object-fit: cover; }
+.transformation-output figcaption { position: absolute; right: 16px; bottom: 16px; left: 16px; display: grid; gap: 5px; border: 1px solid rgba(255,255,255,.22); border-radius: 13px; background: rgba(16,17,18,.8); padding: 14px; backdrop-filter: blur(12px); }
+.transformation-output figcaption b { font-family: var(--font-heading); font-size: 15px; }
 .studio-project-library { margin-top: 35px; }
 .studio-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 13px; padding: 0 3px; }
 .studio-section-head b, .studio-section-head small { display: block; }
@@ -825,6 +837,8 @@ button { color: inherit; }
   .project-pulse { min-height: 220px; border-top: 1px solid rgba(255,255,255,.12); border-left: 0; }
   .studio-empty-projects { grid-template-columns: 100px 1fr; }
   .studio-empty-projects > button { grid-column: 2; justify-self: start; }
+  .studio-transformation { grid-template-columns: 1fr; }
+  .transformation-output { min-height: min(620px, 120vw); }
   .studio-project { width: min(100% - 28px, 760px); padding-top: 24px; }
   .project-head { align-items: flex-start; flex-direction: column; }
   .project-head-actions { justify-content: flex-start; }
