@@ -325,6 +325,12 @@ npm run media:verify
 npm run domains:verify
 ```
 
+Run against the deployed staging or production candidate:
+
+```bash
+npm run smoke:deploy -- https://deployment.example
+```
+
 Some checks require live credentials and must report that limitation rather
 than being described as passing. After deployment:
 
@@ -339,6 +345,10 @@ than being described as passing. After deployment:
 Follow [`HOSTINGER_DEPLOYMENT.md`](HOSTINGER_DEPLOYMENT.md) for the production
 procedure. Health proves the process is alive; readiness proves dependencies
 are usable.
+
+Use [`STAGING_RELEASE_CHECKLIST.md`](STAGING_RELEASE_CHECKLIST.md) for promotion
+and [`ROLLBACK_AND_RESTORE.md`](ROLLBACK_AND_RESTORE.md) before changing a live
+database connection or reversing an application release.
 
 ## 10. Security and operational rules
 

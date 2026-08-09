@@ -17,12 +17,21 @@ import {
 import type { PackEvent } from '@/lib/studio/coordinator'
 import { scopedStorageKey } from '@/lib/workspace'
 import { newerDraft, studioDraftSchema, type StudioDraft, type StudioBriefTurn } from '@/lib/studio-draft'
+import {
+  defaultMediaIntent,
+  MEDIA_CHANNELS,
+  mediaIntentSummary,
+  type MediaChannel,
+  type MediaIntent,
+} from '@/lib/media/intent'
 
 type GeneratedMedia = {
   kind: 'image' | 'video'
   status: 'generating' | 'pending' | 'in_progress' | 'completed' | 'failed'
   url?: string
   token?: string
+  jobId?: string
+  assetId?: string
   costUsd?: number
   model?: string
   error?: string
@@ -32,7 +41,10 @@ type ExecutionApproval = {
   asset: StudioAsset
   kind: 'logo' | 'social' | 'flyer' | 'video'
   estimatedCostUsd: number
+  estimatedCredits: number
   estimateLabel: string
+  intent: MediaIntent
+  quoteValid: boolean
 }
 
 type StudioView = 'dashboard' | 'kickoff' | 'project'
@@ -245,6 +257,7 @@ export function StudioWorkspace({
   const [mediaBusy, setMediaBusy] = useState('')
   const [generatedMedia, setGeneratedMedia] = useState<Record<string, GeneratedMedia>>({})
   const [executionApproval, setExecutionApproval] = useState<ExecutionApproval | null>(null)
+  const [mediaQuoteBusy, setMediaQuoteBusy] = useState(false)
   const [buildingProject, setBuildingProject] = useState(false)
   const [buildComplete, setBuildComplete] = useState(false)
   const [buildElapsed, setBuildElapsed] = useState(0)
@@ -259,6 +272,7 @@ export function StudioWorkspace({
   const [draftId, setDraftId] = useState('')
   const [draftCloudLoaded, setDraftCloudLoaded] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
+  const pollVideoRef = useRef<(assetId: string, token: string, jobId?: string) => Promise<void>>(async () => undefined)
   const loadedWorkspaceRef = useRef('')
   const projectStorageKey = scopedStorageKey(STORAGE_KEY, workspaceScope)
   const viewStorageKey = scopedStorageKey(VIEW_KEY, workspaceScope)
@@ -405,6 +419,41 @@ export function StudioWorkspace({
     if (!project || loadedWorkspaceRef.current !== workspaceScope) return
     setProjects((current) => upsertProject(current, project))
   }, [project, workspaceScope])
+
+  useEffect(() => {
+    if (!project || !signedIn) return
+    let cancelled = false
+    fetch(`/api/studio/media?projectId=${encodeURIComponent(project.id)}`)
+      .then(async (response) => response.ok ? response.json() : { jobs: [] })
+      .then(({ jobs }) => {
+        if (cancelled || !Array.isArray(jobs)) return
+        const restored: Record<string, GeneratedMedia> = {}
+        for (const job of jobs) {
+          if (!job?.projectAssetId || restored[job.projectAssetId]) continue
+          const status = job.status === 'running' || job.status === 'submitted' || job.status === 'queued'
+            ? job.status === 'running' ? 'in_progress' : 'pending'
+            : job.status
+          restored[job.projectAssetId] = {
+            kind: job.mediaType,
+            status,
+            jobId: job.id,
+            assetId: job.outputAssetId || undefined,
+            url: job.outputAssetId ? `/api/studio/media?assetId=${encodeURIComponent(job.outputAssetId)}` : undefined,
+            costUsd: job.actualCostUsd ?? job.quotedCostUsd ?? undefined,
+            model: job.model || undefined,
+            error: job.errorMessage || undefined,
+          }
+          if ((status === 'pending' || status === 'in_progress') && job.mediaType === 'video') {
+            window.setTimeout(() => void pollVideoRef.current(job.projectAssetId, '', job.id), 1_000)
+          }
+        }
+        setGeneratedMedia(restored)
+      })
+      .catch(() => undefined)
+    return () => { cancelled = true }
+  // pollVideo is deliberately reached only after a persisted job is restored.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, signedIn])
 
   useEffect(() => {
     if (!hydrated || !signedIn || loadedWorkspaceRef.current !== workspaceScope) {
@@ -688,6 +737,12 @@ export function StudioWorkspace({
       return
     }
     setError('')
+    const intent = defaultMediaIntent({
+      mediaType: asset.type === 'video' ? 'video' : 'image',
+      purpose: asset.purpose || asset.title,
+      assetType: asset.type,
+      projectChannels: project?.campaign.channels,
+    })
     if (asset.type === 'video') {
       setMediaBusy(asset.id)
       const id = requestId()
@@ -695,7 +750,7 @@ export function StudioWorkspace({
         const response = await fetch('/api/studio/video', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
-          body: JSON.stringify({ action: 'quote' }),
+          body: JSON.stringify({ action: 'quote', intent }),
         })
         const data = await response.json().catch(() => ({}))
         if (!response.ok || typeof data.costUsd !== 'number') {
@@ -706,7 +761,10 @@ export function StudioWorkspace({
           asset,
           kind: 'video',
           estimatedCostUsd: data.costUsd,
-          estimateLabel: `${data.duration}-second ${data.aspectRatio} ${data.resolution} video without audio`,
+          estimatedCredits: data.credits || 16,
+          estimateLabel: mediaIntentSummary(intent),
+          intent,
+          quoteValid: true,
         })
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'The current video price is unavailable.')
@@ -720,8 +778,37 @@ export function StudioWorkspace({
         asset,
         kind: asset.type,
         estimatedCostUsd: 0.05,
-        estimateLabel: 'one low-quality draft image, billed at actual provider usage',
+        estimatedCredits: 4,
+        estimateLabel: mediaIntentSummary(intent),
+        intent,
+        quoteValid: true,
       })
+    }
+  }
+
+  async function updateExecutionIntent(patch: Partial<MediaIntent>) {
+    if (!executionApproval) return
+    const current = executionApproval
+    const nextIntent = { ...current.intent, ...patch }
+    setExecutionApproval({ ...current, intent: nextIntent, estimateLabel: mediaIntentSummary(nextIntent), quoteValid: current.kind !== 'video' })
+    if (current.kind !== 'video') return
+    setMediaQuoteBusy(true)
+    const id = requestId()
+    try {
+      const response = await fetch('/api/studio/video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
+        body: JSON.stringify({ action: 'quote', intent: nextIntent }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || typeof data.costUsd !== 'number') throw new Error(data.error || 'This combination is unavailable.')
+      setExecutionApproval((latest) => latest && latest.asset.id === current.asset.id && latest.intent === nextIntent
+        ? { ...latest, estimatedCostUsd: data.costUsd, estimatedCredits: data.credits || latest.estimatedCredits, quoteValid: true }
+        : latest)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'This video combination is unavailable.')
+    } finally {
+      setMediaQuoteBusy(false)
     }
   }
 
@@ -745,7 +832,10 @@ export function StudioWorkspace({
             action: 'submit',
             approved: true,
             acceptedCostUsd: approval.estimatedCostUsd,
+            projectId: project.id,
+            intent: approval.intent,
             businessName: project.intake.businessName,
+            location: project.intake.location,
             brand: project.brand,
             campaign: project.campaign,
             asset: approval.asset,
@@ -762,11 +852,12 @@ export function StudioWorkspace({
             kind: 'video',
             status: data.status || 'pending',
             token: data.token,
+            jobId: data.jobId,
             costUsd: data.estimatedCostUsd,
             model: data.model,
           },
         }))
-        window.setTimeout(() => pollVideo(approval.asset.id, data.token), 30_000)
+        window.setTimeout(() => pollVideo(approval.asset.id, data.token, data.jobId), 30_000)
       } else {
         setGeneratedMedia((current) => ({
           ...current,
@@ -778,6 +869,8 @@ export function StudioWorkspace({
           body: JSON.stringify({
             approved: true,
             kind: approval.kind,
+            projectId: project.id,
+            intent: approval.intent,
             businessName: project.intake.businessName,
             brand: project.brand,
             campaign: project.campaign,
@@ -795,6 +888,8 @@ export function StudioWorkspace({
             kind: 'image',
             status: 'completed',
             url: data.image,
+            jobId: data.jobId,
+            assetId: data.assetId,
             costUsd: data.costUsd,
             model: data.model,
           },
@@ -816,13 +911,13 @@ export function StudioWorkspace({
     }
   }
 
-  async function pollVideo(assetId: string, token: string) {
+  async function pollVideo(assetId: string, token: string, jobId?: string) {
     const id = requestId()
     try {
       const response = await fetch('/api/studio/video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
-        body: JSON.stringify({ action: 'status', token }),
+        body: JSON.stringify({ action: 'status', token, jobId }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error || 'Video status could not be checked.')
@@ -834,13 +929,15 @@ export function StudioWorkspace({
           kind: 'video',
           status,
           token,
+          jobId: data.jobId || jobId,
+          assetId: data.assetId,
           url: data.downloadUrl,
           costUsd: data.costUsd ?? current[assetId]?.costUsd,
           error: data.error,
         },
       }))
       if (status === 'pending' || status === 'in_progress') {
-        window.setTimeout(() => pollVideo(assetId, token), 30_000)
+        window.setTimeout(() => pollVideo(assetId, token, data.jobId || jobId), 30_000)
       }
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Video status could not be checked.'
@@ -851,6 +948,10 @@ export function StudioWorkspace({
       setError(message)
     }
   }
+
+  useEffect(() => {
+    pollVideoRef.current = pollVideo
+  })
 
   async function shareAsset(asset: StudioAsset) {
     if (asset.status !== 'approved') {
@@ -1337,7 +1438,7 @@ export function StudioWorkspace({
                             )}
                             {media.status === 'completed' && media.url ? (
                               <div className="media-meta">
-                                <span>Download now. Generated files are not saved to this browser automatically.{typeof media.costUsd === 'number' ? ` Actual cost: $${media.costUsd.toFixed(3)}.` : ''}</span>
+                                <span>{media.assetId ? 'Saved to this project and ready on your other devices.' : 'Download this copy now.'}{typeof media.costUsd === 'number' ? ` Actual cost: $${media.costUsd.toFixed(3)}.` : ''}</span>
                                 <button onClick={() => downloadGenerated(asset, media)}>Download {media.kind === 'video' ? 'MP4' : 'PNG'}</button>
                               </div>
                             ) : null}
@@ -1445,20 +1546,90 @@ export function StudioWorkspace({
             <span className="studio-kicker">Final approval</span>
             <h2 id="execution-title">Produce {executionApproval.asset.title}?</h2>
             <p>
-              Studio will send the approved creative direction and brand details to the media provider.
-              This action uses your OpenRouter credits.
+              AI360 has prepared sensible choices from your project. Adjust only what matters, then approve the cost.
             </p>
+            <div className="media-setup-grid">
+              <label>
+                <span>Where will it appear?</span>
+                <select
+                  value={executionApproval.intent.channel}
+                  onChange={(event) => {
+                    const channel = event.target.value as MediaChannel
+                    const aspectRatio = channel === 'auto'
+                      ? executionApproval.intent.aspectRatio
+                      : MEDIA_CHANNELS[channel].aspectRatio
+                    void updateExecutionIntent({ channel, aspectRatio })
+                  }}
+                >
+                  {Object.entries(MEDIA_CHANNELS)
+                    .filter(([key]) => executionApproval.kind !== 'video' || key !== 'print')
+                    .map(([key, option]) => <option value={key} key={key}>{option.label}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Quality</span>
+                <select value={executionApproval.intent.qualityTier} onChange={(event) => void updateExecutionIntent({ qualityTier: event.target.value as MediaIntent['qualityTier'] })}>
+                  <option value="draft">Draft, lowest cost</option>
+                  <option value="standard">Standard</option>
+                  <option value="premium">Best available</option>
+                </select>
+              </label>
+              <label>
+                <span>Shape</span>
+                <select value={executionApproval.intent.aspectRatio} onChange={(event) => void updateExecutionIntent({ aspectRatio: event.target.value as MediaIntent['aspectRatio'], channel: 'auto' })}>
+                  <option value="9:16">Vertical, 9:16</option>
+                  {executionApproval.kind !== 'video' ? <option value="1:1">Square, 1:1</option> : null}
+                  <option value="16:9">Landscape, 16:9</option>
+                  {executionApproval.kind !== 'video' ? <option value="2:3">Portrait print, 2:3</option> : null}
+                </select>
+              </label>
+              {executionApproval.kind === 'video' ? (
+                <label>
+                  <span>Length</span>
+                  <select value={executionApproval.intent.durationSeconds} onChange={(event) => void updateExecutionIntent({ durationSeconds: Number(event.target.value) as 4 | 6 | 8 })}>
+                    <option value="4">4 seconds, quick draft</option>
+                    <option value="6">6 seconds</option>
+                    <option value="8">8 seconds</option>
+                  </select>
+                </label>
+              ) : null}
+              {executionApproval.kind === 'video' ? (
+                <label>
+                  <span>Movement</span>
+                  <select value={executionApproval.intent.motion} onChange={(event) => void updateExecutionIntent({ motion: event.target.value as MediaIntent['motion'] })}>
+                    <option value="calm">Calm</option>
+                    <option value="balanced">Balanced</option>
+                    <option value="dynamic">Dynamic</option>
+                  </select>
+                </label>
+              ) : null}
+              <label>
+                <span>Resolution</span>
+                <select value={executionApproval.intent.resolution} onChange={(event) => void updateExecutionIntent({ resolution: event.target.value as MediaIntent['resolution'] })}>
+                  {executionApproval.kind === 'video' ? (
+                    <><option value="720p">720p, data friendly</option><option value="1080p">1080p</option></>
+                  ) : (
+                    <><option value="1K">1K, data friendly</option><option value="2K">2K</option></>
+                  )}
+                </select>
+              </label>
+            </div>
+            {executionApproval.kind === 'video' ? (
+              <div className="media-audio-note"><b>Audio stays off for this rollout.</b><span>Add editable captions and approved sound after the visual is ready.</span></div>
+            ) : null}
             <div className="execution-quote">
-              <span><b>{executionApproval.estimateLabel}</b><small>Nothing is posted or shared automatically.</small></span>
+              <span><b>{executionApproval.estimateLabel}</b><small>Your file will be saved privately to this project. Nothing is posted automatically.</small></span>
               <strong>
-                {executionApproval.kind === 'video'
-                  ? `$${executionApproval.estimatedCostUsd.toFixed(2)}`
-                  : `up to $${executionApproval.estimatedCostUsd.toFixed(2)}`}
+                {mediaQuoteBusy
+                  ? 'Checking'
+                  : executionApproval.quoteValid
+                    ? `${executionApproval.kind === 'video' ? '' : 'Up to '}${executionApproval.estimatedCredits} credits`
+                    : 'Unavailable'}
               </strong>
             </div>
             <div className="approval-foot">
               <button onClick={() => setExecutionApproval(null)}>Cancel</button>
-              <button className="approve-action" onClick={confirmExecution}>Approve and produce</button>
+              <button className="approve-action" onClick={confirmExecution} disabled={mediaQuoteBusy || !executionApproval.quoteValid}>{mediaQuoteBusy ? 'Checking price' : executionApproval.quoteValid ? 'Approve and create' : 'Adjust choices'}</button>
             </div>
           </section>
         </div>

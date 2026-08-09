@@ -18,7 +18,9 @@
     "runs:verify": "node --experimental-strip-types scripts/verify-run-recovery.mjs",
     "media:verify": "node --experimental-strip-types scripts/verify-media-catalogue.mjs",
     "domains:verify": "node --experimental-strip-types scripts/verify-domains.mjs",
-    "prod:check": "node scripts/check-production.mjs"
+    "prod:check": "node scripts/check-production.mjs",
+    "smoke:deploy": "node scripts/smoke-deployment.mjs",
+    "release:check": "npm audit --omit=dev && npm run lint && npm test && npm run build && npm run prod:check"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.6.4",

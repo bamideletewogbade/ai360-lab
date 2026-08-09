@@ -39,6 +39,7 @@ Add these in hPanel. Never prefix the OpenRouter key with `NEXT_PUBLIC_`.
 ```text
 OPENROUTER_API_KEY=<newly rotated key>
 NEXT_PUBLIC_APP_URL=https://lab.aithreesixty.tech
+AI360_DEPLOYMENT_ENV=production
 OPENROUTER_SITE_URL=https://lab.aithreesixty.tech
 OPENROUTER_SITE_NAME=AI360 Lab
 OPENROUTER_IMAGE_MODEL=openai/gpt-image-1-mini
@@ -79,6 +80,17 @@ AI360_RATE_VOICE_PER_DAY=24
 AI360_QUALITY_REVIEWER_IDS=<comma-separated reviewer user IDs>
 AI360_QUALITY_ALERT_WEBHOOK_URL=<optional server-to-server urgent alert URL>
 AI360_QUALITY_EVALUATOR_MODEL=openai/gpt-5.6-luna
+AI360_BROWSER_PILOT_ENABLED=false
+AI360_BROWSER_PROVIDER=browserbase
+AI360_BROWSER_PILOT_USER_IDS=
+AI360_BROWSER_ALLOWED_DOMAINS=
+BROWSERBASE_API_KEY=
+BROWSERBASE_PROJECT_ID=
+BROWSERBASE_NAVIGATE_FUNCTION_ID=
+AI360_BROWSER_SCREENSHOT_RETENTION_HOURS=24
+AI360_BROWSER_CLEANUP_SECRET=
+AI360_ERROR_ALERT_WEBHOOK_URL=
+AI360_ERROR_ALERT_WEBHOOK_TOKEN=
 ```
 
 Before deployment, run `npm run prod:check`. Deploy the temporary Hostinger URL
@@ -86,6 +98,34 @@ first. Open `/api/health` and confirm it returns HTTP 200 with `"status":"ok"`.
 Then open `/api/ready`; it must return HTTP 200 with `"status":"ready"` and
 `"databaseConnection":"connected"`. A 503 response includes safe configuration
 checks that identify the remaining release blockers without exposing secrets.
+
+After the temporary deployment passes readiness, run:
+
+```text
+npm run smoke:deploy -- https://the-temporary-hostinger-url.example
+```
+
+The smoke suite checks health, dependency readiness, security headers, public
+routes, private-workspace indexing rules and discovery files. Follow
+`STAGING_RELEASE_CHECKLIST.md` before connecting the live domain and
+`ROLLBACK_AND_RESTORE.md` if the release needs to be reversed.
+
+### Optional external error delivery
+
+AI360 always writes redacted structured server errors to Runtime logs. Setting
+`AI360_ERROR_ALERT_WEBHOOK_URL` additionally sends the same bounded event to an
+HTTPS monitoring destination. Set `AI360_ERROR_ALERT_WEBHOOK_TOKEN` only when
+that destination requires bearer authentication. Prompts, files, cookies,
+headers and customer identifiers are excluded from this payload.
+
+### Read-only browser worker
+
+Keep `AI360_BROWSER_PILOT_ENABLED=false` for the core release. Before a closed
+pilot, publish `workers/browser-observer`, configure the returned Function ID,
+create the private Storage bucket and schedule an hourly authenticated `POST`
+to `/api/internal/browser-artifacts/cleanup`. The readiness gate requires the
+worker, named pilot users, allowed domains, private storage and cleanup secret
+as one complete configuration.
 
 ## Authentication and database setup
 

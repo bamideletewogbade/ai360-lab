@@ -845,10 +845,17 @@ button { color: inherit; }
 .media-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--line); background: white; }
 .media-meta span { color: var(--grey); font-size: 8px; }
 .media-meta button { padding: 7px 10px; border: 1px solid var(--black); border-radius: 8px; background: var(--black); color: white; cursor: pointer; font-size: 9px; font-weight: 750; }
-.studio-execution-dialog { width: min(500px, 100%); padding: 24px; overflow: visible; }
+.studio-execution-dialog { width: min(560px, 100%); padding: 24px; overflow-x: hidden; overflow-y: auto; }
 .studio-execution-dialog .studio-kicker { margin-bottom: 8px; }
 .studio-execution-dialog h2 { margin: 0; font-family: var(--font-heading); font-size: 27px; letter-spacing: -.035em; }
 .studio-execution-dialog > p { margin: 12px 0 18px; color: var(--grey); font-size: 11px; line-height: 1.6; }
+.media-setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.media-setup-grid label { display: grid; gap: 6px; min-width: 0; }
+.media-setup-grid label > span { color: var(--grey); font-size: 8px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.media-setup-grid select { width: 100%; min-height: 40px; padding: 0 34px 0 11px; border: 1px solid var(--line-dark); border-radius: 9px; background: white; color: var(--black); font: inherit; font-size: 10px; }
+.media-audio-note { display: flex; gap: 5px; flex-direction: column; margin: 2px 0 12px; padding: 10px 12px; border-radius: 9px; background: #f3f0e9; }
+.media-audio-note b { font-size: 9px; }
+.media-audio-note span { color: var(--grey); font-size: 8px; line-height: 1.45; }
 .execution-quote { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px; border: 1px solid #d8c7b9; border-radius: 11px; background: #fff8f0; }
 .execution-quote b, .execution-quote small { display: block; }
 .execution-quote b { font-size: 10px; text-transform: capitalize; }
@@ -1041,6 +1048,7 @@ button { color: inherit; }
   .media-meta { align-items: flex-start; flex-direction: column; }
   .media-meta button { width: 100%; }
   .studio-execution-dialog { padding: 20px 16px; }
+  .media-setup-grid { grid-template-columns: 1fr; }
   .studio-execution-dialog .approval-foot { margin: 18px -16px -20px; padding: 12px 16px; }
   .execution-next { grid-template-columns: 34px 1fr; }
   .execution-next > span:last-child { display: none; }

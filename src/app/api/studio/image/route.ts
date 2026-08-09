@@ -2,12 +2,17 @@ import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveReque
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
 import { openCreditGate } from '@/lib/billing/credit-gate'
+import { defaultMediaIntent, mediaIntentSchema, type MediaIntent } from '@/lib/media/intent'
+import { createMediaJob, isMediaJobStoreConfigured, markMediaJobSubmitted, updateMediaJobResult } from '@/lib/media/job-repository'
+import { persistGeneratedMedia } from '@/lib/media/storage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 type ImageRequest = {
   approved?: boolean
+  projectId?: string
+  intent?: unknown
   kind?: 'logo' | 'social' | 'flyer'
   businessName?: string
   brand?: {
@@ -22,10 +27,21 @@ type ImageRequest = {
     callToAction?: string
   }
   asset?: {
+    id?: string
     title?: string
     purpose?: string
     content?: string
   }
+}
+
+function requestedIntent(body: ImageRequest): MediaIntent {
+  const supplied = mediaIntentSchema.safeParse(body.intent)
+  if (supplied.success && supplied.data.mediaType === 'image') return supplied.data
+  return defaultMediaIntent({
+    mediaType: 'image',
+    purpose: clean(body.asset?.purpose) || clean(body.asset?.title) || 'Create an approved visual',
+    assetType: body.kind,
+  })
 }
 
 function clean(value: unknown, max = 2_000) {
@@ -66,17 +82,17 @@ function imageModels() {
     : [primary, 'google/gemini-3.1-flash-lite-image'])].slice(0, 3)
 }
 
-function modelOptions(model: string, kind: ImageRequest['kind']) {
-  const aspectRatio = kind === 'flyer' ? '2:3' : '1:1'
+function modelOptions(model: string, kind: ImageRequest['kind'], intent: MediaIntent) {
+  const aspectRatio = intent.aspectRatio
   if (model.startsWith('openai/')) {
     return {
       aspect_ratio: aspectRatio,
-      quality: 'low',
+      quality: intent.qualityTier === 'draft' ? 'low' : intent.qualityTier === 'premium' ? 'high' : 'medium',
       background: kind === 'logo' ? 'transparent' : 'opaque',
     }
   }
   if (model.startsWith('google/')) {
-    return { resolution: '1K', aspect_ratio: aspectRatio }
+    return { resolution: intent.resolution, aspect_ratio: aspectRatio }
   }
   return { aspect_ratio: aspectRatio }
 }
@@ -146,6 +162,20 @@ export async function POST(request: Request) {
     })
   }
   const gate = credit.gate
+  const intent = requestedIntent(body)
+  const durable = Boolean(requester.context && isMediaJobStoreConfigured())
+  const jobId = `media_${crypto.randomUUID()}`
+  if (durable && requester.context) {
+    await createMediaJob({
+      context: requester.context,
+      id: jobId,
+      projectId: clean(body.projectId, 64) || undefined,
+      projectAssetId: clean(body.asset?.id, 64) || undefined,
+      intent,
+      idempotencyKey: `image:${request.headers.get('idempotency-key') || log.requestId}`,
+      reservationId: gate.reservationId,
+    })
+  }
 
   const models = imageModels()
   const startedAt = performance.now()
@@ -168,7 +198,7 @@ export async function POST(request: Request) {
           model,
           prompt: promptFor(body),
           n: 1,
-          ...modelOptions(model, body.kind),
+          ...modelOptions(model, body.kind, intent),
         }),
       })
       if (!response.ok) {
@@ -199,6 +229,32 @@ export async function POST(request: Request) {
       }
       const mediaType = image.media_type || 'image/png'
       const latencyMs = Math.round(performance.now() - startedAt)
+      let assetId: string | undefined
+      let mediaUrl = `data:${mediaType};base64,${image.b64_json}`
+      if (durable && requester.context) {
+        await markMediaJobSubmitted({ context: requester.context, jobId, provider: 'openrouter', model, status: 'running' })
+        try {
+          const stored = await persistGeneratedMedia({
+            context: requester.context,
+            jobId,
+            projectId: clean(body.projectId, 64) || null,
+            bytes: Buffer.from(image.b64_json, 'base64'),
+            mimeType: mediaType,
+            metadata: { kind: body.kind || 'social', model, aspectRatio: intent.aspectRatio, qualityTier: intent.qualityTier },
+          })
+          assetId = stored.assetId
+          mediaUrl = `/api/studio/media?assetId=${encodeURIComponent(assetId)}`
+        } catch (storageError) {
+          await updateMediaJobResult({
+            context: requester.context,
+            jobId,
+            status: 'failed',
+            errorCode: 'storage_failed',
+            errorMessage: storageError instanceof Error ? storageError.message : 'Media storage failed',
+          })
+          log.warn('studio.image.storage_failed', { jobId, ...errorDetails(storageError) })
+        }
+      }
 
       await recordUsageEventSafe({
         requestId: log.requestId, route: '/api/studio/image', feature: `image.${body.kind}`,
@@ -219,7 +275,9 @@ export async function POST(request: Request) {
       await gate.settle('success', result.usage?.cost)
       log.finish(200, { outcome: 'success', model, attempt: attempt + 1, kind: body.kind, creditsReserved: gate.reserved })
       return Response.json({
-        image: `data:${mediaType};base64,${image.b64_json}`,
+        image: mediaUrl,
+        jobId: durable ? jobId : undefined,
+        assetId,
         mediaType,
         costUsd: result.usage?.cost,
         model,
@@ -248,6 +306,15 @@ export async function POST(request: Request) {
     outcome: 'all_providers_failed', metadata: { attemptedModels: models },
   })
   await gate.settle('failure')
+  if (durable && requester.context) {
+    await updateMediaJobResult({
+      context: requester.context,
+      jobId,
+      status: 'failed',
+      errorCode: 'provider_failed',
+      errorMessage: 'Every configured image provider failed.',
+    }).catch(() => undefined)
+  }
   log.finish(502, { outcome: 'all_providers_failed', attemptedModels: models.length })
   return Response.json({
     error: 'Studio could not create this design after trying its backup image provider. Please try again shortly.',
