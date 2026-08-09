@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useState, type CSSProperties, type RefObject } from 'react'
 
 export type ConversationPrompt = {
   id: string
@@ -108,6 +108,9 @@ export function ConversationMinimap({
 
   if (prompts.length < MINIMUM_PROMPTS) return null
 
+  const activeIndex = Math.max(0, prompts.findIndex((prompt) => prompt.id === activeId))
+  const activePosition = positions[activeId] ?? ((activeIndex + 1) / (prompts.length + 1)) * 100
+
   const jumpToPrompt = (id: string) => {
     const target = messageElement(id)
     if (!target) return
@@ -121,11 +124,15 @@ export function ConversationMinimap({
   return (
     <nav className="conversation-minimap" aria-label="Prompts in this conversation">
       <div className="conversation-minimap-track" aria-hidden="true" />
+      <div className="conversation-minimap-progress" aria-hidden="true" style={{ height: `${activePosition}%` }} />
       {prompts.map((prompt, index) => (
         <button
           type="button"
           className={prompt.id === activeId ? 'active' : ''}
-          style={{ top: `${positions[prompt.id] ?? ((index + 1) / (prompts.length + 1)) * 100}%` }}
+          style={{
+            top: `${positions[prompt.id] ?? ((index + 1) / (prompts.length + 1)) * 100}%`,
+            '--minimap-order': index,
+          } as CSSProperties}
           key={prompt.id}
           aria-label={`Jump to prompt ${index + 1}: ${prompt.label}`}
           aria-current={prompt.id === activeId ? 'location' : undefined}

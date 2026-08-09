@@ -299,10 +299,14 @@ export async function POST(request: Request) {
         await failRun(log.requestId, requester.context, 'run_failed')
         await gate?.settle('failure')
         log.finish(500, { outcome: 'stream_error' })
-        send({
-          type: 'error',
-          message: `The agent could not complete this task. Please try again. Reference: ${log.requestId}`,
-        })
+          send({
+            type: 'error',
+            code: 'run_failed',
+            message: 'AI360 could not complete this research task.',
+            retryable: true,
+            creditNotice: 'No credits were used for incomplete work.',
+            requestId: log.requestId,
+          })
         close()
       }
     },

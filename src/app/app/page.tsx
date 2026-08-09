@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { type ChatMode } from '@/lib/models'
 import { ResponseContent } from '@/components/ResponseContent'
 import {
-  browserSpeechLocale, DEFAULT_LANGUAGE, DEFAULT_SPEECH_INPUT, findLanguage, LANGUAGES,
+  browserSpeechLocale, DEFAULT_LANGUAGE, DEFAULT_SPEECH_INPUT,
   type LanguageCode, type SpeechInputCode,
 } from '@/lib/languages'
 import { StudioWorkspace } from '@/components/StudioWorkspace'
@@ -14,6 +14,8 @@ import { AccountControls } from '@/components/AccountControls'
 import { WorkspaceBoot } from '@/components/WorkspaceBoot'
 import { QualityFeedback } from '@/components/QualityFeedback'
 import { ConversationMinimap, type ConversationPrompt } from '@/components/ConversationMinimap'
+import { PromptComposer } from '@/components/PromptComposer'
+import { ResponseActions } from '@/components/ResponseActions'
 import { useAuth } from '@clerk/nextjs'
 import { scopedStorageKey } from '@/lib/workspace'
 import { routeIntentDeterministically, type IntentRoute } from '@/lib/intent-router'
@@ -45,6 +47,14 @@ type Msg = {
   actions?: AgentAction[]
   /** Correlates customer feedback with the server trace that produced this answer. */
   requestId?: string
+  failure?: MessageFailure
+}
+type MessageFailure = {
+  code: string
+  message: string
+  retryable: boolean
+  creditNotice: string
+  requestId: string
 }
 type Experience = 'chat' | 'agent' | 'studio'
 type AgentStep = { id: string; label: string; status: 'pending' | 'active' | 'complete' | 'failed' }
@@ -122,7 +132,6 @@ const MODE_META: Record<Experience, {
   eyebrow: string
   heading: ReactNode
   intro: string
-  mark: string
 }> = {
   chat: {
     label: 'Ask',
@@ -131,7 +140,6 @@ const MODE_META: Record<Experience, {
     eyebrow: 'Everyday intelligence',
     heading: <>Turn a thought into<br />something useful.</>,
     intro: 'Ask a question, shape an idea, or bring a task. AI360 chooses the right intelligence and helps you move forward.',
-    mark: 'A',
   },
   agent: {
     label: 'Research',
@@ -140,7 +148,6 @@ const MODE_META: Record<Experience, {
     eyebrow: 'Research workspace',
     heading: <>Give us the outcome.<br />We will work the steps.</>,
     intro: 'Set a goal and let AI360 research the web, inspect your materials, reason through the work and return a checked deliverable.',
-    mark: 'R',
   },
   studio: {
     label: 'Create',
@@ -149,7 +156,6 @@ const MODE_META: Record<Experience, {
     eyebrow: 'Project workspace',
     heading: <>Build the assets that<br />move your business.</>,
     intro: 'Go from a brand brief to a coordinated launch pack, then review, refine, approve and produce each asset.',
-    mark: 'C',
   },
 }
 
@@ -194,10 +200,6 @@ async function routeExperience(prompt: string): Promise<Experience> {
   return experienceForPrompt(prompt)
 }
 
-function formatDuration(seconds: number) {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-}
-
 function fileToDataUrl(file: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
@@ -207,17 +209,43 @@ function fileToDataUrl(file: Blob) {
   })
 }
 
-async function readTextStream(response: Response, onText: (text: string) => void) {
+type ChatStreamEvent =
+  | { type: 'delta'; text: string }
+  | { type: 'done' }
+  | { type: 'error'; code: string; message: string; retryable: boolean; creditNotice: string; requestId: string }
+
+async function readChatStream(response: Response, onEvent: (event: ChatStreamEvent) => void) {
   if (!response.body) throw new Error('No response stream')
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
-  let accumulated = ''
+  let buffer = ''
+  let terminalEvent = false
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
-    accumulated += decoder.decode(value, { stream: true })
-    onText(accumulated)
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.trim()) continue
+      const event = JSON.parse(line) as ChatStreamEvent
+      if (event.type === 'done' || event.type === 'error') terminalEvent = true
+      onEvent(event)
+    }
   }
+  if (!terminalEvent) throw new Error('The connection ended before AI360 confirmed the result.')
+}
+
+function failureFromHttp(status: number, detail: Record<string, unknown>, requestId: string): MessageFailure {
+  const code = typeof detail.status === 'string' ? detail.status : `http_${status}`
+  const message = typeof detail.error === 'string' ? detail.error : 'AI360 could not start this request.'
+  const retryable = status === 408 || status === 429 || status >= 500
+  const creditNotice = status === 402
+    ? 'No work was started. Add credits before trying again.'
+    : status === 409
+      ? 'The original request may still be processing. Check it before starting another.'
+      : 'No work was started and no credits were used.'
+  return { code, message, retryable, creditNotice, requestId }
 }
 
 type AgentEvent =
@@ -226,7 +254,7 @@ type AgentEvent =
   | { type: 'delta'; text: string; reset?: boolean }
   | { type: 'plan'; objectives: string[]; depth: AgentDepth; awaitingApproval: boolean; estimatedCredits: number }
   | { type: 'result'; content: string; sources?: SourceLink[]; actions?: AgentAction[]; usage?: { totalTokens?: number; cost?: number } }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; code?: string; retryable?: boolean; creditNotice?: string; requestId?: string }
 
 async function readAgentStream(response: Response, onEvent: (event: AgentEvent) => void) {
   if (!response.body) throw new Error('No agent stream')
@@ -254,18 +282,11 @@ async function readAgentStream(response: Response, onEvent: (event: AgentEvent) 
 const SIDEBAR_GROUPS: Array<{
   id: string
   label: string
-  mark: string
   match: (experience?: Experience) => boolean
 }> = [
-  { id: 'chats', label: 'Chats', mark: 'A', match: (experience) => !experience || experience === 'chat' },
-  { id: 'research', label: 'Research', mark: 'R', match: (experience) => experience === 'agent' },
+  { id: 'chats', label: 'Chats', match: (experience) => !experience || experience === 'chat' },
+  { id: 'research', label: 'Research', match: (experience) => experience === 'agent' },
 ]
-
-const AGENT_DEPTH_HINTS: Record<AgentDepth, string> = {
-  quick: 'One line of enquiry, no checking pass. Fastest and cheapest.',
-  standard: 'Up to two lines of enquiry, then checked against the sources.',
-  thorough: 'Up to three lines of enquiry, then checked and corrected.',
-}
 
 const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
 
@@ -301,11 +322,11 @@ function LabWorkspace({
   // Kept for the session so nobody has to reselect their language every message.
   const [responseLanguage, setResponseLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE)
   const [speechInputLanguage] = useState<SpeechInputCode>(DEFAULT_SPEECH_INPUT)
-  const [languageOpen, setLanguageOpen] = useState(false)
   const recovering = useRef(new Set<string>())
   const [hydrated, setHydrated] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [conversationMenuId, setConversationMenuId] = useState('')
   const [attachment, setAttachment] = useState<Attachment | null>(null)
   const [fileError, setFileError] = useState('')
   const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'recorded' | 'transcribing'>('idle')
@@ -321,6 +342,7 @@ function LabWorkspace({
   const [initialStudioBrief, setInitialStudioBrief] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
   const [showReturnToLatest, setShowReturnToLatest] = useState(false)
+  const [copiedPromptId, setCopiedPromptId] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const followLatestRef = useRef(true)
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -340,6 +362,27 @@ function LabWorkspace({
     .map((message) => ({ id: message.id, label: promptPreview(message) })), [messages])
   const experience = active?.experience ?? 'chat'
   const modeMeta = MODE_META[experience]
+
+  useEffect(() => {
+    if (!conversationMenuId) return
+
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest('.history-actions')) return
+      setConversationMenuId('')
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setConversationMenuId('')
+      document.querySelector<HTMLElement>('[data-menu-trigger][aria-expanded="true"]')?.focus()
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePress)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePress)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [conversationMenuId])
 
   useEffect(() => {
     if (!authLoaded) return
@@ -553,13 +596,6 @@ function LabWorkspace({
 
   function updateActive(updater: (conversation: Conversation) => Conversation) {
     setConversations((items) => items.map((item) => (item.id === activeId ? updater(item) : item)))
-  }
-
-  function grow() {
-    const textarea = taRef.current
-    if (!textarea) return
-    textarea.style.height = 'auto'
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`
   }
 
   function newChat() {
@@ -886,7 +922,7 @@ function LabWorkspace({
             if (event.type === 'delta') {
               // A reset marks a new draft replacing the one on screen, which is
               // what happens when verification sends the answer back for correction.
-              return { ...message, content: event.reset ? event.text : message.content + event.text }
+              return { ...message, content: event.reset ? event.text : message.content + event.text, failure: undefined }
             }
             if (event.type === 'plan') {
               return {
@@ -906,8 +942,23 @@ function LabWorkspace({
                 sources: event.sources ?? [],
                 actions: event.actions ?? [],
                 usage: event.usage,
+                failure: undefined,
                 agentDone: true,
                 agentPlan: message.agentPlan ? { ...message.agentPlan, awaitingApproval: false } : undefined,
+              }
+            }
+            if (event.code) {
+              return {
+                ...message,
+                content: '',
+                agentDone: true,
+                failure: {
+                  code: event.code,
+                  message: event.message,
+                  retryable: Boolean(event.retryable),
+                  creditNotice: event.creditNotice || 'No credits were used for incomplete work.',
+                  requestId: event.requestId || message.requestId || 'Unavailable',
+                },
               }
             }
             return { ...message, content: event.message }
@@ -1000,6 +1051,9 @@ function LabWorkspace({
         applyAgentEvent(conversationId, messageId, {
           type: 'error',
           message: 'That run did not finish. No credits were charged for work you did not receive.',
+          code: 'run_failed',
+          retryable: true,
+          creditNotice: 'No credits were used for incomplete work.',
         })
       }
       return
@@ -1051,6 +1105,9 @@ function LabWorkspace({
       applyAgentEvent(conversationId, message.id, {
         type: 'error',
         message: error instanceof Error ? error.message : 'The plan could not be run.',
+        code: 'plan_failed',
+        retryable: false,
+        creditNotice: 'The approved plan was not completed. Check the activity before starting it again.',
       })
     } finally {
       setBusy(false)
@@ -1137,11 +1194,16 @@ function LabWorkspace({
         }),
       })
       if (!res.ok) {
-        const detail = await res.json().catch(() => ({}))
+        const detail = await res.json().catch(() => ({})) as Record<string, unknown>
         const reference = res.headers.get('X-Request-Id') || requestId
-        throw new Error(
-          `${typeof detail.error === 'string' ? detail.error : 'The request could not be completed.'} Reference: ${reference}`,
-        )
+        const failure = failureFromHttp(res.status, detail, reference)
+        setConversations((items) => items.map((item) => item.id !== requestConversationId ? item : {
+          ...item,
+          messages: item.messages.map((message) => message.id === placeholder.id
+            ? { ...message, content: '', failure }
+            : message),
+        }))
+        return
       }
       if (currentExperience === 'agent') {
         // The run continues on the server whatever happens to this connection,
@@ -1163,14 +1225,21 @@ function LabWorkspace({
           await recoverRun(requestConversationId, placeholder.id, runId)
         }
       } else {
-        await readTextStream(res, (accumulated) => {
+        let accumulated = ''
+        await readChatStream(res, (event) => {
           setConversations((items) =>
             items.map((item) =>
               item.id === requestConversationId
                 ? {
                     ...item,
                     messages: item.messages.map((message) =>
-                      message.id === placeholder.id ? { ...message, content: accumulated } : message,
+                      message.id !== placeholder.id
+                        ? message
+                        : event.type === 'delta'
+                          ? { ...message, content: (accumulated += event.text), failure: undefined }
+                          : event.type === 'error'
+                            ? { ...message, content: '', failure: event }
+                            : message,
                     ),
                     updatedAt: Date.now(),
                   }
@@ -1190,9 +1259,16 @@ function LabWorkspace({
                   message.id === placeholder.id
                     ? {
                         ...message,
-                        content: error instanceof Error
-                          ? error.message
-                          : 'Something went wrong. Please try again.',
+                        content: '',
+                        failure: {
+                          code: 'connection_lost',
+                          message: error instanceof Error
+                            ? error.message
+                            : 'The connection ended before AI360 confirmed the result.',
+                          retryable: false,
+                          creditNotice: 'The execution status is unknown, so AI360 will not automatically run it twice.',
+                          requestId,
+                        },
                       }
                     : message,
                 ),
@@ -1206,11 +1282,25 @@ function LabWorkspace({
   }
 
   function regenerate(index: number) {
+    if (index !== messages.length - 1) return
     const prior = messages.slice(0, index)
     const lastUserIndex = prior.map((message) => message.role).lastIndexOf('user')
     if (lastUserIndex < 0) return
     const user = prior[lastUserIndex]
     send(user.content, user.attachments?.[0] ?? null, prior.slice(0, lastUserIndex))
+  }
+
+  async function copyFailedPrompt(index: number) {
+    const prior = messages.slice(0, index)
+    const lastUserIndex = prior.map((message) => message.role).lastIndexOf('user')
+    if (lastUserIndex < 0) return
+    const prompt = prior[lastUserIndex]
+    const attachmentNote = prompt.attachments?.length
+      ? `\n\nAttachments: ${prompt.attachments.map((item) => item.name).join(', ')}`
+      : ''
+    await navigator.clipboard.writeText(`${prompt.content}${attachmentNote}`)
+    setCopiedPromptId(prompt.id)
+    window.setTimeout(() => setCopiedPromptId((current) => current === prompt.id ? '' : current), 1800)
   }
 
   function selectExperience(nextExperience: Experience) {
@@ -1269,13 +1359,35 @@ function LabWorkspace({
               <div className="history-group" key={group.id}>
                 <div className="history-label">{group.label}<span>{items.length}</span></div>
                 {items.map((conversation) => (
-                  <div className={`history-item${conversation.id === active.id ? ' active' : ''}`} key={conversation.id}>
-                    <button className="history-main" onClick={() => { setActiveId(conversation.id); setSidebarOpen(false) }}>
-                      <span className="history-mark">{group.mark}</span>
+                  <div className={`history-item${conversation.id === active.id ? ' active' : ''}${conversationMenuId === conversation.id ? ' menu-open' : ''}`} key={conversation.id}>
+                    <button className="history-main" onClick={() => { setConversationMenuId(''); setActiveId(conversation.id); setSidebarOpen(false) }}>
                       <span>{displayConversationTitle(conversation.title)}</span>
                     </button>
-                    <button className="history-more" onClick={() => renameChat(conversation.id)} title="Rename">✎</button>
-                    <button className="history-more delete" onClick={() => deleteChat(conversation.id)} title="Delete">×</button>
+                    <div className="history-actions">
+                      <button
+                        type="button"
+                        className="history-options"
+                        aria-label={`Options for ${displayConversationTitle(conversation.title)}`}
+                        aria-expanded={conversationMenuId === conversation.id}
+                        aria-controls={`conversation-menu-${conversation.id}`}
+                        data-menu-trigger={conversation.id}
+                        onClick={() => setConversationMenuId((current) => current === conversation.id ? '' : conversation.id)}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
+                      </button>
+                      {conversationMenuId === conversation.id ? (
+                        <div className="history-menu" id={`conversation-menu-${conversation.id}`} role="group" aria-label="Conversation actions">
+                          <button type="button" onClick={() => { setConversationMenuId(''); renameChat(conversation.id) }}>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 16-.7 3.7L8 19l10.2-10.2-3-3L5 16Z" /><path d="m13.8 7.2 3 3" /></svg>
+                            <span>Rename</span>
+                          </button>
+                          <button type="button" className="danger" onClick={() => { setConversationMenuId(''); deleteChat(conversation.id) }}>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3m2 0-1 13H8L7 7m3 4v5m4-5v5" /></svg>
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1303,7 +1415,6 @@ function LabWorkspace({
           </div>
           <div className="workspace-title"><b>{experience === 'studio' ? 'Projects' : 'Chats'}</b><small>{experience === 'studio' ? 'Build and improve lasting work' : experience === 'agent' ? 'Research is on' : 'Ask, write and research'}</small></div>
           <div className="lab-top-right">
-          {experience !== 'studio' && <button className="new-top" onClick={newChat}><span>＋</span><span className="hide-mobile">New chat</span></button>}
           <AccountControls enabled={AUTH_ENABLED} />
           </div>
         </header>
@@ -1348,9 +1459,7 @@ function LabWorkspace({
           ) : (
             <>
             <div className="thread-context">
-              <div className={`context-mark ${experience}`}>{modeMeta.mark}</div>
               <div><span>{modeMeta.label} workspace</span><b>{displayConversationTitle(active.title)}</b></div>
-              <small>{messages.length} message{messages.length === 1 ? '' : 's'} · {modeMeta.short}</small>
             </div>
             <div className="thread">
               {messages.map((message, index) => (
@@ -1428,7 +1537,28 @@ function LabWorkspace({
                         </div>
                       </details>
                     ) : null}
-                    {message.content ? (
+                    {message.failure ? (
+                      <section className="message-failure" role="alert" aria-label="Request could not be completed">
+                        <div className="message-failure-head">
+                          <span aria-hidden="true">!</span>
+                          <span><b>This did not finish</b><small>{message.failure.message}</small></span>
+                        </div>
+                        <p>{message.failure.creditNotice}</p>
+                        <div className="message-failure-actions">
+                          {message.failure.retryable && index === messages.length - 1 ? (
+                            <button type="button" className="failure-retry" onClick={() => regenerate(index)} disabled={busy}>
+                              {busy ? 'Running…' : 'Run again'}
+                            </button>
+                          ) : null}
+                          <button type="button" onClick={() => void copyFailedPrompt(index)}>
+                            {copiedPromptId === [...messages.slice(0, index)].reverse().find((item) => item.role === 'user')?.id
+                              ? 'Prompt copied'
+                              : 'Copy prompt'}
+                          </button>
+                          <small>Reference: {message.failure.requestId}</small>
+                        </div>
+                      </section>
+                    ) : message.content ? (
                       <ResponseContent content={message.content} />
                     ) : message.agentSteps?.length ? (
                       <span className="agent-wait">Working...</span>
@@ -1474,14 +1604,15 @@ function LabWorkspace({
                         </div>
                       </section>
                     ) : null}
-                    {message.role === 'assistant' && message.content && (
-                      <>
-                        <div className="message-actions">
-                          <button onClick={() => navigator.clipboard.writeText(message.content)} title="Copy">□ <span>Copy</span></button>
-                          {browserSpeechLocale(responseLanguage) ? (
-                            <button onClick={() => speak(message.content)} title="Read aloud in English">◖ <span>Listen</span></button>
-                          ) : null}
-                          <button onClick={() => regenerate(index)} disabled={busy} title="Regenerate">↻ <span>Try again</span></button>
+                    {message.role === 'assistant' && message.content && !message.failure && (
+                      <ResponseActions
+                        content={message.content}
+                        canListen={Boolean(browserSpeechLocale(responseLanguage))}
+                        canRetry={index === messages.length - 1}
+                        busy={busy}
+                        onListen={() => speak(message.content)}
+                        onRetry={() => regenerate(index)}
+                        feedback={(
                           <QualityFeedback
                             context={{
                               sourceSurface: message.agent ? 'research' : 'quick',
@@ -1495,8 +1626,8 @@ function LabWorkspace({
                                 .join('\n\n'),
                             }}
                           />
-                        </div>
-                      </>
+                        )}
+                      />
                     )}
                   </div>
                 </article>
@@ -1506,153 +1637,32 @@ function LabWorkspace({
           )}
           </main>
 
-          <div className="composer-zone">
-          <div className={`composer${recordingState === 'recording' ? ' recording' : ''}`}>
-            {recordingState !== 'idle' && (
-              <div className={`voice-capture ${recordingState}`}>
-                {recordingState === 'recording' ? (
-                  <>
-                    <span className="recording-pulse" />
-                    <span className="voice-state"><b>Recording voice</b><small>{formatDuration(recordingSeconds)} / 5:00</small></span>
-                    <div className="voice-bars" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /></div>
-                    <button className="voice-stop" onClick={toggleRecording}>Stop</button>
-                  </>
-                ) : (
-                  <>
-                    <span className="recording-icon">◉</span>
-                    <audio src={recordingUrl} controls preload="metadata" aria-label="Voice recording preview" />
-                    <span className="voice-state"><b>{recordingState === 'transcribing' ? 'Transcribing…' : 'Voice note ready'}</b><small>{formatDuration(recordingSeconds)}</small></span>
-                    <button className="voice-transcribe" onClick={transcribeRecording} disabled={recordingState === 'transcribing'}>
-                      {recordingState === 'transcribing' ? 'Working…' : 'Use transcript'}
-                    </button>
-                    <button className="voice-delete" onClick={discardRecording} disabled={recordingState === 'transcribing'} aria-label="Delete recording">×</button>
-                  </>
-                )}
-              </div>
-            )}
-            {voiceNotice ? <div className="voice-review-note" role="status">{voiceNotice}</div> : null}
-            {attachment && (
-              <div className="attachment-preview">
-                {attachment.kind === 'image' && attachment.data ? (
-                  <img src={attachment.data} alt="" />
-                ) : attachment.kind === 'video' && attachment.data ? (
-                  <video src={attachment.data} muted preload="metadata" aria-label={attachment.name} />
-                ) : (
-                  <span>{attachment.kind === 'pdf' ? 'PDF' : attachment.kind === 'video' ? 'VID' : 'DOC'}</span>
-                )}
-                <div><b>{attachment.name}</b><small>Ready to send</small></div>
-                <button onClick={() => setAttachment(null)} aria-label="Remove file">×</button>
-              </div>
-            )}
-            <textarea
-              ref={taRef}
-              rows={1}
-              placeholder={
-                recordingState === 'recording'
-                  ? 'Recording your voice…'
-                  : experience === 'agent'
-                    ? 'Describe an outcome you want completed…'
-                    : 'Ask anything, or describe what you need…'
-              }
-              value={input}
-              onChange={(event) => { setInput(event.target.value); grow() }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault()
-                  send(input)
-                }
-              }}
-            />
-            <div className="composer-tools">
-              <input
-                ref={fileRef}
-                type="file"
-                hidden
-                accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf,text/plain,text/markdown,text/csv,application/json"
-                onChange={(event) => handleFile(event.target.files?.[0])}
-              />
-              <button onClick={() => fileRef.current?.click()} title="Attach an image, video or document" aria-label="Attach file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button>
-              <button className={recordingState === 'recording' ? 'active' : ''} onClick={toggleRecording} title="Record your voice" aria-label="Record voice"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="4" width="6" height="11" rx="3" /><path d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3M9 20h6" /></svg></button>
-              <div className="language-picker">
-                <button
-                  className={`language-trigger${responseLanguage === DEFAULT_LANGUAGE ? '' : ' chosen'}`}
-                  onClick={() => setLanguageOpen((open) => !open)}
-                  aria-expanded={languageOpen}
-                  aria-label={`Answer language: ${findLanguage(responseLanguage).name}`}
-                  title="Ask and get answers in your own language"
-                >
-                  {findLanguage(responseLanguage).nativeName}
-                  <span className="chevron">⌄</span>
-                </button>
-                {languageOpen && (
-                  <div className="language-menu">
-                    <div className="language-menu-title">Answer me in</div>
-                    {LANGUAGES.map((option) => (
-                      <button
-                        key={option.code}
-                        className={option.code === responseLanguage ? 'selected' : ''}
-                        onClick={() => { setResponseLanguage(option.code); setLanguageOpen(false) }}
-                      >
-                        <span className="language-check">{option.code === responseLanguage ? '✓' : ''}</span>
-                        <span><b>{option.nativeName}</b><small>{option.sample}</small></span>
-                      </button>
-                    ))}
-                    <p className="language-note">Write in any of these and it replies the same way, whatever is selected.</p>
-                  </div>
-                )}
-              </div>
-              {experience === 'agent' ? (
-                <div className="agent-controls">
-                  <div className="agent-depth" role="group" aria-label="How thorough the agent should be">
-                    {(['quick', 'standard', 'thorough'] as const).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        className={agentDepth === option ? 'active' : ''}
-                        aria-pressed={agentDepth === option}
-                        onClick={() => setAgentDepth(option)}
-                        title={AGENT_DEPTH_HINTS[option]}
-                      >
-                        {option[0].toUpperCase() + option.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    className={`agent-plan-toggle ${planFirst ? 'active' : ''}`}
-                    aria-pressed={planFirst}
-                    onClick={() => setPlanFirst((value) => !value)}
-                    title="See the plan and approve it before any credits are spent on the work"
-                  >
-                    {planFirst ? '✓ ' : ''}Plan first
-                  </button>
-                </div>
-              ) : null}
-              <button
-                className="send"
-                onClick={() => send(input)}
-                disabled={
-                  busy ||
-                  recordingState === 'recording' ||
-                  recordingState === 'transcribing' ||
-                  (!input.trim() && !attachment)
-                }
-                aria-label="Send message"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 19V5M5 12l7-7 7 7" />
-                </svg>
-              </button>
-            </div>
-          </div>
-          {fileError && <div className="file-error">{fileError}</div>}
-          <div className="composer-note">
-            AI can make mistakes. Check important information.
-            <span>Built with care by AI360 · Accra Innovation Center</span>
-            <Link href="/privacy">Privacy</Link>
-            <Link href="/terms">Terms</Link>
-          </div>
-          </div>
+          <PromptComposer
+            experience={experience}
+            input={input}
+            busy={busy}
+            textareaRef={taRef}
+            fileInputRef={fileRef}
+            attachment={attachment}
+            fileError={fileError}
+            recordingState={recordingState}
+            recordingSeconds={recordingSeconds}
+            recordingUrl={recordingUrl}
+            voiceNotice={voiceNotice}
+            responseLanguage={responseLanguage}
+            researchDepth={agentDepth}
+            planFirst={planFirst}
+            onInputChange={setInput}
+            onSubmit={() => send(input)}
+            onFile={(file) => void handleFile(file)}
+            onRemoveAttachment={() => setAttachment(null)}
+            onToggleRecording={() => void toggleRecording()}
+            onTranscribeRecording={() => void transcribeRecording()}
+            onDiscardRecording={discardRecording}
+            onLanguageChange={setResponseLanguage}
+            onResearchDepthChange={setAgentDepth}
+            onPlanFirstChange={setPlanFirst}
+          />
           </>
         )}
       </section>

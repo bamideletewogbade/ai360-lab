@@ -444,3 +444,22 @@ reduced-motion support.
 Release proof requires keyboard and screen-reader checks, correct proportional
 positions while an answer streams, no forced return to the bottom, no desktop
 overlap and no minimap rendering at narrow breakpoints.
+
+## Failed-request recovery (2026-08-09)
+
+Chat and Research failures are message state, not assistant prose. Streaming
+routes emit typed newline-delimited events for deltas, completion and failure.
+A failure records a stable code, a plain-language explanation, whether a new
+attempt is safe, what happened to credits and the request reference used by
+support. The interface never decides recovery by searching generated text for
+phrases such as "something went wrong."
+
+A failed turn always offers Copy prompt. Run again is shown only when the
+server marks the failure retryable and the failure is the final turn. Retrying
+replaces that user/assistant attempt instead of duplicating it. Historical
+failures cannot truncate later messages. When a connection ends before the
+server confirms success or failure, execution and billing are treated as
+unknown: the prompt remains copyable, but one-click rerun is withheld until a
+durable status check can prove that duplicate work is impossible. Research
+runs continue to prefer recovery of their durable run ID before offering a new
+execution.

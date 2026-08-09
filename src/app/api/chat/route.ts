@@ -13,6 +13,10 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 type Msg = ContextMessage
+type ChatStreamEvent =
+  | { type: 'delta'; text: string }
+  | { type: 'done' }
+  | { type: 'error'; code: string; message: string; retryable: boolean; creditNotice: string; requestId: string }
 type ContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string } }
@@ -44,8 +48,7 @@ function toProviderMessage(message: Msg) {
   return { role: message.role, content }
 }
 
-async function mockStream(controller: ReadableStreamDefaultController, messages: Msg[]) {
-  const encoder = new TextEncoder()
+async function mockStream(send: (event: ChatStreamEvent) => void, messages: Msg[]) {
   const last = [...messages].reverse().find((message) => message.role === 'user')
   const fileNote = last?.attachments?.length
     ? ` I can also see your attached ${last.attachments.map((file) => file.name).join(', ')}.`
@@ -56,9 +59,10 @@ async function mockStream(controller: ReadableStreamDefaultController, messages:
     `For now, the full workspace experience, including history, files, voice and model selection, is ready to explore.`
 
   for (const word of reply.split(' ')) {
-    controller.enqueue(encoder.encode(`${word} `))
+    send({ type: 'delta', text: `${word} ` })
     await sleep(24)
   }
+  send({ type: 'done' })
 }
 
 function responseWithRequestId(response: Response, requestId: string) {
@@ -124,9 +128,10 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder()
+      const send = (event: ChatStreamEvent) => controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
       try {
         if (!key) {
-          await mockStream(controller, messages)
+          await mockStream(send, messages)
           log.finish(200, { outcome: 'preview_response' })
           controller.close()
           return
@@ -194,9 +199,14 @@ export async function POST(req: NextRequest) {
             metadata: { providerStatus: res.status, mode, attachmentCount: attachments.length },
           })
           await gate?.settle('failure')
-          controller.enqueue(
-            encoder.encode(`The Lab could not reach its AI provider. Please try again. Reference: ${log.requestId}`),
-          )
+          send({
+            type: 'error',
+            code: 'provider_unavailable',
+            message: 'AI360 could not reach the AI service.',
+            retryable: true,
+            creditNotice: 'No credits were used for this attempt.',
+            requestId: log.requestId,
+          })
           controller.close()
           return
         }
@@ -227,7 +237,7 @@ export async function POST(req: NextRequest) {
           const block = `\n\n### Live sources\n\n${missing.map(([url, title]) => `- [${title}](${url})`).join('\n')}`
           outputText += block
           outputCharacters += block.length
-          controller.enqueue(encoder.encode(block))
+          send({ type: 'delta', text: block })
         }
         while (true) {
           const { done, value } = await reader.read()
@@ -268,6 +278,7 @@ export async function POST(req: NextRequest) {
                 liveWebUsed: sources.size > 0,
                 sourceCount: sources.size,
               })
+              send({ type: 'done' })
               controller.close()
               return
             }
@@ -277,7 +288,7 @@ export async function POST(req: NextRequest) {
               if (delta) {
                 outputCharacters += delta.length
                 outputText += delta
-                controller.enqueue(encoder.encode(delta))
+                send({ type: 'delta', text: delta })
               }
               const annotations =
                 json.choices?.[0]?.delta?.annotations ||
@@ -310,14 +321,20 @@ export async function POST(req: NextRequest) {
           liveWebUsed: sources.size > 0,
           sourceCount: sources.size,
         })
+        send({ type: 'done' })
         controller.close()
       } catch (error) {
         log.error('chat.stream.failed', errorDetails(error))
         await gate?.settle('failure')
         log.finish(500, { outcome: 'stream_error' })
-        controller.enqueue(
-          encoder.encode(`Something went wrong. Please try again. Reference: ${log.requestId}`),
-        )
+        send({
+          type: 'error',
+          code: 'stream_failed',
+          message: 'AI360 could not complete this response.',
+          retryable: true,
+          creditNotice: 'No credits were used for incomplete work.',
+          requestId: log.requestId,
+        })
         controller.close()
       }
     },
@@ -325,7 +342,7 @@ export async function POST(req: NextRequest) {
 
   return new Response(stream, {
     headers: log.headers({
-      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'no-store',
       'X-Accel-Buffering': 'no',
     }),
