@@ -1,148 +1,152 @@
+import { openCreditGate, type CreditGate } from '@/lib/billing/credit-gate'
 import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrails'
+import { transcriptionLanguageHint } from '@/lib/languages'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
+import { MAX_VOICE_BYTES, parseTranscriptionForm } from '@/lib/voice/contracts'
+import { OpenRouterTranscriptionProvider } from '@/lib/voice/openrouter'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 120
 
-const FORMATS = new Set(['webm', 'wav', 'mp3', 'm4a', 'ogg', 'aac', 'flac'])
+const ROUTE = '/api/transcribe'
+const MULTIPART_OVERHEAD_BYTES = 512 * 1024
 
 export async function POST(request: Request) {
-  const log = requestLogger(request, '/api/transcribe')
-  const tooLarge = rejectLargeRequest(request, 15_000_000)
+  const log = requestLogger(request, ROUTE)
+  const tooLarge = rejectLargeRequest(request, MAX_VOICE_BYTES + MULTIPART_OVERHEAD_BYTES)
   if (tooLarge) {
     log.finish(tooLarge.status, { outcome: 'request_too_large' })
     return new Response(tooLarge.body, { status: tooLarge.status, headers: log.headers(tooLarge.headers) })
   }
-  const limited = rateLimit(request, 'voice', { minute: 5, daily: 24 }, await resolveRequester(request))
+
+  const requester = await resolveRequester(request)
+  const limited = rateLimit(request, 'voice', { minute: 5, daily: 24 }, requester)
   if (limited) {
     log.finish(limited.status, { outcome: 'rate_limited' })
     return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })
   }
 
-  let body: { data?: string; format?: string }
+  let form: FormData
   try {
-    body = await request.json()
+    form = await request.formData()
   } catch {
-    log.finish(400, { outcome: 'invalid_json' })
-    return Response.json({ error: 'Invalid request', requestId: log.requestId }, {
-      status: 400,
-      headers: log.headers(),
+    log.finish(400, { outcome: 'multipart_invalid' })
+    return Response.json({ error: 'Send the recording as a voice upload', requestId: log.requestId }, {
+      status: 400, headers: log.headers({ 'Cache-Control': 'no-store' }),
     })
   }
 
-  const format = String(body.format || '').toLowerCase()
-  const data = typeof body.data === 'string' ? body.data : ''
-  if (!FORMATS.has(format) || !data) {
-    log.finish(400, { outcome: 'unsupported_format', format })
-    return Response.json({ error: 'Unsupported recording format', requestId: log.requestId }, {
-      status: 400,
-      headers: log.headers(),
-    })
-  }
-  if (data.length > 14_000_000) {
-    log.finish(413, { outcome: 'recording_too_large', encodedBytes: data.length })
-    return Response.json({ error: 'Recording is too large', requestId: log.requestId }, {
-      status: 413,
-      headers: log.headers(),
+  const parsed = parseTranscriptionForm(form)
+  if (!parsed.ok) {
+    log.finish(parsed.status, { outcome: parsed.outcome })
+    return Response.json({ error: parsed.error, requestId: log.requestId }, {
+      status: parsed.status, headers: log.headers({ 'Cache-Control': 'no-store' }),
     })
   }
 
-  // Browser recordings arrive as data URLs, while OpenRouter expects only the
-  // raw base64 payload inside input_audio.data.
-  const audioData = data.startsWith('data:')
-    ? data.slice(data.indexOf(',') + 1)
-    : data
-  if (!audioData || !/^[A-Za-z0-9+/=_-]+$/.test(audioData)) {
-    log.finish(400, { outcome: 'invalid_audio_data', format })
-    return Response.json({ error: 'The recording data is invalid', requestId: log.requestId }, {
-      status: 400,
-      headers: log.headers(),
-    })
-  }
-
-  const key = process.env.OPENROUTER_API_KEY
-  if (!key) {
+  const apiKey = process.env.OPENROUTER_API_KEY
+  if (!apiKey) {
     log.finish(503, { outcome: 'not_configured' })
     return Response.json({ error: 'Voice transcription is not configured', requestId: log.requestId }, {
-      status: 503,
-      headers: log.headers(),
+      status: 503, headers: log.headers({ 'Cache-Control': 'no-store' }),
     })
   }
 
+  const credit = await openCreditGate({
+    request, requester, feature: 'voice', requestId: log.requestId,
+  })
+  if (credit.denied) {
+    log.finish(credit.denied.status, { outcome: 'credit_denied' })
+    return new Response(credit.denied.body, {
+      status: credit.denied.status,
+      headers: log.headers(credit.denied.headers),
+    })
+  }
+  const gate: CreditGate = credit.gate
+  const provider = new OpenRouterTranscriptionProvider({
+    apiKey,
+    model: process.env.OPENROUTER_STT_MODEL,
+  })
+  const providerStartedAt = performance.now()
+  const languageHint = transcriptionLanguageHint(parsed.value.inputLanguage)
+  log.info('provider.request.started', {
+    provider: provider.id,
+    feature: 'transcription',
+    model: provider.model,
+    format: parsed.value.format,
+    audioBytes: parsed.value.audio.size,
+    durationSeconds: parsed.value.durationSeconds,
+    requestedLanguage: parsed.value.inputLanguage,
+    languageHintApplied: Boolean(languageHint),
+    creditsReserved: gate.reserved,
+  })
+
   try {
-    const model = process.env.OPENROUTER_STT_MODEL || 'openai/whisper-large-v3'
-    const providerStartedAt = performance.now()
-    log.info('provider.request.started', {
-      provider: 'openrouter',
-      feature: 'transcription',
-      model,
-      format,
-      encodedBytes: audioData.length,
-    })
-    const response = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
-      method: 'POST',
-      signal: AbortSignal.timeout(60_000),
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-        'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',
-      },
-      body: JSON.stringify({
-        model,
-        input_audio: { data: audioData, format },
-        temperature: 0,
-      }),
-    })
-    if (!response.ok) {
-      const failure = await providerErrorDetails(response)
-      log.error('provider.request.failed', {
-        provider: 'openrouter',
-        feature: 'transcription',
-        model,
-        durationMs: Math.round(performance.now() - providerStartedAt),
-        ...failure,
-      })
-      log.finish(502, { outcome: 'provider_error', providerStatus: response.status })
-      await recordUsageEventSafe({
-        requestId: log.requestId, route: '/api/transcribe', feature: 'transcription',
-        provider: 'openrouter', model, latencyMs: Math.round(performance.now() - providerStartedAt),
-        outcome: 'provider_error', metadata: { providerStatus: response.status, format },
-      })
-      return Response.json({
-        error: 'The recording could not be transcribed',
-        requestId: log.requestId,
-      }, { status: 502, headers: log.headers() })
-    }
-    const result = await response.json()
+    const result = await provider.transcribe(parsed.value, AbortSignal.timeout(90_000))
     const latencyMs = Math.round(performance.now() - providerStartedAt)
+    if (!result.text) {
+      await gate.settle('failure')
+      log.finish(422, { outcome: 'empty_transcript', provider: result.provider, model: result.model })
+      return Response.json({
+        error: 'We could not hear enough speech. Try again closer to the microphone.',
+        requestId: log.requestId,
+      }, { status: 422, headers: log.headers({ 'Cache-Control': 'no-store' }) })
+    }
+
     await recordUsageEventSafe({
-      requestId: log.requestId, route: '/api/transcribe', feature: 'transcription',
-      provider: 'openrouter', model, inputTokens: result.usage?.prompt_tokens,
-      outputTokens: result.usage?.completion_tokens, actualCostUsd: result.usage?.cost,
-      latencyMs, outcome: 'success', metadata: { format },
+      requestId: log.requestId, route: ROUTE, feature: 'transcription',
+      provider: result.provider, model: result.model,
+      inputTokens: result.usage?.inputTokens, outputTokens: result.usage?.outputTokens,
+      actualCostUsd: result.usage?.cost, latencyMs, outcome: 'success',
+      metadata: {
+        format: parsed.value.format,
+        audioBytes: parsed.value.audio.size,
+        durationSeconds: parsed.value.durationSeconds,
+        requestedLanguage: parsed.value.inputLanguage,
+        detectedLanguage: result.detectedLanguage,
+        languageHintApplied: Boolean(languageHint),
+        segmentCount: result.segments?.length || 0,
+      },
     })
+    await gate.settle('success', result.usage?.cost)
     log.finish(200, {
-      outcome: 'success',
-      provider: 'openrouter',
-      model,
-      durationMs: latencyMs,
-      outputCharacters: typeof result.text === 'string' ? result.text.length : 0,
-      totalTokens: result.usage?.total_tokens,
-      cost: result.usage?.cost,
+      outcome: 'success', provider: result.provider, model: result.model, durationMs: latencyMs,
+      outputCharacters: result.text.length, totalTokens: result.usage?.totalTokens,
+      cost: result.usage?.cost, creditsReserved: gate.reserved,
     })
     return Response.json({
-      text: typeof result.text === 'string' ? result.text : '',
+      text: result.text,
+      segments: result.segments,
+      language: {
+        requested: parsed.value.inputLanguage,
+        detected: result.detectedLanguage,
+        hintApplied: languageHint || null,
+      },
+      confidenceAvailable: result.confidenceAvailable,
+      reviewRequired: true,
+      audioRetention: 'not_stored',
       usage: result.usage,
       requestId: log.requestId,
-    }, { headers: log.headers() })
+    }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
   } catch (error) {
-    log.error('transcription.failed', errorDetails(error))
-    log.finish(502, { outcome: 'request_error' })
+    await gate.settle('failure')
+    const failure = error instanceof Response ? await providerErrorDetails(error) : errorDetails(error)
+    log.error('provider.request.failed', {
+      provider: provider.id, feature: 'transcription', model: provider.model,
+      durationMs: Math.round(performance.now() - providerStartedAt), ...failure,
+    })
+    await recordUsageEventSafe({
+      requestId: log.requestId, route: ROUTE, feature: 'transcription',
+      provider: provider.id, model: provider.model,
+      latencyMs: Math.round(performance.now() - providerStartedAt), outcome: 'provider_error',
+      metadata: { format: parsed.value.format, requestedLanguage: parsed.value.inputLanguage },
+    })
+    log.finish(502, { outcome: 'provider_error' })
     return Response.json({
-      error: 'The recording could not be transcribed',
+      error: 'The voice note could not be transcribed. You can retry without recording it again.',
       requestId: log.requestId,
-    }, { status: 502, headers: log.headers() })
+    }, { status: 502, headers: log.headers({ 'Cache-Control': 'no-store' }) })
   }
 }

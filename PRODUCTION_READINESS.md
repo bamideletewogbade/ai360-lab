@@ -19,7 +19,7 @@ external media and payment providers.
 
 ## Audit snapshot: 2026-08-08
 
-- `npm test`: 100/100 pass.
+- `npm test`: 113/113 pass.
 - `npm run lint` and `npm run build`: pass on Next.js 16.3.0.
 - `npm audit --omit=dev`: zero known production dependency vulnerabilities.
 - Live public-provider checks: domains 6/6 and video catalogue 4/4 pass.
@@ -69,8 +69,9 @@ external media and payment providers.
 | Monthly allowance grants | Lazy renewal on first touch of a new period; unused allowance expires, purchased credits survive | None, no scheduler required | Covered by `npm run credits:verify` including a rollover case | Pilot-ready |
 | Credit interface | `/api/credits` returns balance, holds and cost table | None | No screen displays a balance | Missing |
 | Subscriptions and credits | Catalog and ledger schema prepared | Database, payment provider and policies | No live entitlement activation | In progress |
-| MojoPay checkout | Safe disabled boundary implemented | Signed API/webhook contract and credentials | Sandbox scenarios pending | Blocked intentionally |
+| ExpressPay hosted checkout | Provider-isolated adapter, durable attempts, return/notification routes, server-side query verification and idempotent activation implemented | Merchant sandbox key, public HTTPS callback URL and migrations `0006`/`0007` | 113 unit/contract tests and production build pass; real sandbox payment pending | Blocked intentionally |
 | Logs and request IDs | Structured redacted logs implemented | Host log retention | External alerting absent | Pilot-ready |
+| Customer Quality Loop | Feedback, opt-in evidence, receipts, rule-first triage, bounded AI evaluation and reviewer desk implemented | Database migration, reviewer IDs and optional alert webhook | 7 focused unit tests and responsive browser checks pass; live urgent alert still requires verification | Private pilot |
 | Error monitoring | Runtime logs only | Sentry or equivalent | Not configured | Missing |
 | Security headers | Hardened; Clerk-compatible CSP | Clerk domain DNS | Production header scan pending | Implemented |
 | Dependency security | Production dependency audit clean | Regular update process | `npm audit --omit=dev` passes | Ready |
@@ -147,11 +148,14 @@ external media and payment providers.
 - [ ] Store private uploads and generated assets in Supabase Storage with signed URLs.
 - [ ] Run a production-like load test and inspect slow queries.
 - [ ] Publish incident, retention, deletion, refund and support procedures.
+- [ ] Apply `0006_quality_loop.sql`, assign at least two quality reviewers and test an S0 alert end to end.
+- [ ] Set staffed review hours and measure urgent acknowledgement and fix-verification time.
 
 ### Gate 5: payments
 
-- [ ] Approve MojoPay's signed contract and API documentation.
-- [ ] Verify webhook signatures, retry behavior and idempotency.
+- [x] Select ExpressPay's hosted Merchant API so payment credentials stay on the provider page.
+- [ ] Complete one sandbox card and one sandbox Mobile Money payment, including delayed notification and duplicate-callback checks.
+- [ ] Confirm post-url retry behavior with merchant support; verify every notification through Query and replay it to prove idempotency.
 - [ ] Test success, delay, abandonment, duplicate, reversal and refund paths.
 - [ ] Reconcile payment, subscription and credit-ledger records.
 - [ ] Enable billing only after all previous gates pass.
@@ -180,4 +184,4 @@ These actions change external state, incur cost or depend on private credentials
 2. Add Clerk development and production credentials without sending secrets in chat.
 3. Configure the production Google OAuth consent screen and credentials.
 4. Approve an error-monitoring provider and its data-retention settings.
-5. Approve MojoPay only after its sandbox and webhook contract are available.
+5. Enable ExpressPay only after the complete sandbox matrix and server-side query reconciliation pass.

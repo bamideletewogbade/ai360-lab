@@ -9,6 +9,49 @@ the layer-by-layer architecture remain in this log and `SYSTEM_ARCHITECTURE.md`.
 
 ---
 
+## 2026-08-08 · Decision · ExpressPay is hosted, query-verified and manually renewed
+
+AI360 uses ExpressPay's Merchant API and sends the customer to ExpressPay's
+hosted payment page. AI360 stores the order, price and expected currency before
+the redirect, then treats both the browser return and delayed post-url as
+untrusted signals. A server-side Query must match token, order, amount and GHS
+before one locked transaction activates the plan and appends the credit grant.
+
+**Why.** This keeps card numbers, security codes and wallet authorization out
+of AI360 while making delayed Mobile Money and duplicate delivery safe. The
+provider adapter owns wire formats; the repository owns money-state invariants;
+the plans and ledger remain portable if the provider changes.
+
+Monthly access is a fresh customer-authorized payment. No reusable payment
+token is requested or stored. A throttled status check provides recovery when a
+delayed notification is missed, and production billing remains disabled until
+the complete sandbox matrix passes.
+
+**Revisit if.** ExpressPay approves a documented recurring contract whose
+customer consent, cancellation, failure recovery and token security are tested,
+or if reliability and feature measurements justify swapping the adapter.
+
+---
+
+## 2026-08-08 · Decision · Quality reports use rules first, AI second and people for consequential actions
+
+Customer feedback is stored as a separate quality domain with opt-in evidence
+and contact details. Fixed rules assign urgency before a separate evaluator can
+summarize the issue, propose a test or recommend a fix. The evaluator cannot
+lower urgency or execute a consequential action. A reviewer owns sensitive
+decisions, customer updates and final verification.
+
+**Why.** The system must learn from failures without allowing the same model to
+be the final judge of its own behavior. Durable receipts make the process
+visible to customers, while approved test candidates turn repeated failures
+into measurable release gates.
+
+**Revisit if.** Independent evaluations demonstrate that another bounded action
+is safe, reversible, fully audited and materially reduces response time. Human
+approval remains mandatory for customer contact, containment and release.
+
+---
+
 ## 2026-08-08 · Decision · Public pricing is a monthly, research-calibrated pilot
 
 Explorer remains GH₵0 for 5 credits and Everyday remains GH₵125 for 120.

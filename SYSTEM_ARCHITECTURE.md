@@ -61,11 +61,13 @@ flowchart LR
   O --> M["Model gateway and routing"]
   O --> T["Search, files, voice and production tools"]
   A --> D["Supabase Postgres"]
+  A --> Q["Quality Loop: rules, review and test candidates"]
   T --> S["Supabase private Storage"]
-  A --> B["Plans, credits and MojoPay adapter"]
+  A --> B["Plans, credits and ExpressPay adapter"]
   M --> E["Usage, cost, latency and quality events"]
   T --> E
   D --> E
+  Q --> E
   E --> R["Operations, evaluation and product decisions"]
 ```
 
@@ -81,8 +83,9 @@ flowchart LR
 | Tools and retrieval | Ground answers and execute useful work | Web research, uploads, voice, image, video and exports | Add permissioned tool registry, malware scanning and prompt-injection isolation before broad connectors |
 | Data | Preserve truth, ownership, state and billing evidence | Supabase Postgres is the only data plane, with RLS, indexes and runtime repositories | Verify production-host connectivity and tenant isolation; partition only after table and query metrics justify it |
 | Asset storage | Store large private files outside relational tables | Private Supabase bucket defined; metadata schema prepared | Signed URLs, lifecycle rules, checksums and CDN; separate hot and archival retention when storage cost warrants it |
-| Billing and payments | Convert variable AI cost into understandable access | Versioned plans, payment attempts, subscriptions and ledger | MojoPay signed webhooks, atomic reservations and reconciliation before enabling checkout |
+| Billing and payments | Convert variable AI cost into understandable access | Versioned plans, durable payment attempts, hosted ExpressPay checkout, query-verified activation, subscriptions and an append-only ledger | Pass the sandbox matrix, add scheduled reconciliation and enable production credentials only after operational approval |
 | Observability and evaluation | Detect failures and prove that changes improve outcomes | Request, token, cost and latency logging | Central tracing, alerts, product analytics and representative eval suite before public scale |
+| Customer quality | Turn feedback into evidence, accountable decisions and regression tests | Opt-in evidence, rule-first severity, bounded AI evaluation, private receipts and a human Quality Desk | Measure acknowledgement and verification time; add durable alert delivery and benchmark execution before public scale |
 | Security and governance | Protect people, organizations, prompts and money | CSP, RLS, server ownership checks and approval boundaries | Threat modelling, dependency scanning, incident playbook, data retention and external security review |
 | Platform and delivery | Release safely and recover quickly | Hostinger Node deployment, health/readiness and preflight | Staging, automated migrations, rollback and load tests; move jobs to workers before long runs threaten web capacity |
 
@@ -105,13 +108,33 @@ broadband networks, not only from a developer laptop.
 | Billing correctness | Zero duplicate grants; every ledger mutation idempotent | Payment and ledger reconciliation |
 | Recovery | Pilot RPO 24 hours and RTO 4 hours, improved after restore rehearsal | Backup and restore test |
 | Accessibility | WCAG 2.2 AA contrast, keyboard flow and 200% text zoom for core journeys | Automated and manual review |
+| Quality response | S0 acknowledgement under 15 minutes during staffed pilot hours; all other reports under one business day | Quality event timestamps and reviewer queue |
+
+## Quality Loop
+
+```mermaid
+flowchart LR
+  F["Customer feedback"] --> R["Fixed rules set urgency"]
+  R --> H["Urgent human queue"]
+  R --> A["Bounded AI check"]
+  A --> C["Human decision"]
+  C --> T["Approved private test"]
+  T --> V["Fix is verified"]
+  V --> U["Customer-safe status update"]
+```
+
+The AI check may summarize, classify and propose a test or fix. It cannot lower
+the rules-first urgency, contact a customer, pause a capability, publish a fix
+or close a serious case. Message content and contact details are opt-in. Review
+receipts expose only customer-safe events; operational evidence stays behind
+reviewer authorization.
 
 ## Data boundaries
 
 - Clerk is the identity and session authority.
 - Supabase Postgres is the durable application truth.
 - Supabase Storage holds private binaries; Postgres holds metadata and ownership.
-- MojoPay confirms money movement; AI360 owns plans, entitlements and the
+- ExpressPay confirms money movement; AI360 owns plans, entitlements and the
   append-only credit history.
 - OpenRouter and media providers execute model work; AI360 owns routing,
   budgets, user approvals and usage evidence.
@@ -142,3 +165,6 @@ broadband networks, not only from a developer laptop.
   restore evidence.
 - Before each phase gate: threat model, load test, tenant isolation and rollback
   rehearsal proportional to the change.
+# Voice and language subsystem
+
+The production voice boundary is a provider-neutral cascade: capture, binary upload, spoken-language context, transcription routing, human transcript review, AI reasoning, and optional tested speech output. Spoken language and answer language are separate product settings. Provider adapters, evaluation gates, privacy rules and the staged roadmap are defined in `VOICE_LANGUAGE_ARCHITECTURE.md`.

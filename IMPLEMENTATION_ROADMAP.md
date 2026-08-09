@@ -8,7 +8,7 @@ Companion references:
 
 - `SYSTEM_ARCHITECTURE.md` defines every product layer and its quality budget.
 - `PRICING_STRATEGY.md` records global and African evidence, unit economics and
-  the MojoPay activation gate.
+  the ExpressPay activation gate.
 
 ## Product outcome
 
@@ -47,7 +47,7 @@ AI360 Lab should help an individual or team move from an outcome to a reviewed d
 - [x] Production build and live-provider release-candidate test.
 - [x] Public Ghana-first pricing page and versioned pilot plan catalog.
 - [x] Provider-neutral payment, subscription, webhook and credit-ledger schema.
-- [x] Safe checkout boundary that remains closed until MojoPay is verified.
+- [x] Safe hosted-checkout boundary that remains closed until ExpressPay is verified.
 - [x] Clerk-compatible CSP, restricted authorized parties and production
   liveness/readiness endpoints.
 - [x] Supabase Postgres schema, RLS policies, indexes and migration runner prepared.
@@ -245,18 +245,20 @@ Why: subscriptions should be based on measured cost and reliable entitlements, n
 - [ ] Add spend caps at user, organization and application levels.
 - [ ] Publish clear retention, privacy, cancellation and refund rules before charging.
 
-### MojoPay activation gate
+### ExpressPay activation gate
 
-Why: MojoPay is the preferred Ghana payment edge, but AI360 must not invent a provider contract or activate access from a browser redirect.
+Why: ExpressPay is the selected Ghana payment edge. AI360 uses its hosted
+Merchant API so sensitive payment credentials stay with the provider, and
+activates access only after a server-side Query matches the stored order.
 
-- [ ] Obtain sandbox and production merchant credentials directly from MojoPay.
+- [ ] Enter sandbox and production merchant credentials directly in each deployment environment.
 - [ ] Confirm Mobile Money networks, cards, settlement schedule, transaction fees and refund fees.
-- [ ] Confirm whether recurring MoMo uses wallet direct debit, standing approval or monthly customer authorization.
-- [ ] Obtain the canonical checkout endpoint, webhook signature scheme, retry behavior and event catalog.
-- [ ] Confirm idempotency support, provider reference uniqueness and status-query endpoint.
+- [x] Use manual monthly renewal; do not store or request a reusable card or wallet token.
+- [x] Implement the documented submit, hosted payment, return, post-url and Query endpoints.
+- [x] Make AI360 order IDs and credit grants idempotent and provider references unique.
 - [ ] Test successful, abandoned, delayed, duplicate, reversed and refunded payments.
-- [ ] Activate an entitlement only after a verified server-to-server event or verified status query.
-- [ ] Keep Paystack or Flutterwave as a documented fallback adapter if MojoPay reliability or feature coverage fails the pilot gate.
+- [x] Activate an entitlement only after a Query verifies token, order, amount and currency.
+- [ ] Keep a second Ghana-capable provider as an adapter-level fallback if ExpressPay reliability or feature coverage fails the pilot gate.
 
 ## First implementation slice
 
@@ -294,7 +296,7 @@ Only after this passes should Studio persistence and the coordinator runtime be 
 | 2026-08-01 | First specialist team selected | Researcher, Strategist and Verifier cover evidence, decisions and quality control |
 | 2026-08-01 | Workspace ownership foundation implemented | Server-derived personal and organization keys now scope conversation persistence |
 | 2026-08-08 | Research-calibrated monthly pilot pricing adopted | GH₵0 Explorer, GH₵125 Everyday, GH₵350 Builder and GH₵1,200 assisted Team balance accessible entry with safer upper-plan economics; annual purchasing waits for proven renewal and refund operations |
-| 2026-08-03 | MojoPay selected behind an adapter | Mobile Money should lead checkout, while AI360 retains provider-neutral billing and entitlement records |
+| 2026-08-08 | ExpressPay hosted Merchant API selected behind an adapter | Mobile Money should lead checkout, payment credentials remain on the provider page, and AI360 retains provider-neutral billing and entitlement records |
 | 2026-08-04 | Clerk + Supabase production boundary selected | Clerk owns identity; portable Postgres, RLS and Storage provide the durable data plane |
 | 2026-08-04 | Production preflight and readiness endpoint added | Releases must expose missing dependencies instead of silently degrading |
 | 2026-08-04 | Layer-first quality budgets adopted | Performance, latency, accessibility, security and cost are acceptance criteria for every feature |

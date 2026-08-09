@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  DEFAULT_LANGUAGE, findLanguage, ghanaianLanguages, isLanguageCode,
-  LANGUAGES, languageDirective,
+  browserSpeechLocale, DEFAULT_LANGUAGE, DEFAULT_SPEECH_INPUT, findLanguage,
+  ghanaianLanguages, isLanguageCode, isSpeechInputCode, LANGUAGES,
+  languageDirective, transcriptionLanguageHint,
 } from '../src/lib/languages.ts'
 
 test('the chosen language is stated before anything else can dilute it', () => {
@@ -34,6 +35,21 @@ test('an unknown language code falls back to English rather than breaking', () =
   assert.equal(isLanguageCode('fr'), false)
   assert.equal(isLanguageCode(undefined), false)
   assert.equal(findLanguage('zz' as never).code, DEFAULT_LANGUAGE)
+})
+
+test('speech input is separate from the requested response language', () => {
+  assert.equal(DEFAULT_SPEECH_INPUT, 'mixed')
+  assert.equal(isSpeechInputCode('mixed'), true)
+  assert.equal(isSpeechInputCode('tw'), true)
+  assert.equal(isSpeechInputCode('fr'), false)
+})
+
+test('provider hints and browser speech stay conservative until evaluated', () => {
+  assert.equal(transcriptionLanguageHint('en'), 'en')
+  assert.equal(transcriptionLanguageHint('tw'), undefined)
+  assert.equal(transcriptionLanguageHint('mixed'), undefined)
+  assert.equal(browserSpeechLocale('en'), 'en-GH')
+  assert.equal(browserSpeechLocale('gaa'), undefined)
 })
 
 test('a question typed in English does not cancel the chosen language', () => {

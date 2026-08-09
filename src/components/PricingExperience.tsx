@@ -77,7 +77,7 @@ export function PricingExperience() {
           {BILLING_PLANS.map((plan) => {
             const price = plan.monthlyPriceGhs
             const paid = price > 0
-            const signupHref = `/sign-up?plan=${plan.slug}&cadence=monthly`
+            const checkoutHref = `/checkout?plan=${plan.slug}`
             return (
               <article className={`${styles.plan} ${plan.featured ? styles.featured : ''}`} key={plan.slug}>
                 {plan.featured && <span className={styles.recommended}>Best place to begin</span>}
@@ -94,7 +94,7 @@ export function PricingExperience() {
                     Request Team pilot <span>↗</span>
                   </a>
                 ) : (
-                  <Link href={paid ? signupHref : '/app'} className={paid ? styles.choose : styles.start}>
+                  <Link href={paid && BILLING_ENABLED ? checkoutHref : paid ? `/sign-up?plan=${plan.slug}&cadence=monthly` : '/app'} className={paid ? styles.choose : styles.start}>
                     {paid ? (BILLING_ENABLED ? `Choose ${plan.name}` : `Join the ${plan.name} pilot`) : 'Start free'} <span>↗</span>
                   </Link>
                 )}
@@ -147,7 +147,7 @@ export function PricingExperience() {
           <h2>{BILLING_ENABLED ? <>Review everything.<br />Then decide.</> : <>Payment is designed.<br />Verification comes first.</>}</h2>
           <p>{BILLING_ENABLED
             ? 'Checkout will repeat your selected plan, credits, billing period and complete amount. Nothing is charged until you choose a payment method and confirm.'
-            : 'This is the checkout experience planned for launch. It remains disabled while signatures, retries, reversals and reconciliation are verified in the provider sandbox.'}</p>
+            : 'This is the checkout experience planned for launch. It remains disabled while delayed payments, repeat notifications, reversals and reconciliation are verified in the provider sandbox.'}</p>
           <div className={styles.methodRow}><span>MTN MoMo</span><span>Telecel Cash</span><span>AT Money</span><span>Visa</span><span>Mastercard</span></div>
         </div>
         <div className={styles.checkoutReview}>

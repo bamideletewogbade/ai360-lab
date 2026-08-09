@@ -56,13 +56,11 @@ monthly cohorts.
   wallet. Card support still matters for international users, organizations and
   customers who prefer bank-linked payment.
   [World Bank Ghana case study](https://fastpayments.worldbank.org/sites/default/files/2025-07/FPS_Governance%20Note_Final.pdf).
-- Mojo Payments is a Ghana-licensed Enhanced Payment Service Provider. Its
-  public product material advertises one-time and recurring collections,
-  verification, web checkout and direct debit for mobile wallets and bank
-  accounts. That fits AI360's intended local payment edge.
-  [MojoPay company information](https://mojo-pay.com/about-us),
-  [collections](https://mojo-pay.com/services/collections) and
-  [direct debit](https://mojo-pay.com/services/direct-debit).
+- ExpressPay's Merchant API provides a Ghana-focused hosted payment page,
+  browser return, delayed Mobile Money notification and server-side Query.
+  This fits AI360's local payment edge without bringing card or wallet
+  credentials into the application.
+  [ExpressPay Merchant API](https://expresspaygh.com/developers/docs/accept-payments/merchant-api).
 - GH₵125 deliberately sits below typical global AI-builder subscriptions while
   remaining high enough to fund support and real work. It will not be affordable
   to every learner. Sponsored Campus seats, institutional bundles and controlled
@@ -158,21 +156,20 @@ Do this before the pricing page goes live with the published range.
 6. Fall back by capability, price, latency and current provider health.
 7. Log actual cost rather than assuming the quoted estimate was consumed.
 
-## MojoPay activation checklist
+## ExpressPay activation checklist
 
-The public website confirms MojoPay's broad fit, but the merchant contract and
-API documentation must decide the implementation. Before enabling checkout:
+The hosted Merchant API is implemented behind the provider-neutral payment
+contract. Before enabling checkout:
 
-- Confirm sandbox and production base URLs and credentials.
+- Enter sandbox and production credentials directly in protected environment settings.
 - Confirm supported Mobile Money networks and local/international card rails.
 - Obtain exact transaction, refund, chargeback and settlement fees.
-- Confirm whether recurring Mobile Money is direct debit or a fresh customer
-  approval each month.
-- Verify webhook signature, retry and event-ordering behaviour.
-- Verify status lookup, provider-reference uniqueness and idempotency support.
+- Keep renewal as a fresh monthly customer-authorized payment until a separate recurring contract is approved.
+- Confirm post-url retry and event-ordering behaviour with merchant support.
+- Verify every browser return and post-url notification with the server-side Query API.
 - Test success, delayed success, abandonment, duplicate events, reversal,
   refund and chargeback.
-- Grant credits only after a verified server event or verified status lookup.
+- Grant credits only after token, order, amount and currency match the stored attempt.
 - Keep the payment adapter provider-neutral so a fallback PSP does not require
   rewriting plans, subscriptions or the credit ledger.
 

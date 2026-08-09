@@ -33,11 +33,17 @@ if (/@db\.[a-z0-9]+\.supabase\.co/.test(process.env.DATABASE_URL || '')) {
 }
 
 if (process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true') {
-  for (const name of ['MOJOPAY_MERCHANT_ID', 'MOJOPAY_SECRET_KEY', 'MOJOPAY_WEBHOOK_SECRET']) {
+  for (const name of ['EXPRESSPAY_MERCHANT_ID', 'EXPRESSPAY_API_KEY']) {
     requireValue(name, 'required when billing is enabled')
   }
+  if (process.env.PAYMENTS_PROVIDER !== 'expresspay') {
+    errors.push('PAYMENTS_PROVIDER: must be expresspay when billing is enabled')
+  }
+  if (process.env.EXPRESSPAY_ENV !== 'live') {
+    errors.push('EXPRESSPAY_ENV: production billing must use live')
+  }
 } else {
-  warnings.push('Billing is disabled. Keep it disabled until MojoPay sandbox and signed webhooks pass.')
+  warnings.push('Billing is disabled. Keep it disabled until ExpressPay sandbox checkout, callback and server-side query verification pass.')
 }
 
 if (!configured('CLERK_AUTHORIZED_PARTIES')) {

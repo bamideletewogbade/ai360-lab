@@ -12,6 +12,34 @@ export type ChangelogRelease = {
 
 export const CHANGELOG_RELEASES: readonly ChangelogRelease[] = [
   {
+    id: 'expresspay-foundation',
+    date: '2026-08-08',
+    displayDate: '8 August 2026',
+    status: 'Foundation',
+    title: 'Safer local payments are ready for sandbox verification',
+    summary: 'AI360 now has a hosted ExpressPay checkout path designed for Mobile Money and cards without handling sensitive payment details.',
+    changes: [
+      'Added a clear plan review and secure handoff to ExpressPay hosted checkout.',
+      'Required a direct server check before any plan or credits can activate.',
+      'Made repeat notifications and page refreshes safe through one-time activation and ledger controls.',
+      'Kept live charging closed until card, Mobile Money and delayed-payment sandbox tests pass.',
+    ],
+  },
+  {
+    id: 'quality-loop',
+    date: '2026-08-08',
+    displayDate: '8 August 2026',
+    status: 'Pilot',
+    title: 'A clearer way to report problems and track what happens next',
+    summary: 'Customers can now flag weak answers, serious concerns and missing features without leaving their work.',
+    changes: [
+      'Added simple Helpful, Needs work and Report a problem controls beside AI answers.',
+      'Made message sharing optional and gave every report a private status receipt.',
+      'Added rule-first urgent review, a bounded AI quality check and a human decision queue.',
+      'Turned approved failures into private test candidates so fixes can be checked before release.',
+    ],
+  },
+  {
     id: 'production-readiness',
     date: '2026-08-08',
     displayDate: '8 August 2026',

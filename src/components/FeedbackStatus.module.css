@@ -1,0 +1,24 @@
+.state,.card { width:min(920px,calc(100% - 40px)); margin:clamp(70px,10vw,130px) auto; }
+.state { display:grid; min-height:260px; place-items:center; align-content:center; gap:14px; border:1px solid #dedbd3; border-radius:20px; background:white; }
+.state p { margin:0; color:#55585a; }
+.state a,.return { color:#171819; font-weight:800; }
+.card { padding:clamp(26px,6vw,68px); border:1px solid #d9d6ce; border-radius:24px; background:#f7f6f2; box-shadow:0 30px 90px rgba(16,17,18,.08); }
+.eyebrow { margin:0 0 18px; color:#5c5f61; font-size:10px; font-weight:850; letter-spacing:.13em; text-transform:uppercase; }
+.card h1 { margin:0; font-family:var(--font-heading); font-size:clamp(46px,7vw,76px); line-height:1; letter-spacing:-.06em; }
+.intro { max-width:620px; margin:18px 0 28px; color:#55585a; font-size:16px; line-height:1.7; }
+.reference { display:inline-grid; gap:3px; padding:12px 15px; border:1px solid #d7d4cc; border-radius:11px; background:white; }
+.reference span,.update span { color:#6b6e70; font-size:9px; font-weight:850; letter-spacing:.1em; text-transform:uppercase; }
+.reference strong { overflow-wrap:anywhere; font-size:13px; }
+.flow { display:grid; grid-template-columns:repeat(5,1fr); margin:42px 0; border-top:1px solid #c9c6bd; }
+.flow div { position:relative; display:grid; gap:11px; padding:22px 12px 0 0; color:#929597; }
+.flow div::before { position:absolute; top:-5px; left:0; width:9px; height:9px; border:2px solid #f7f6f2; border-radius:50%; background:#bbbdbf; content:''; }
+.flow .complete { color:#171819; }
+.flow .complete::before { background:#436a55; }
+.flow span { font-size:9px; font-weight:800; }
+.flow b { font-size:11px; }
+.update { padding:19px; border-radius:13px; background:#e9eee9; }
+.update p { margin:7px 0 0; color:#304638; line-height:1.65; }
+.note { max-width:650px; margin:24px 0; color:#686b6d; font-size:11px; line-height:1.65; }
+.return { display:inline-flex; min-height:44px; align-items:center; padding:0 16px; border-radius:9px; background:#171819; color:white; text-decoration:none; font-size:11px; }
+@media(max-width:650px){.state,.card{width:calc(100% - 24px);margin:36px auto}.card{padding:27px 20px}.flow{grid-template-columns:1fr;margin:30px 0;border-top:0;border-left:1px solid #c9c6bd}.flow div{grid-template-columns:35px 1fr;align-items:center;padding:10px 0 10px 20px}.flow div::before{top:50%;left:-5px;transform:translateY(-50%)}}
+

@@ -10,7 +10,7 @@ export type CreateCheckoutInput = {
   currency: 'GHS'
   cadence: PaymentCadence
   preferredMethod: PaymentMethod
-  customer: { email?: string; phone?: string }
+  customer: { email: string; phone: string; firstName: string; lastName: string }
   returnUrl: string
   webhookUrl: string
   metadata: Record<string, string>
@@ -24,18 +24,29 @@ export type CheckoutSession = {
   expiresAt?: string
 }
 
+export type VerifiedPayment = {
+  provider: string
+  providerReference: string
+  providerTransactionId: string | null
+  orderId: string
+  status: 'approved' | 'declined' | 'pending' | 'failed'
+  statusText: string
+  amountMinor: number
+  currency: 'GHS'
+  processedAt: string | null
+}
+
 export interface PaymentProvider {
   readonly name: string
   createCheckout(input: CreateCheckoutInput): Promise<CheckoutSession>
-  verifyWebhook(request: Request): Promise<unknown>
+  queryPayment(providerReference: string): Promise<VerifiedPayment>
 }
 
 export function isPaymentProviderConfigured() {
   return Boolean(
-    process.env.PAYMENTS_PROVIDER === 'mojopay' &&
-      process.env.MOJOPAY_API_BASE_URL &&
-      process.env.MOJOPAY_SECRET_KEY &&
-      process.env.MOJOPAY_MERCHANT_ID &&
-      process.env.MOJOPAY_WEBHOOK_SECRET,
+    process.env.PAYMENTS_PROVIDER === 'expresspay' &&
+      (process.env.EXPRESSPAY_ENV === 'sandbox' || process.env.EXPRESSPAY_ENV === 'live') &&
+      process.env.EXPRESSPAY_API_KEY &&
+      process.env.EXPRESSPAY_MERCHANT_ID,
   )
 }

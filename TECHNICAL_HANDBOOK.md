@@ -73,6 +73,8 @@ flowchart LR
   Services --> Models["OpenRouter model gateway"]
   Services --> Tools["Search, files, voice, image, video and export tools"]
   Services --> Data["Supabase Postgres"]
+  Routes --> Quality["Quality Loop"]
+  Quality --> Data
   Tools --> Storage["Supabase private Storage target"]
   Services --> Payments["Provider-neutral payments boundary"]
   Models --> Telemetry["Redacted usage, cost and reliability events"]
@@ -97,6 +99,8 @@ Public, indexable pages:
 Private or utility surfaces:
 
 - `/app`: workspace; must remain `noindex, nofollow`
+- `/feedback/[reportId]`: private receipt opened with a signed-in identity or one-time browser token
+- `/quality`: reviewer-only Quality Desk; must remain `noindex, nofollow`
 - `/sign-in` and `/sign-up`: Clerk account flows
 - `/api/*`: server routes; never public search results
 - `/api/health`: process liveness
@@ -114,6 +118,7 @@ Update these when a new public page or materially different capability ships.
 | UI components | One visible idea, responsive behavior and local interaction | `src/components`, `src/app/*` pages and CSS modules |
 | Route handlers | HTTP parsing, authorization, rate limits and response translation | `src/app/api` |
 | Application services | Complete use cases and workflow policy | `src/lib/agent`, `src/lib/studio`, `src/lib/billing` |
+| Quality policy | Consent, deterministic urgency, bounded AI evaluation and human decisions | `src/lib/quality`, `src/app/api/feedback`, `src/app/api/quality` |
 | Provider adapters | Provider request shape, timeout, failover and normalization | `src/lib/models.ts`, `src/lib/live-tools.ts`, media modules |
 | Repositories | Durable aggregates and atomic invariants | `src/lib/workspace-db.ts`, agent and billing stores |
 | Infrastructure | Database pool, configuration, logs and deployment checks | `src/lib/postgres.ts`, `runtime-config.ts`, `observability.ts`, `scripts` |
@@ -163,6 +168,26 @@ actual cost or releases the hold. Ledger operations are idempotent and live in
 Supabase Postgres. Monthly plan allowance is granted lazily on first touch of a
 new period; purchased credits survive allowance rollover.
 
+### Customer Quality Loop
+
+```mermaid
+flowchart LR
+  Report["Report"] --> Rules["Rules set urgency"]
+  Rules --> AI["AI gathers the signal"]
+  Rules --> Human["Urgent human review"]
+  AI --> Human
+  Human --> Eval["Approve a private test"]
+  Eval --> Fix["Verify the fix"]
+  Fix --> Receipt["Update the customer receipt"]
+```
+
+`POST /api/feedback` validates consent and creates a durable report. Rules run
+first and cannot be weakened by the evaluator. The evaluator sees no contact
+email and receives message content only when the customer opted in. It may
+summarize, categorize and propose an evaluation or fix. Only an approved
+reviewer may decide consequential actions through `/quality`. Keep every status
+note suitable for the customer to read.
+
 ## 7. Data, identity and providers
 
 Supabase Postgres is the only application database. The ordered migrations are:
@@ -172,6 +197,8 @@ Supabase Postgres is the only application database. The ordered migrations are:
 3. `0003_credit_runtime.sql`
 4. `0004_credit_allowance.sql`
 5. `0005_resumable_runs.sql`
+6. `0006_quality_loop.sql`
+7. `0007_expresspay_foundation.sql`
 
 Use `DATABASE_URL` for the Hostinger runtime and `DIRECT_URL` for migrations.
 The Hostinger runtime should use the Supabase shared session pooler on port
@@ -184,8 +211,8 @@ Provider boundaries:
 - Supabase Postgres: durable application truth
 - Supabase Storage: intended private binary storage with signed access
 - OpenRouter: model and media gateway
-- MojoPay adapter: present but deliberately disabled until contract, sandbox,
-  signature and reconciliation checks pass
+- ExpressPay hosted-checkout adapter: implemented but deliberately disabled
+  until sandbox checkout, delayed notification and Query reconciliation pass
 
 Never put secrets in `NEXT_PUBLIC_*`. Never log prompts, file contents,
 recordings, cookies, authorization headers, full generated media or provider
@@ -203,10 +230,32 @@ keys.
 | `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_*` | private asset storage when connected |
 | `NEXT_PUBLIC_BILLING_ENABLED`, payment secrets | verified checkout only |
 | `AI360_RATE_*` | pilot request limits |
+| `AI360_QUALITY_*` | reviewer access, urgent alert delivery and isolated quality evaluation |
 | search verification tokens | search-console ownership verification |
 
 Treat `NEXT_PUBLIC_APP_URL` as canonical. Production is
 `https://lab.aithreesixty.tech`.
+
+### Payment activation path
+
+```mermaid
+flowchart LR
+  U["Signed-in customer"] --> A["AI360 creates durable attempt"]
+  A --> E["ExpressPay hosted checkout"]
+  E --> R["Browser return or delayed post-url"]
+  R --> Q["AI360 queries ExpressPay server to server"]
+  Q --> V{"Order, token, amount and GHS match?"}
+  V -->|No| H["Hold for review"]
+  V -->|Pending| P["Reconcile again later"]
+  V -->|Approved| T["One database transaction"]
+  T --> S["Activate plan and append credit grant"]
+```
+
+The return and post-url are signals, never proof. External HTTP calls happen
+outside database transactions. A row lock, `activated_at`, unique provider
+transaction IDs and ledger idempotency keys make duplicate delivery harmless.
+The signed-in status route can claim a stale pending attempt and re-query it,
+so a missed delayed notification does not permanently strand Mobile Money.
 
 ## 9. Verification and release
 
@@ -291,3 +340,6 @@ information, exploit details, generic maintenance or future work as shipped.
 - Read the newest entries in `DECISIONS.md` before changing model routing,
   credits, media pricing or orchestration.
 - Never infer production readiness from a polished screen or a green build.
+# Voice and language foundation (2026-08-09)
+
+AI360 no longer treats voice as a base64 field attached directly to one provider. The browser sends binary multipart audio to a validated route, which delegates to a `TranscriptionProvider`. This preserves the reviewed-transcript safety gate while allowing Ghana-specific ASR, streaming transcription and tested TTS to be added without rewriting chat or tools. Read `VOICE_LANGUAGE_ARCHITECTURE.md` for the decision record, privacy rules, evaluation gates and research sources.

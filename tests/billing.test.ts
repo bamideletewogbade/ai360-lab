@@ -18,6 +18,14 @@ test('the pilot catalog keeps a free entry point and prices paid access in Ghana
 test('the public pilot catalog is versioned and monthly only', () => {
   assert.equal(BILLING_CATALOG_VERSION, 'pilot-2026-08-v3')
   assert.ok(BILLING_PLANS.every((plan) => !('annualMonthlyPriceGhs' in plan)))
-  assert.equal(checkoutRequestSchema.safeParse({ plan: 'builder', cadence: 'monthly' }).success, true)
-  assert.equal(checkoutRequestSchema.safeParse({ plan: 'builder', cadence: 'annual' }).success, false)
+  assert.equal(checkoutRequestSchema.safeParse({ plan: 'builder', cadence: 'monthly', phone: '024 000 0000' }).success, true)
+  assert.equal(checkoutRequestSchema.safeParse({ plan: 'builder', cadence: 'annual', phone: '024 000 0000' }).success, false)
+})
+
+test('checkout normalizes Ghana phone numbers before they reach the provider', () => {
+  const local = checkoutRequestSchema.parse({ plan: 'everyday', phone: '024 000 0000' })
+  const international = checkoutRequestSchema.parse({ plan: 'everyday', phone: '+233 24 000 0000' })
+  assert.equal(local.phone, '233240000000')
+  assert.equal(international.phone, '233240000000')
+  assert.equal(checkoutRequestSchema.safeParse({ plan: 'everyday', phone: '123' }).success, false)
 })

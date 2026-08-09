@@ -5,11 +5,15 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { MODEL_OPTIONS, type ChatMode } from '@/lib/models'
 import { ResponseContent } from '@/components/ResponseContent'
-import { DEFAULT_LANGUAGE, findLanguage, LANGUAGES, type LanguageCode } from '@/lib/languages'
+import {
+  browserSpeechLocale, DEFAULT_LANGUAGE, DEFAULT_SPEECH_INPUT, findLanguage, LANGUAGES,
+  SPEECH_INPUT_OPTIONS, type LanguageCode, type SpeechInputCode,
+} from '@/lib/languages'
 import { StudioWorkspace } from '@/components/StudioWorkspace'
 import { AccountControls } from '@/components/AccountControls'
 import { WorkspaceOnboarding, type OnboardingChoice } from '@/components/WorkspaceOnboarding'
 import { WorkspaceBoot } from '@/components/WorkspaceBoot'
+import { QualityFeedback } from '@/components/QualityFeedback'
 import { useAuth } from '@clerk/nextjs'
 import { scopedStorageKey } from '@/lib/workspace'
 
@@ -37,6 +41,8 @@ type Msg = {
   sources?: SourceLink[]
   usage?: { totalTokens?: number; cost?: number }
   actions?: AgentAction[]
+  /** Correlates customer feedback with the server trace that produced this answer. */
+  requestId?: string
 }
 type Experience = 'chat' | 'agent' | 'studio'
 type AgentStep = { id: string; label: string; status: 'pending' | 'active' | 'complete' | 'failed' }
@@ -288,7 +294,8 @@ function LabWorkspace({
   const [agentDepth, setAgentDepth] = useState<AgentDepth>('standard')
   const [planFirst, setPlanFirst] = useState(false)
   // Kept for the session so nobody has to reselect their language every message.
-  const [language, setLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE)
+  const [responseLanguage, setResponseLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE)
+  const [speechInputLanguage, setSpeechInputLanguage] = useState<SpeechInputCode>(DEFAULT_SPEECH_INPUT)
   const [languageOpen, setLanguageOpen] = useState(false)
   const recovering = useRef(new Set<string>())
   const [hydrated, setHydrated] = useState(false)
@@ -302,6 +309,7 @@ function LabWorkspace({
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null)
   const [recordingUrl, setRecordingUrl] = useState('')
+  const [voiceNotice, setVoiceNotice] = useState('')
   const [actionDraft, setActionDraft] = useState<ActionDraft | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
   const [actionError, setActionError] = useState('')
@@ -601,6 +609,7 @@ function LabWorkspace({
 
   async function toggleRecording() {
     setFileError('')
+    setVoiceNotice('')
     if (recordingState === 'recording') {
       recorderRef.current?.stop()
       return
@@ -611,7 +620,15 @@ function LabWorkspace({
     }
     discardRecording()
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: { ideal: 1 },
+          sampleRate: { ideal: 24_000 },
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: true },
+        },
+      })
       recordingStreamRef.current = stream
       const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
         .find((type) => MediaRecorder.isTypeSupported(type))
@@ -648,18 +665,14 @@ function LabWorkspace({
     setFileError('')
     try {
       const requestId = crypto.randomUUID()
-      const dataUrl = await fileToDataUrl(recordingBlob)
-      const format = recordingBlob.type.includes('ogg')
-        ? 'ogg'
-        : recordingBlob.type.includes('mp4')
-          ? 'm4a'
-          : recordingBlob.type.includes('mpeg')
-            ? 'mp3'
-            : 'webm'
+      const form = new FormData()
+      form.set('audio', recordingBlob, 'voice-note')
+      form.set('inputLanguage', speechInputLanguage)
+      form.set('durationSeconds', String(recordingSeconds))
       const response = await fetch('/api/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
-        body: JSON.stringify({ data: dataUrl.split(',')[1], format }),
+        headers: { 'X-Request-Id': requestId, 'Idempotency-Key': requestId },
+        body: form,
       })
       const result = await response.json()
       if (!response.ok || typeof result.text !== 'string') {
@@ -668,6 +681,7 @@ function LabWorkspace({
       }
       setInput((current) => [current.trim(), result.text.trim()].filter(Boolean).join(' '))
       discardRecording()
+      setVoiceNotice('Transcript added. Read it before you send.')
       taRef.current?.focus()
     } catch (error) {
       console.error('[AI360] Transcription failed', error)
@@ -681,9 +695,20 @@ function LabWorkspace({
   }
 
   function speak(text: string) {
+    const locale = browserSpeechLocale(responseLanguage)
+    if (!locale || typeof window.speechSynthesis === 'undefined') {
+      setFileError('Read aloud is not yet available for this language.')
+      return
+    }
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text.replace(/[#*_`]/g, ''))
+    utterance.lang = locale
     utterance.rate = 0.98
+    const voices = window.speechSynthesis.getVoices()
+    utterance.voice = voices.find((voice) => voice.lang.toLowerCase() === locale.toLowerCase())
+      || voices.find((voice) => voice.lang.toLowerCase().startsWith('en-gh'))
+      || voices.find((voice) => voice.lang.toLowerCase().startsWith('en'))
+      || null
     window.speechSynthesis.speak(utterance)
   }
 
@@ -968,7 +993,7 @@ function LabWorkspace({
           messages: history,
           mode: conversation.model,
           depth: plan.depth,
-          language,
+          language: responseLanguage,
           sessionId: conversationId,
           proposedPlan: plan.objectives,
           approvedPlan: plan.objectives,
@@ -1013,10 +1038,12 @@ function LabWorkspace({
     }
     const next = [...baseMessages, userMessage]
     const currentExperience = experienceOverride ?? targetConversation.experience ?? 'chat'
+    const requestId = crypto.randomUUID()
     const placeholder: Msg = {
       id: makeId(),
       role: 'assistant',
       content: '',
+      requestId,
       agent: currentExperience === 'agent',
       ...(currentExperience === 'agent' ? { agentSteps: [] } : {}),
     }
@@ -1042,7 +1069,6 @@ function LabWorkspace({
     if (taRef.current) taRef.current.style.height = 'auto'
 
     try {
-      const requestId = crypto.randomUUID()
       const res = await fetch(currentExperience === 'agent' ? '/api/agent' : '/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
@@ -1053,7 +1079,7 @@ function LabWorkspace({
             attachments,
           })),
           mode,
-          language,
+          language: responseLanguage,
           sessionId: requestConversationId,
           ...(currentExperience === 'agent' ? { depth: agentDepth, planOnly: planFirst } : {}),
         }),
@@ -1202,6 +1228,14 @@ function LabWorkspace({
             <p className="no-results">{search ? 'Nothing matches that search.' : 'Nothing here yet. Start something above.'}</p>
           )}
         </nav>
+        <QualityFeedback
+          variant="global"
+          context={{
+            sourceSurface: experience === 'chat' ? 'quick' : experience === 'agent' ? 'research' : 'studio',
+            conversationId: active.id,
+            conversationText: messages.slice(-6).map((message) => `${message.role === 'user' ? 'Customer' : 'AI360'}: ${message.content}`).join('\n\n'),
+          }}
+        />
         <div className="side-foot" aria-live="polite">
           <div className={`privacy-dot ${signedIn ? cloudStatus : 'local'}`}><span /></div>
           <div>
@@ -1421,11 +1455,28 @@ function LabWorkspace({
                       </section>
                     ) : null}
                     {message.role === 'assistant' && message.content && (
-                      <div className="message-actions">
-                        <button onClick={() => navigator.clipboard.writeText(message.content)} title="Copy">□ <span>Copy</span></button>
-                        <button onClick={() => speak(message.content)} title="Read aloud">◖ <span>Listen</span></button>
-                        <button onClick={() => regenerate(index)} disabled={busy} title="Regenerate">↻ <span>Try again</span></button>
-                      </div>
+                      <>
+                        <div className="message-actions">
+                          <button onClick={() => navigator.clipboard.writeText(message.content)} title="Copy">□ <span>Copy</span></button>
+                          {browserSpeechLocale(responseLanguage) ? (
+                            <button onClick={() => speak(message.content)} title="Read aloud in English">◖ <span>Listen</span></button>
+                          ) : null}
+                          <button onClick={() => regenerate(index)} disabled={busy} title="Regenerate">↻ <span>Try again</span></button>
+                        </div>
+                        <QualityFeedback
+                          context={{
+                            sourceSurface: message.agent ? 'research' : 'quick',
+                            conversationId: active.id,
+                            messageId: message.id,
+                            requestId: message.requestId,
+                            runId: message.agentRunId,
+                            responseText: message.content,
+                            conversationText: messages.slice(Math.max(0, index - 5), index + 1)
+                              .map((item) => `${item.role === 'user' ? 'Customer' : 'AI360'}: ${item.content}`)
+                              .join('\n\n'),
+                          }}
+                        />
+                      </>
                     )}
                   </div>
                 </article>
@@ -1439,6 +1490,18 @@ function LabWorkspace({
           <div className={`composer${recordingState === 'recording' ? ' recording' : ''}`}>
             {recordingState !== 'idle' && (
               <div className={`voice-capture ${recordingState}`}>
+                <label className="voice-language">
+                  <span>I&apos;m speaking</span>
+                  <select
+                    value={speechInputLanguage}
+                    onChange={(event) => setSpeechInputLanguage(event.target.value as SpeechInputCode)}
+                    disabled={recordingState === 'transcribing'}
+                  >
+                    {SPEECH_INPUT_OPTIONS.map((option) => (
+                      <option value={option.code} key={option.code}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
                 {recordingState === 'recording' ? (
                   <>
                     <span className="recording-pulse" />
@@ -1459,6 +1522,7 @@ function LabWorkspace({
                 )}
               </div>
             )}
+            {voiceNotice ? <div className="voice-review-note" role="status">{voiceNotice}</div> : null}
             {attachment && (
               <div className="attachment-preview">
                 {attachment.kind === 'image' && attachment.data ? (
@@ -1503,13 +1567,13 @@ function LabWorkspace({
               <button className={recordingState === 'recording' ? 'active' : ''} onClick={toggleRecording} title="Record your voice" aria-label="Record voice">●</button>
               <div className="language-picker">
                 <button
-                  className={`language-trigger${language === DEFAULT_LANGUAGE ? '' : ' chosen'}`}
+                  className={`language-trigger${responseLanguage === DEFAULT_LANGUAGE ? '' : ' chosen'}`}
                   onClick={() => setLanguageOpen((open) => !open)}
                   aria-expanded={languageOpen}
-                  aria-label={`Language: ${findLanguage(language).name}`}
+                  aria-label={`Answer language: ${findLanguage(responseLanguage).name}`}
                   title="Ask and get answers in your own language"
                 >
-                  {findLanguage(language).nativeName}
+                  {findLanguage(responseLanguage).nativeName}
                   <span className="chevron">⌄</span>
                 </button>
                 {languageOpen && (
@@ -1518,10 +1582,10 @@ function LabWorkspace({
                     {LANGUAGES.map((option) => (
                       <button
                         key={option.code}
-                        className={option.code === language ? 'selected' : ''}
-                        onClick={() => { setLanguage(option.code); setLanguageOpen(false) }}
+                        className={option.code === responseLanguage ? 'selected' : ''}
+                        onClick={() => { setResponseLanguage(option.code); setLanguageOpen(false) }}
                       >
-                        <span className="language-check">{option.code === language ? '✓' : ''}</span>
+                        <span className="language-check">{option.code === responseLanguage ? '✓' : ''}</span>
                         <span><b>{option.nativeName}</b><small>{option.sample}</small></span>
                       </button>
                     ))}

@@ -13,6 +13,7 @@
  */
 
 export type LanguageCode = 'en' | 'tw' | 'gaa' | 'ee' | 'pcm'
+export type SpeechInputCode = LanguageCode | 'mixed'
 
 export type LanguageSupport = 'native' | 'good' | 'workable'
 
@@ -71,9 +72,38 @@ export const LANGUAGES: Language[] = [
 ]
 
 export const DEFAULT_LANGUAGE: LanguageCode = 'en'
+export const DEFAULT_SPEECH_INPUT: SpeechInputCode = 'mixed'
+
+/** Speech input and requested response language are independent settings. */
+export const SPEECH_INPUT_OPTIONS: ReadonlyArray<{ code: SpeechInputCode; label: string }> = [
+  { code: 'mixed', label: 'Mixed languages' },
+  { code: 'en', label: 'English' },
+  { code: 'tw', label: 'Twi' },
+  { code: 'gaa', label: 'Ga' },
+  { code: 'ee', label: 'Ewe' },
+  { code: 'pcm', label: 'Ghanaian Pidgin' },
+]
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
   return typeof value === 'string' && LANGUAGES.some((language) => language.code === value)
+}
+
+export function isSpeechInputCode(value: unknown): value is SpeechInputCode {
+  return value === 'mixed' || isLanguageCode(value)
+}
+
+/**
+ * Only send hints the current production provider is known to accept. Passing
+ * an unsupported code can perform worse than automatic detection. Ghanaian
+ * language choices remain attached as product and evaluation context.
+ */
+export function transcriptionLanguageHint(code: SpeechInputCode) {
+  return code === 'en' ? 'en' : undefined
+}
+
+/** Browser voices vary by platform, so untested local voices stay unavailable. */
+export function browserSpeechLocale(code: LanguageCode) {
+  return code === 'en' ? 'en-GH' : undefined
 }
 
 export function findLanguage(code: LanguageCode) {

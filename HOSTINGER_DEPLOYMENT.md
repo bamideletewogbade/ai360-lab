@@ -58,6 +58,10 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<Supabase publishable key>
 SUPABASE_SECRET_KEY=<server-only Supabase secret key>
 SUPABASE_PRIVATE_BUCKET=ai360-private
 NEXT_PUBLIC_BILLING_ENABLED=false
+PAYMENTS_PROVIDER=expresspay
+EXPRESSPAY_ENV=live
+EXPRESSPAY_MERCHANT_ID=<ExpressPay merchant ID>
+EXPRESSPAY_API_KEY=<server-only ExpressPay API key>
 GOOGLE_SITE_VERIFICATION=<optional Google Search Console token>
 BING_SITE_VERIFICATION=<optional Bing Webmaster Tools token>
 AI360_RATE_CHAT_PER_MINUTE=12
@@ -72,6 +76,9 @@ AI360_RATE_STUDIO_VIDEO_PER_MINUTE=1
 AI360_RATE_STUDIO_VIDEO_PER_DAY=3
 AI360_RATE_VOICE_PER_MINUTE=5
 AI360_RATE_VOICE_PER_DAY=24
+AI360_QUALITY_REVIEWER_IDS=<comma-separated reviewer user IDs>
+AI360_QUALITY_ALERT_WEBHOOK_URL=<optional server-to-server urgent alert URL>
+AI360_QUALITY_EVALUATOR_MODEL=openai/gpt-5.6-luna
 ```
 
 Before deployment, run `npm run prod:check`. Deploy the temporary Hostinger URL

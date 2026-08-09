@@ -33,6 +33,10 @@ export function productionReadinessChecks(): ReadinessCheck[] {
   const clerkSecret = configured('CLERK_SECRET_KEY')
   const databaseProvider = selectedDatabaseProvider()
   const billingEnabled = process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true'
+  const paymentProviderReady = process.env.PAYMENTS_PROVIDER === 'expresspay'
+    && (process.env.EXPRESSPAY_ENV === 'sandbox' || process.env.EXPRESSPAY_ENV === 'live')
+    && configured('EXPRESSPAY_MERCHANT_ID')
+    && configured('EXPRESSPAY_API_KEY')
 
   return [
     {
@@ -73,13 +77,13 @@ export function productionReadinessChecks(): ReadinessCheck[] {
       key: 'payments',
       status: !billingEnabled
         ? 'pending'
-        : configured('MOJOPAY_MERCHANT_ID') && configured('MOJOPAY_SECRET_KEY') && configured('MOJOPAY_WEBHOOK_SECRET')
+        : paymentProviderReady
           ? 'ready'
           : 'missing',
       required: billingEnabled,
       message: billingEnabled
-        ? 'Billing is enabled and requires complete MojoPay credentials.'
-        : 'Billing remains safely disabled until the provider contract and sandbox are approved.',
+        ? 'Billing is enabled and requires complete ExpressPay hosted-checkout configuration.'
+        : 'Billing remains safely disabled until an ExpressPay sandbox payment and server verification pass.',
     },
   ]
 }
