@@ -12,6 +12,20 @@ export type ChangelogRelease = {
 
 export const CHANGELOG_RELEASES: readonly ChangelogRelease[] = [
   {
+    id: 'durable-media-setup',
+    date: '2026-08-09',
+    displayDate: '9 August 2026',
+    status: 'Pilot',
+    title: 'Visual creation now starts with the outcome',
+    summary: 'Studio can prepare image and video choices from project context, show the credit cost and recover saved media work after a refresh.',
+    changes: [
+      'Added simple choices for channel, shape, quality, resolution, video length and movement without exposing model names.',
+      'Added exact capability and price checks before approved video work begins.',
+      'Made signed-in media jobs durable and linked their private outputs to the project that created them.',
+      'Kept generated text and audio outside the first visual rollout so important copy stays editable and reviewable.',
+    ],
+  },
+  {
     id: 'expresspay-foundation',
     date: '2026-08-08',
     displayDate: '8 August 2026',

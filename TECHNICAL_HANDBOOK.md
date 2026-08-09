@@ -196,9 +196,31 @@ the final sections into durable, reviewable and versioned deliverables. Existing
 campaign projects remain readable through the older project fields.
 
 Image and video production require asset approval and a provider-cost
-confirmation. A payment redirect or client response never grants credits. Pack
-runs still need durable run IDs and event persistence before a disconnected
-browser can recover their final result.
+confirmation. The UI collects a provider-neutral `MediaIntent`: purpose,
+channel, shape, quality tier, resolution, length, movement, audio policy and
+references. Customers choose outcomes and cost, never model names. The server
+validates the exact capability combination against the live catalogue and
+routes only within the selected quality tier.
+
+`lab_media_jobs` is the durable boundary for provider work. It stores the
+approved intent, project and deliverable identity, quote, credit reservation,
+provider job identity and terminal result. `lab_media_outputs` versions the
+result separately, while the bytes live in the private Supabase bucket through
+`lab_assets`. Provider calls and object uploads happen outside database
+transactions; the short final transaction locks one job while assigning its
+next output version. After a refresh, Studio reloads jobs by project and resumes
+video status checks. The old signed video token remains only as a guest or
+database-unavailable fallback.
+
+Generated business text remains outside image pixels so phone numbers, prices
+and Ghanaian-language copy stay editable and reviewable. Audio is deliberately
+off in the first production slice. Reference-led generation, deterministic
+captioning and channel adaptation must land behind the same intent and artifact
+contracts rather than adding provider-shaped fields to the UI.
+
+A payment redirect or client response never grants credits. Pack runs still
+need durable run IDs and event persistence before a disconnected browser can
+recover their final result.
 
 ### Credits
 
@@ -398,3 +420,27 @@ information, exploit details, generic maintenance or future work as shipped.
 # Voice and language foundation (2026-08-09)
 
 AI360 no longer treats voice as a base64 field attached directly to one provider. The browser sends binary multipart audio to a validated route, which delegates to a `TranscriptionProvider`. This preserves the reviewed-transcript safety gate while allowing Ghana-specific ASR, streaming transcription and tested TTS to be added without rewriting chat or tools. Read `VOICE_LANGUAGE_ARCHITECTURE.md` for the decision record, privacy rules, evaluation gates and research sources.
+
+## Conversation minimap decision (2026-08-09)
+
+Long Chat and Research threads will gain a conditional desktop conversation
+minimap. It is in-thread navigation, not a replacement for the workspace
+sidebar: each marker represents a durable user-message ID, reflects the
+prompt's real position in the scroll container, previews plain text on hover or
+keyboard focus and jumps to that turn. It appears only after four or five user
+prompts and only when the viewport leaves a safe reading gutter. It remains
+hidden on tablet and mobile. Studio continues to navigate by durable project
+stage and deliverable rather than by prompt position.
+
+The minimap depends on correcting the current unconditional auto-scroll. The
+workspace may follow new output only while the reader is near the bottom.
+Selecting an earlier prompt pauses follow mode and exposes a small Return to
+latest control. IntersectionObserver identifies the current prompt within the
+existing scroll root; ResizeObserver, throttled through requestAnimationFrame,
+recomputes proportional positions as streamed responses change height. Markers
+are real buttons with accessible names, visible focus, sticky-header offset and
+reduced-motion support.
+
+Release proof requires keyboard and screen-reader checks, correct proportional
+positions while an answer streams, no forced return to the bottom, no desktop
+overlap and no minimap rendering at narrow breakpoints.

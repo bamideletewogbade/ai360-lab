@@ -13,6 +13,7 @@ import { StudioWorkspace } from '@/components/StudioWorkspace'
 import { AccountControls } from '@/components/AccountControls'
 import { WorkspaceBoot } from '@/components/WorkspaceBoot'
 import { QualityFeedback } from '@/components/QualityFeedback'
+import { ConversationMinimap, type ConversationPrompt } from '@/components/ConversationMinimap'
 import { useAuth } from '@clerk/nextjs'
 import { scopedStorageKey } from '@/lib/workspace'
 import { routeIntentDeterministically, type IntentRoute } from '@/lib/intent-router'
@@ -90,6 +91,16 @@ const ACTIVE_KEY = 'ai360-lab-active-v2'
 const ONBOARDING_KEY = 'ai360-lab-onboarding-v1'
 const MAX_FILE_BYTES = 4 * 1024 * 1024
 const MAX_VIDEO_BYTES = 8 * 1024 * 1024
+
+function promptPreview(message: Msg) {
+  const plainText = message.content
+    .replace(/[`*_#>~\[\]]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (plainText) return plainText.length > 92 ? `${plainText.slice(0, 89).trimEnd()}…` : plainText
+  if (message.attachments?.length) return `Prompt with ${message.attachments[0].name}`
+  return 'Prompt'
+}
 
 const TASKS = [
   { icon: 'Aa', label: 'Write an SMS', prompt: 'Draft a friendly SMS reminding parents about PTA this Friday at 3pm.' },
@@ -309,7 +320,9 @@ function LabWorkspace({
   const [, setCloudStatus] = useState<'local' | 'loading' | 'synced' | 'unavailable'>('local')
   const [initialStudioBrief, setInitialStudioBrief] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
+  const [showReturnToLatest, setShowReturnToLatest] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const followLatestRef = useRef(true)
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -322,6 +335,9 @@ function LabWorkspace({
 
   const active = conversations.find((conversation) => conversation.id === activeId) ?? conversations[0]
   const messages = useMemo(() => active?.messages ?? [], [active])
+  const conversationPrompts = useMemo<ConversationPrompt[]>(() => messages
+    .filter((message) => message.role === 'user')
+    .map((message) => ({ id: message.id, label: promptPreview(message) })), [messages])
   const experience = active?.experience ?? 'chat'
   const modeMeta = MODE_META[experience]
 
@@ -470,12 +486,44 @@ function LabWorkspace({
   }, [cloudReady, conversations, signedIn, workspaceScope])
 
   useEffect(() => {
-    if (messages.length) {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-    } else {
-      scrollRef.current?.scrollTo({ top: 0 })
-    }
+    followLatestRef.current = true
+    setShowReturnToLatest(false)
+    window.requestAnimationFrame(() => {
+      const root = scrollRef.current
+      root?.scrollTo({ top: root.scrollHeight })
+    })
+  }, [activeId])
+
+  useEffect(() => {
+    if (!followLatestRef.current) return
+    const root = scrollRef.current
+    if (!root) return
+    root.scrollTo({
+      top: messages.length ? root.scrollHeight : 0,
+      behavior: busy || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    })
   }, [messages, busy])
+
+  const updateFollowLatest = () => {
+    const root = scrollRef.current
+    if (!root) return
+    const nearLatest = root.scrollHeight - root.scrollTop - root.clientHeight < 96
+    followLatestRef.current = nearLatest
+    setShowReturnToLatest(!nearLatest)
+  }
+
+  const pauseFollowLatest = () => {
+    followLatestRef.current = false
+    setShowReturnToLatest(true)
+  }
+
+  const returnToLatest = () => {
+    const root = scrollRef.current
+    if (!root) return
+    followLatestRef.current = true
+    setShowReturnToLatest(false)
+    root.scrollTo({ top: root.scrollHeight, behavior: 'auto' })
+  }
 
   useEffect(() => {
     if (recordingState !== 'recording') return
@@ -1268,7 +1316,14 @@ function LabWorkspace({
           />
         ) : (
           <>
-          <main className="lab-main" ref={scrollRef}>
+          <ConversationMinimap
+            prompts={conversationPrompts}
+            scrollRootRef={scrollRef}
+            showReturnToLatest={showReturnToLatest}
+            onNavigateBack={pauseFollowLatest}
+            onReturnToLatest={returnToLatest}
+          />
+          <main className="lab-main" ref={scrollRef} onScroll={updateFollowLatest}>
           {messages.length === 0 ? (
             <div className="lab-empty">
               <p className="eyebrow">One workspace, shaped around your goal</p>
@@ -1299,7 +1354,12 @@ function LabWorkspace({
             </div>
             <div className="thread">
               {messages.map((message, index) => (
-                <article className={`message ${message.role}`} key={message.id}>
+                <article
+                  className={`message ${message.role}`}
+                  id={`message-${message.id}`}
+                  data-prompt-id={message.role === 'user' ? message.id : undefined}
+                  key={message.id}
+                >
                   <div className="avatar">
                     {message.role === 'assistant' ? <img src="/icon-mark-black.png" alt="" /> : <span>You</span>}
                   </div>

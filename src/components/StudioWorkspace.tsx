@@ -273,6 +273,7 @@ export function StudioWorkspace({
   const [draftCloudLoaded, setDraftCloudLoaded] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   const pollVideoRef = useRef<(assetId: string, token: string, jobId?: string) => Promise<void>>(async () => undefined)
+  const mediaQuoteSequenceRef = useRef(0)
   const loadedWorkspaceRef = useRef('')
   const projectStorageKey = scopedStorageKey(STORAGE_KEY, workspaceScope)
   const viewStorageKey = scopedStorageKey(VIEW_KEY, workspaceScope)
@@ -792,6 +793,7 @@ export function StudioWorkspace({
     const nextIntent = { ...current.intent, ...patch }
     setExecutionApproval({ ...current, intent: nextIntent, estimateLabel: mediaIntentSummary(nextIntent), quoteValid: current.kind !== 'video' })
     if (current.kind !== 'video') return
+    const sequence = ++mediaQuoteSequenceRef.current
     setMediaQuoteBusy(true)
     const id = requestId()
     try {
@@ -802,13 +804,13 @@ export function StudioWorkspace({
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok || typeof data.costUsd !== 'number') throw new Error(data.error || 'This combination is unavailable.')
-      setExecutionApproval((latest) => latest && latest.asset.id === current.asset.id && latest.intent === nextIntent
+      setExecutionApproval((latest) => sequence === mediaQuoteSequenceRef.current && latest && latest.asset.id === current.asset.id && latest.intent === nextIntent
         ? { ...latest, estimatedCostUsd: data.costUsd, estimatedCredits: data.credits || latest.estimatedCredits, quoteValid: true }
         : latest)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'This video combination is unavailable.')
     } finally {
-      setMediaQuoteBusy(false)
+      if (sequence === mediaQuoteSequenceRef.current) setMediaQuoteBusy(false)
     }
   }
 
@@ -1438,7 +1440,7 @@ export function StudioWorkspace({
                             )}
                             {media.status === 'completed' && media.url ? (
                               <div className="media-meta">
-                                <span>{media.assetId ? 'Saved to this project and ready on your other devices.' : 'Download this copy now.'}{typeof media.costUsd === 'number' ? ` Actual cost: $${media.costUsd.toFixed(3)}.` : ''}</span>
+                                <span>{media.assetId ? 'Saved to this project and ready on your other devices.' : 'Download this copy now.'}</span>
                                 <button onClick={() => downloadGenerated(asset, media)}>Download {media.kind === 'video' ? 'MP4' : 'PNG'}</button>
                               </div>
                             ) : null}

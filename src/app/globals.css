@@ -147,7 +147,7 @@ button { color: inherit; }
 .workspace-guide footer a { color: var(--black); font-weight: 750; text-underline-offset: 3px; }
 
 /* Workspace and top bar */
-.workspace { min-width: 0; flex: 1; display: flex; flex-direction: column; height: 100dvh; }
+.workspace { position: relative; min-width: 0; flex: 1; display: flex; flex-direction: column; height: 100dvh; }
 /* Three zones. The middle one holds the only control that changes what the
    whole workspace is, so it sits centred and is sized to be found. */
 .lab-top { height: var(--topbar); flex: 0 0 var(--topbar); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 0 clamp(16px, 3vw, 34px); border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(16px); z-index: 20; }
@@ -240,7 +240,26 @@ button { color: inherit; }
 .thread-context > small { color: var(--grey); font-size: 8px; }
 .thread { max-width: var(--thread); margin: 0 auto; padding: 30px 24px 32px; }
 .message { position: relative; display: grid; grid-template-columns: 39px 1fr; gap: 13px; margin-bottom: 32px; animation: message-in .24s var(--ease); }
+.message.user { scroll-margin-top: 78px; }
 .message.assistant::before { content: ''; position: absolute; top: 41px; bottom: -18px; left: 16px; width: 1px; background: linear-gradient(var(--line), transparent); }
+
+/* A quiet document map for long conversations. It stays separate from the
+   workspace sidebar, which moves between chats and projects. */
+.conversation-minimap { position: absolute; z-index: 14; top: 86px; bottom: 132px; left: 15px; width: 32px; pointer-events: none; }
+.conversation-minimap-track { position: absolute; top: 0; bottom: 0; left: 9px; width: 1px; background: linear-gradient(transparent, var(--line) 8%, var(--line) 92%, transparent); }
+.conversation-minimap > button:not(.conversation-return-latest) { position: absolute; left: 0; width: 26px; height: 18px; padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; transform: translateY(-50%); }
+.conversation-minimap > button:not(.conversation-return-latest) > i { position: absolute; top: 8px; left: 5px; width: 8px; height: 2px; border-radius: 999px; background: #aaa8a2; transition: width .15s var(--ease), background .15s var(--ease); }
+.conversation-minimap > button:not(.conversation-return-latest):hover > i,
+.conversation-minimap > button:not(.conversation-return-latest):focus-visible > i,
+.conversation-minimap > button:not(.conversation-return-latest).active > i { width: 19px; background: var(--black); }
+.conversation-minimap > button:not(.conversation-return-latest):focus-visible { outline: 2px solid var(--black); outline-offset: 2px; border-radius: 4px; }
+.conversation-minimap-preview { position: absolute; top: 50%; left: 32px; width: 260px; display: grid; gap: 5px; padding: 11px 12px; border: 1px solid #37393a; border-radius: 10px; background: #202223; color: #f7f6f2; box-shadow: 0 14px 38px rgba(16,17,18,.2); opacity: 0; pointer-events: none; text-align: left; transform: translate(5px,-50%); transition: opacity .14s, transform .14s var(--ease); }
+.conversation-minimap-preview b { color: #999da0; font-size: 8px; letter-spacing: .09em; text-transform: uppercase; }
+.conversation-minimap-preview span { display: -webkit-box; overflow: hidden; font-size: 10px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.conversation-minimap > button:not(.conversation-return-latest):hover .conversation-minimap-preview,
+.conversation-minimap > button:not(.conversation-return-latest):focus-visible .conversation-minimap-preview { opacity: 1; transform: translate(0,-50%); }
+.conversation-return-latest { position: absolute; left: 0; bottom: -42px; display: flex; align-items: center; gap: 5px; padding: 6px 8px; border: 1px solid var(--line-dark); border-radius: 999px; background: var(--white); color: var(--charcoal); box-shadow: 0 6px 18px rgba(16,17,18,.08); cursor: pointer; pointer-events: auto; font-size: 8px; font-weight: 750; white-space: nowrap; }
+.conversation-return-latest i { font-size: 11px; font-style: normal; }
 @keyframes message-in { from { opacity: 0; transform: translateY(5px); } }
 .avatar { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); }
 .avatar img { width: 20px; height: 24px; object-fit: contain; }
@@ -1054,6 +1073,9 @@ button { color: inherit; }
   .execution-next > span:last-child { display: none; }
   .studio-sources > div:last-child { grid-template-columns: 1fr; }
   .studio-sources a:nth-child(odd) { border-right: 0; }
+}
+@media (max-width: 1460px) {
+  .conversation-minimap { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
