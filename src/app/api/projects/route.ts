@@ -50,6 +50,47 @@ const assetSchema = z.object({
   purpose: z.string().max(5_000),
   content: z.string().max(250_000),
   status: z.enum(['draft', 'approved']).optional(),
+  specialistId: z.enum(['researcher', 'brand', 'campaign', 'copy', 'namer', 'domains', 'ads', 'calendar', 'pitch']).optional(),
+  version: z.number().int().positive().optional(),
+  versions: z.array(z.object({
+    version: z.number().int().positive(),
+    content: z.string().max(250_000),
+    createdAt: z.number().int().nonnegative(),
+    reason: z.enum(['created', 'ai_revision', 'manual_edit']),
+  })).max(20).optional(),
+})
+
+const specialistIdSchema = z.enum(['researcher', 'brand', 'campaign', 'copy', 'namer', 'domains', 'ads', 'calendar', 'pitch'])
+
+const projectPackSchema = z.object({
+  id: z.enum(['launch', 'marketing', 'ads', 'naming', 'pitch', 'calendar']),
+  name: z.string().min(1).max(255),
+  outcome: z.string().max(2_000),
+  bestFor: z.string().max(2_000),
+  estimatedCredits: z.number().int().nonnegative().max(100),
+  promisedDeliverables: z.array(z.string().max(2_000)).max(30),
+})
+
+const projectRunSchema = z.object({
+  status: z.enum(['complete', 'partial', 'failed']),
+  startedAt: z.number().int().nonnegative(),
+  completedAt: z.number().int().nonnegative(),
+  specialists: z.array(z.object({
+    id: specialistIdSchema,
+    label: z.string().max(255),
+    working: z.string().max(2_000),
+    status: z.enum(['pending', 'active', 'complete', 'failed']),
+    detail: z.string().max(2_000).optional(),
+  })).max(20),
+  producedSections: z.number().int().nonnegative().max(50),
+  review: z.object({
+    passed: z.boolean(),
+    evaluations: z.array(z.object({
+      id: specialistIdSchema,
+      passed: z.boolean(),
+      issues: z.array(z.string().max(2_000)).max(20),
+    })).max(20),
+  }).optional(),
 })
 
 const projectSchema = z.object({
@@ -64,6 +105,9 @@ const projectSchema = z.object({
     title: z.string().max(500),
     url: z.url().max(4_000),
   })).max(50).optional(),
+  schemaVersion: z.literal(2).optional(),
+  pack: projectPackSchema.optional(),
+  run: projectRunSchema.optional(),
 })
 
 const lifecycleSchema = z.object({

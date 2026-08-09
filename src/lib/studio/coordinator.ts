@@ -5,6 +5,7 @@ import { providerErrorDetails } from '@/lib/observability'
 import { checkDomains, type DomainResult } from '@/lib/studio/domains'
 import { packCredits, packSpecialists, SPECIALISTS, type Pack, type SpecialistId } from '@/lib/studio/packs'
 import { FEATURE_WEIGHTS, usdBudgetForCredits } from '@/lib/billing/credits'
+import { evaluatePackSections, type SectionEvaluation } from '@/lib/studio/evaluator'
 
 /**
  * The Create coordinator.
@@ -39,6 +40,7 @@ export type PackEvent =
   | { type: 'specialist'; id: SpecialistId; status: 'pending' | 'active' | 'complete' | 'failed'; detail?: string }
   | { type: 'section'; id: SpecialistId; title: string; content: string }
   | { type: 'domains'; results: DomainResult[] }
+  | { type: 'review'; status: 'checking' | 'correcting' | 'complete'; evaluations: SectionEvaluation[]; detail: string }
   | { type: 'result'; sections: PackSection[]; sources: Array<{ url: string; title: string }>; usage: { cost: number; totalTokens: number } }
   | { type: 'error'; message: string }
 
@@ -161,7 +163,7 @@ export async function runPack(input: PackRunInput): Promise<PackRunResult> {
   ].join('\n')
 
   /** One specialist. Tools only where the brief genuinely needs the network. */
-  async function callSpecialist(id: SpecialistId, priorWork: string) {
+  async function callSpecialist(id: SpecialistId, priorWork: string, correctionIssues: string[] = []) {
     const specialist = SPECIALISTS[id]
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -177,7 +179,10 @@ export async function runPack(input: PackRunInput): Promise<PackRunResult> {
         models,
         messages: [
           { role: 'system', content: `${SPECIALIST_BRIEFS[id]}\n\n${HOUSE_STYLE}\n\n${speaks}` },
-          { role: 'user', content: `${brief}${priorWork ? `\n\nWhat the team has produced so far:\n${priorWork}` : ''}` },
+          {
+            role: 'user',
+            content: `${brief}${priorWork ? `\n\nWhat the team has produced so far:\n${priorWork}` : ''}${correctionIssues.length ? `\n\nQuality review found these problems in your section:\n- ${correctionIssues.join('\n- ')}\nRewrite your section once and fix only those problems.` : ''}`,
+          },
         ],
         ...(specialist.usesTools ? { tools: RESEARCH_TOOLS } : {}),
         provider: providerPreferences('studio', { withTools: specialist.usesTools }),
@@ -284,6 +289,48 @@ export async function runPack(input: PackRunInput): Promise<PackRunResult> {
   }
 
   if (!sections.length) throw new Error('No specialist produced anything')
+
+  let evaluations = evaluatePackSections(sections)
+  input.emit({
+    type: 'review',
+    status: 'checking',
+    evaluations,
+    detail: 'Checking every deliverable for completeness, placeholders and source quality.',
+  })
+
+  // One bounded correction pass. It never extends the run deadline or spends
+  // beyond the amount already reserved for the pack.
+  const needsCorrection = evaluations.filter((evaluation) => !evaluation.passed && evaluation.id !== 'domains').slice(0, 2)
+  for (const evaluation of needsCorrection) {
+    if (outOfRoom()) break
+    input.emit({ type: 'review', status: 'correcting', evaluations, detail: `Improving ${SPECIALISTS[evaluation.id].label}.` })
+    input.emit({ type: 'specialist', id: evaluation.id, status: 'active', detail: 'Correcting the quality review findings.' })
+    const priorWork = sections
+      .filter((section) => section.id !== evaluation.id)
+      .map((section) => `## ${section.title}\n${section.content}`)
+      .join('\n\n')
+    try {
+      const content = await callSpecialist(evaluation.id, priorWork, evaluation.issues)
+      const index = sections.findIndex((section) => section.id === evaluation.id)
+      if (index >= 0 && content) {
+        sections[index] = { ...sections[index], content }
+        input.emit({ type: 'section', ...sections[index] })
+      }
+      input.emit({ type: 'specialist', id: evaluation.id, status: 'complete', detail: 'Quality review passed to the final check.' })
+    } catch {
+      input.emit({ type: 'specialist', id: evaluation.id, status: 'failed', detail: 'The correction pass could not be completed.' })
+    }
+    evaluations = evaluatePackSections(sections)
+  }
+
+  input.emit({
+    type: 'review',
+    status: 'complete',
+    evaluations,
+    detail: evaluations.every((evaluation) => evaluation.passed)
+      ? 'Every deliverable passed the quality gate.'
+      : 'The project is usable, with remaining quality notes shown for review.',
+  })
 
   return {
     sections,

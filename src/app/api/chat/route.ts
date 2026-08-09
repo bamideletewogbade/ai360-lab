@@ -7,21 +7,12 @@ import { recordUsageEventSafe } from '@/lib/usage'
 import { openCreditGate } from '@/lib/billing/credit-gate'
 import { chatFeature } from '@/lib/billing/credits'
 import { DEFAULT_LANGUAGE, isLanguageCode, languageDirective, type LanguageCode } from '@/lib/languages'
+import { policyForConversation, prepareConversationContext, type ContextMessage } from '@/lib/context-engineering'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-type Attachment = {
-  name: string
-  kind: 'image' | 'video' | 'pdf' | 'text'
-  data?: string
-  text?: string
-}
-type Msg = {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  attachments?: Attachment[]
-}
+type Msg = ContextMessage
 type ContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string } }
@@ -98,19 +89,20 @@ export async function POST(req: NextRequest) {
     return new Response('Bad request', { status: 400, headers: log.headers() })
   }
 
-  const messages = (body.messages ?? [])
-    .filter((message) => message && typeof message.content === 'string')
-    .slice(-20)
+  const messages = prepareConversationContext(body.messages ?? [])
   const mode: ChatMode = isChatMode(body.mode) ? body.mode : 'auto'
   const language: LanguageCode = isLanguageCode(body.language) ? body.language : DEFAULT_LANGUAGE
   const sessionId = typeof body.sessionId === 'string' ? body.sessionId.slice(0, 256) : undefined
   const key = process.env.OPENROUTER_API_KEY
+  const policy = policyForConversation(messages)
   const attachments = messages.flatMap((message) => message.attachments ?? [])
   log.info('chat.accepted', {
     mode,
     messageCount: messages.length,
     attachmentCount: attachments.length,
     attachmentKinds: attachments.map((attachment) => attachment.kind),
+    liveInformation: policy.liveInformation,
+    contextCharacters: policy.contextCharacters,
     aiConfigured: Boolean(key),
   })
 
@@ -119,7 +111,7 @@ export async function POST(req: NextRequest) {
     ? await openCreditGate({
         request: req,
         requester,
-        feature: chatFeature({ hasAttachment: attachments.length > 0 }),
+        feature: chatFeature({ liveResearch: policy.liveInformation, hasAttachment: policy.hasAttachments }),
         requestId: log.requestId,
       })
     : { gate: undefined, denied: undefined }
@@ -140,23 +132,17 @@ export async function POST(req: NextRequest) {
           return
         }
 
-        const hasVideo = messages.some((message) =>
-          message.attachments?.some((attachment) => attachment.kind === 'video'),
-        )
         const { model, models } = routeFor(mode, {
           workload: 'chat',
-          hasVideo,
-          hasAttachments: attachments.length > 0,
+          hasVideo: policy.hasVideo,
+          hasAttachments: policy.hasAttachments,
         })
-        const hasPdf = messages.some((message) =>
-          message.attachments?.some((attachment) => attachment.kind === 'pdf'),
-        )
         const providerStartedAt = performance.now()
         log.info('provider.request.started', {
           provider: 'openrouter',
           model,
           fallbackModels: models,
-          hasPdf,
+          hasPdf: policy.hasPdf,
         })
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
@@ -172,17 +158,22 @@ export async function POST(req: NextRequest) {
             models,
             ...(sessionId ? { session_id: sessionId } : {}),
             messages: [
-              { role: 'system', content: `${SYSTEM_PROMPT}\n\n${languageDirective(language)}` },
+              {
+                role: 'system',
+                content: `${SYSTEM_PROMPT}\n\n${languageDirective(language)}\n\n${policy.liveInformation
+                  ? 'Live information tools are available for this request. Use them only where freshness or verification matters.'
+                  : 'Live information tools are not enabled for this request. Do not claim that you searched or verified current information.'}`,
+              },
               ...messages.map(toProviderMessage),
             ],
-            tools: LIVE_INFORMATION_TOOLS,
-            provider: providerPreferences('chat', { withTools: true }),
+            ...(policy.liveInformation ? { tools: LIVE_INFORMATION_TOOLS } : {}),
+            provider: providerPreferences('chat', { withTools: policy.liveInformation }),
             // A thinking model otherwise spends the whole budget reasoning and
             // streams back an empty answer.
             reasoning: REASONING_BUDGET,
             stream: true,
             max_tokens: 2_000,
-            ...(hasPdf
+            ...(policy.hasPdf
               ? { plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] }
               : {}),
           }),

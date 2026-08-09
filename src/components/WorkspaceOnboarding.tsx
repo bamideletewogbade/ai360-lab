@@ -8,11 +8,11 @@ export type OnboardingChoice = {
 }
 
 const CHOICES: Array<OnboardingChoice & { mark: string; title: string; detail: string }> = [
-  { mark: 'A', title: 'Get a quick answer', detail: 'Think, write, learn or solve an everyday task.', mode: 'chat', prompt: '' },
-  { mark: '01', title: 'Learn or prepare', detail: 'Understand a topic, practise, study or prepare for an opportunity.', mode: 'chat', prompt: 'Help me learn or prepare for: ' },
-  { mark: 'R', title: 'Research a decision', detail: 'Investigate current information and return a sourced recommendation.', mode: 'agent', prompt: 'Research this and help me make a well-supported decision: ' },
-  { mark: 'Aa', title: 'Create useful materials', detail: 'Produce a plan, report, proposal, presentation or public message.', mode: 'agent', prompt: 'Create a polished, ready-to-use deliverable for: ' },
-  { mark: 'C', title: 'Build a campaign or brand', detail: 'Shape the strategy, identity, messages and production assets.', mode: 'studio', prompt: 'I want to create a coordinated campaign or brand asset pack for: ' },
+  { mark: '01', title: 'Ask a question', detail: 'Get help thinking, writing, learning or solving an everyday task.', mode: 'chat', prompt: '' },
+  { mark: '02', title: 'Learn or prepare', detail: 'Understand a topic, practise or prepare for an opportunity.', mode: 'chat', prompt: 'Help me learn or prepare for: ' },
+  { mark: '03', title: 'Research a decision', detail: 'Investigate current information and return a checked recommendation with sources.', mode: 'agent', prompt: 'Research this and help me make a well-supported decision: ' },
+  { mark: '04', title: 'Prepare a document', detail: 'Research and produce a plan, report, proposal or public message.', mode: 'agent', prompt: 'Research and prepare a ready-to-use document for: ' },
+  { mark: '05', title: 'Start a business project', detail: 'Keep a campaign brief, decisions and ready-to-use assets together.', mode: 'studio', prompt: 'I want to start a campaign project for: ' },
 ]
 
 export function WorkspaceOnboarding({ onChoose, onSkip }: { onChoose: (choice: OnboardingChoice) => void; onSkip: () => void }) {
@@ -23,13 +23,13 @@ export function WorkspaceOnboarding({ onChoose, onSkip }: { onChoose: (choice: O
         <button className="onboarding-skip" onClick={onSkip}>Skip for now</button>
         <p className="onboarding-kicker">Welcome to your AI workspace</p>
         <h1 id="onboarding-title">What would you like<br />to accomplish?</h1>
-        <p className="onboarding-intro">Choose an outcome and AI360 will prepare the right starting point. You can switch modes at any time.</p>
+        <p className="onboarding-intro">Choose the kind of help you need. AI360 will prepare the right starting point, and you can change direction at any time.</p>
         <div className="onboarding-choices">
           {CHOICES.map((choice) => (
             <button key={choice.title} onClick={() => onChoose(choice)}>
               <span>{choice.mark}</span>
               <span><b>{choice.title}</b><small>{choice.detail}</small></span>
-              <i>↗</i>
+              <i aria-hidden="true">→</i>
             </button>
           ))}
         </div>

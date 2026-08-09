@@ -65,7 +65,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${jakarta.variable} ${dmSans.variable}`}>
-      <body><SiteStructuredData /><AuthProvider>{children}</AuthProvider></body>
+      {/* Browser writing assistants such as Grammarly add data attributes to
+          body before React starts. The server cannot predict those attributes,
+          so accept that one shallow boundary without suppressing warnings in
+          the application tree itself. */}
+      <body suppressHydrationWarning>
+        <SiteStructuredData />
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   )
 }

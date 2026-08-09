@@ -246,6 +246,7 @@ export type StoredRun = {
   sources: Array<{ url: string; title: string }>
   usage: { totalTokens?: number; cost?: number } | null
   errorCode: string | null
+  activity: Array<{ type: string; summary: string; createdAt: string }>
 }
 
 /** What a returning client needs to pick up where it left off. */
@@ -268,6 +269,12 @@ export async function loadRun(workspaceKey: string, runId: string): Promise<Stor
         from public.lab_agent_runs
        where workspace_key = ${workspaceKey} and id = ${runId}`
     if (!row) return null
+    const events = await sql<Array<{ event_type: string; summary: string; created_at: Date }>>`
+      select event_type, summary, created_at
+        from public.lab_agent_events
+       where workspace_key = ${workspaceKey} and run_id = ${runId} and visibility = 'user'
+       order by sequence desc
+       limit 12`
     return {
       runId: row.id,
       status: row.status,
@@ -278,6 +285,11 @@ export async function loadRun(workspaceKey: string, runId: string): Promise<Stor
       sources: row.result_sources ?? [],
       usage: row.result_usage ?? null,
       errorCode: row.error_code,
+      activity: events.reverse().map((event) => ({
+        type: event.event_type,
+        summary: event.summary,
+        createdAt: event.created_at.toISOString(),
+      })),
     }
   }, null)
 }

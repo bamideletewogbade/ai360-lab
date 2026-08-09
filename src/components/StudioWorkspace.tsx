@@ -4,66 +4,19 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import Image from 'next/image'
 import { ResponseContent } from '@/components/ResponseContent'
 import { mergeProjects, setProjectArchived, sortProjects, upsertProject } from '@/lib/studio-projects'
+import { PACKS, findPack, packCredits, type Pack, type PackId, type SpecialistId } from '@/lib/studio/packs'
+import {
+  addAssetVersion,
+  createPackProject,
+  initialProjectSpecialists,
+  type Intake,
+  type ProjectSpecialist,
+  type StudioAsset,
+  type StudioProject,
+} from '@/lib/studio-project-model'
+import type { PackEvent } from '@/lib/studio/coordinator'
 import { scopedStorageKey } from '@/lib/workspace'
-
-type BrandFile = {
-  name: string
-  kind: 'image' | 'pdf' | 'text'
-  data?: string
-  text?: string
-}
-
-type Intake = {
-  businessName: string
-  industry: string
-  offer: string
-  audience: string
-  goal: string
-  location: string
-  channels: string[]
-  notes: string
-}
-
-type BrandProfile = {
-  summary: string
-  audience: string
-  personality: string[]
-  voice: string
-  colors: Array<{ name: string; hex: string; role: string }>
-  tagline: string
-  valueProposition: string
-}
-
-type Campaign = {
-  name: string
-  objective: string
-  bigIdea: string
-  callToAction: string
-  channels: string[]
-  successMeasures: string[]
-}
-
-type StudioAsset = {
-  id: string
-  type: 'strategy' | 'messaging' | 'whatsapp' | 'social' | 'flyer' | 'direct' | 'logo' | 'video'
-  title: string
-  channel: string
-  purpose: string
-  content: string
-  status?: 'draft' | 'approved'
-}
-
-type StudioProject = {
-  id: string
-  createdAt: number
-  updatedAt: number
-  intake: Intake
-  brand: BrandProfile
-  campaign: Campaign
-  assets: StudioAsset[]
-  sources?: Array<{ title: string; url: string }>
-  archivedAt?: number
-}
+import { newerDraft, studioDraftSchema, type StudioDraft, type StudioBriefTurn } from '@/lib/studio-draft'
 
 type GeneratedMedia = {
   kind: 'image' | 'video'
@@ -82,37 +35,14 @@ type ExecutionApproval = {
   estimateLabel: string
 }
 
-type BuildAgent = {
-  id: string
-  mark: string
-  name: string
-  role: string
-  working: string
-  handoff: string
-}
-
-type StudioView = 'dashboard' | 'intake' | 'project'
+type StudioView = 'dashboard' | 'kickoff' | 'project'
 type SaveState = 'local' | 'saving' | 'saved' | 'unavailable'
-
 const STORAGE_KEY = 'ai360-studio-projects-v2'
+const DRAFT_STORAGE_KEY = 'ai360-studio-draft-v1'
 const LEGACY_STORAGE_KEY = 'ai360-studio-project-v1'
 const VIEW_KEY = 'ai360-studio-view-v2'
 const IMPORT_ACK_KEY = 'ai360-studio-guest-import-v1'
 const CHANNELS = ['WhatsApp', 'Instagram', 'Facebook', 'TikTok', 'SMS', 'Email', 'Google Business', 'Print']
-const GOALS = [
-  'Launch a new business',
-  'Promote a product or service',
-  'Announce an event',
-  'Increase enquiries and sales',
-  'Build online visibility',
-  'Run a 30-day campaign',
-]
-const QUICK_STARTS = [
-  { mark: '01', title: 'Launch a business', note: 'Brand foundation, launch campaign and practical sales assets.', goal: 'Launch a new business' },
-  { mark: '02', title: 'Promote an offer', note: 'Turn one product or service into a coordinated conversion campaign.', goal: 'Promote a product or service' },
-  { mark: '03', title: 'Fill an event', note: 'Create the message, promotion plan and event-ready content pack.', goal: 'Announce an event' },
-  { mark: '04', title: 'Plan 30 days', note: 'Build a focused month of content with one consistent direction.', goal: 'Run a 30-day campaign' },
-]
 const ASSET_ICONS: Record<StudioAsset['type'], string> = {
   strategy: '01',
   messaging: 'Aa',
@@ -129,52 +59,10 @@ const EMPTY_INTAKE: Intake = {
   offer: '',
   audience: '',
   goal: '',
-  location: 'Ghana',
-  channels: ['WhatsApp', 'Instagram'],
+  location: '',
+  channels: [],
   notes: '',
 }
-const BUILD_AGENTS: BuildAgent[] = [
-  {
-    id: 'scout',
-    mark: '01',
-    name: 'Brief Scout',
-    role: 'Maps the business, audience and desired outcome.',
-    working: 'Reading the brief and finding the strongest starting point',
-    handoff: 'brief map',
-  },
-  {
-    id: 'brand',
-    mark: 'Aa',
-    name: 'Brand Architect',
-    role: 'Shapes the voice, personality, palette and positioning.',
-    working: 'Turning business signals into a coherent brand foundation',
-    handoff: 'brand system',
-  },
-  {
-    id: 'campaign',
-    mark: 'CTA',
-    name: 'Campaign Strategist',
-    role: 'Connects the goal, big idea, channels and measures.',
-    working: 'Designing the campaign route and primary call to action',
-    handoff: 'campaign route',
-  },
-  {
-    id: 'production',
-    mark: '08',
-    name: 'Asset Crew',
-    role: 'Produces eight coordinated, practical deliverables.',
-    working: 'Writing and coordinating every campaign asset',
-    handoff: 'asset pack',
-  },
-  {
-    id: 'quality',
-    mark: '✓',
-    name: 'Quality Lead',
-    role: 'Checks clarity, consistency, claims and usability.',
-    working: 'Reviewing the complete pack before the final handoff',
-    handoff: 'approved draft',
-  },
-]
 
 function requestId() {
   return crypto.randomUUID()
@@ -195,31 +83,33 @@ function projectMarkdown(project: StudioProject) {
     '',
     `Prepared for ${project.intake.businessName}`,
     '',
-    '## Campaign overview',
+    `## ${project.pack ? 'Project overview' : 'Campaign overview'}`,
     '',
     `**Objective:** ${project.campaign.objective}`,
     '',
-    `**Big idea:** ${project.campaign.bigIdea}`,
+    `**${project.pack ? 'Outcome' : 'Big idea'}:** ${project.campaign.bigIdea}`,
     '',
     `**Call to action:** ${project.campaign.callToAction}`,
     '',
     `**Channels:** ${project.campaign.channels.join(', ')}`,
     '',
-    `**Progress:** ${approved} of ${project.assets.length} assets approved`,
+    `**Progress:** ${approved} of ${project.assets.length} deliverables approved`,
     '',
-    '## Brand foundation',
-    '',
-    project.brand.summary,
-    '',
-    `**Audience:** ${project.brand.audience}`,
-    '',
-    `**Voice:** ${project.brand.voice}`,
-    '',
-    `**Tagline:** ${project.brand.tagline}`,
-    '',
-    `**Value proposition:** ${project.brand.valueProposition}`,
-    '',
-    '## Success measures',
+    ...(!project.pack ? [
+      '## Brand foundation',
+      '',
+      project.brand.summary,
+      '',
+      `**Audience:** ${project.brand.audience}`,
+      '',
+      `**Voice:** ${project.brand.voice}`,
+      '',
+      `**Tagline:** ${project.brand.tagline}`,
+      '',
+      `**Value proposition:** ${project.brand.valueProposition}`,
+      '',
+    ] : []),
+    `## ${project.pack ? 'Promised deliverables' : 'Success measures'}`,
     '',
     ...project.campaign.successMeasures.map((measure) => `- ${measure}`),
     '',
@@ -244,16 +134,24 @@ function projectMarkdown(project: StudioProject) {
 
 function StudioBuildRoom({
   intake,
-  stage,
+  pack,
+  specialists,
+  sectionsCount,
+  reviewNote,
+  complete,
   elapsed,
 }: {
   intake: Intake
-  stage: number
+  pack: Pack
+  specialists: ProjectSpecialist[]
+  sectionsCount: number
+  reviewNote: string
+  complete: boolean
   elapsed: number
 }) {
-  const complete = stage >= BUILD_AGENTS.length
-  const activeAgent = BUILD_AGENTS[Math.min(stage, BUILD_AGENTS.length - 1)]
-  const progress = complete ? 100 : [12, 30, 51, 73, 91][stage] ?? 91
+  const finished = specialists.filter((specialist) => specialist.status === 'complete' || specialist.status === 'failed').length
+  const activeSpecialist = specialists.find((specialist) => specialist.status === 'active')
+  const progress = complete ? 100 : Math.max(8, Math.round((finished / Math.max(1, specialists.length)) * 100))
   const context = [
     intake.businessName,
     intake.goal,
@@ -267,12 +165,12 @@ function StudioBuildRoom({
           <i />
           <i />
           <i />
-          <strong>AI</strong>
+          <strong>{pack.mark}</strong>
         </div>
         <span>
-          <span className="studio-kicker">{complete ? 'Handoff complete' : 'Agent room live'}</span>
-          <h2>{complete ? 'Your launch pack is ready.' : 'Building together, in real time.'}</h2>
-          <p>{complete ? 'Opening the completed project for your review.' : activeAgent.working}.</p>
+          <span className="studio-kicker">{complete ? 'Build complete' : `${pack.name} · Live progress`}</span>
+          <h2>{complete ? 'Your project is ready to review.' : 'The work is moving through its stages.'}</h2>
+          <p>{complete ? 'Opening the completed project.' : reviewNote || activeSpecialist?.working || 'Preparing the specialist team'}.</p>
         </span>
       </header>
 
@@ -286,18 +184,18 @@ function StudioBuildRoom({
       </div>
 
       <div className="agent-relay">
-        {BUILD_AGENTS.map((agent, index) => {
-          const status = complete || index < stage ? 'complete' : index === stage ? 'active' : 'queued'
+        {specialists.map((specialist) => {
+          const status = complete && specialist.status !== 'failed' ? 'complete' : specialist.status === 'pending' ? 'queued' : specialist.status
           return (
-            <div className={`relay-step ${status}`} key={agent.id}>
+            <div className={`relay-step ${status}`} key={specialist.id}>
               <span className="relay-line" aria-hidden="true"><i /></span>
-              <span className="relay-avatar">{status === 'complete' ? '✓' : agent.mark}</span>
+              <span className="relay-avatar">{status === 'complete' ? '✓' : String(packSpecialistNumber(pack, specialist.id)).padStart(2, '0')}</span>
               <span className="relay-copy">
-                <span><b>{agent.name}</b><em>{status === 'active' ? 'Working' : status === 'complete' ? 'Passed' : 'Waiting'}</em></span>
-                <small>{agent.role}</small>
+                <span><b>{specialist.label}</b><em>{status === 'active' ? 'Working' : status === 'complete' ? 'Ready' : status === 'failed' ? 'Needs attention' : 'Waiting'}</em></span>
+                <small>{specialist.working}</small>
               </span>
               <span className="relay-handoff">
-                {status === 'complete' ? <><i>→</i>{agent.handoff}</> : status === 'active' ? <span className="relay-dots"><i /><i /><i /></span> : 'queued'}
+                {status === 'complete' ? <><i>→</i>deliverable ready</> : status === 'failed' ? specialist.detail || 'not produced' : status === 'active' ? <span className="relay-dots"><i /><i /><i /></span> : 'queued'}
               </span>
             </div>
           )
@@ -307,12 +205,16 @@ function StudioBuildRoom({
       <footer className="build-room-foot">
         <span className="studio-spinner" aria-hidden="true" />
         <span>
-          <b>{complete ? 'Pack assembled and checked' : `${activeAgent.name} is on it`}</b>
-          <small>{complete ? 'One moment while Studio prepares your workspace.' : `Elapsed ${elapsed}s. You can leave this tab open while the team works.`}</small>
+          <b>{complete ? `${sectionsCount} deliverables ready` : activeSpecialist ? `${activeSpecialist.label} is working` : 'Preparing the project'}</b>
+          <small>{complete ? 'One moment while Create prepares your workspace.' : `Elapsed ${elapsed}s. Progress shown here comes from the real build.`}</small>
         </span>
       </footer>
     </section>
   )
+}
+
+function packSpecialistNumber(pack: Pack, id: SpecialistId) {
+  return pack.stages.flatMap((stage) => stage.specialists).indexOf(id) + 1
 }
 
 export function StudioWorkspace({
@@ -326,7 +228,6 @@ export function StudioWorkspace({
 }) {
   const [hydrated, setHydrated] = useState(false)
   const [intake, setIntake] = useState<Intake>(EMPTY_INTAKE)
-  const [brandFile, setBrandFile] = useState<BrandFile | null>(null)
   const [project, setProject] = useState<StudioProject | null>(null)
   const [projects, setProjects] = useState<StudioProject[]>([])
   const [view, setView] = useState<StudioView>('dashboard')
@@ -346,14 +247,23 @@ export function StudioWorkspace({
   const [executionApproval, setExecutionApproval] = useState<ExecutionApproval | null>(null)
   const [buildingProject, setBuildingProject] = useState(false)
   const [buildComplete, setBuildComplete] = useState(false)
-  const [buildStage, setBuildStage] = useState(0)
   const [buildElapsed, setBuildElapsed] = useState(0)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [selectedPackId, setSelectedPackId] = useState<PackId>('launch')
+  const [buildSpecialists, setBuildSpecialists] = useState<ProjectSpecialist[]>(initialProjectSpecialists(PACKS[0]))
+  const [buildSectionsCount, setBuildSectionsCount] = useState(0)
+  const [buildReviewNote, setBuildReviewNote] = useState('')
+  const [showPackPicker, setShowPackPicker] = useState(false)
+  const [briefInput, setBriefInput] = useState('')
+  const [briefTurns, setBriefTurns] = useState<StudioBriefTurn[]>([])
+  const [briefBusy, setBriefBusy] = useState(false)
+  const [draftId, setDraftId] = useState('')
+  const [draftCloudLoaded, setDraftCloudLoaded] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   const loadedWorkspaceRef = useRef('')
   const projectStorageKey = scopedStorageKey(STORAGE_KEY, workspaceScope)
   const viewStorageKey = scopedStorageKey(VIEW_KEY, workspaceScope)
   const importAckKey = scopedStorageKey(IMPORT_ACK_KEY, workspaceScope)
+  const draftStorageKey = scopedStorageKey(DRAFT_STORAGE_KEY, workspaceScope)
 
   useEffect(() => {
     let mounted = true
@@ -378,32 +288,108 @@ export function StudioWorkspace({
           setGuestProjects(candidates.filter((item) => !item.archivedAt))
         }
         const savedView = localStorage.getItem(viewStorageKey) as StudioView | null
+        const parsedDraft = studioDraftSchema.safeParse(JSON.parse(localStorage.getItem(draftStorageKey) || 'null'))
+        const localDraft = parsedDraft.success ? parsedDraft.data : null
         if (initialBrief.trim()) {
-          setIntake((current) => ({ ...current, notes: initialBrief.trim() }))
-          setView('intake')
+          setDraftId(requestId())
+          setBriefInput(initialBrief.trim())
+          setView('kickoff')
+          setProject(null)
+        } else if (localDraft) {
+          setDraftId(localDraft.id)
+          setIntake(localDraft.intake)
+          setSelectedPackId(localDraft.packId)
+          setBriefTurns(localDraft.turns)
+          setBriefInput(localDraft.unsentText)
+          setView('kickoff')
           setProject(null)
         } else if (savedView === 'project' && loaded[0]) {
           setProject(loaded[0])
           setView('project')
         } else {
           setProject(null)
-          setView(savedView === 'intake' ? 'intake' : 'dashboard')
+          if (savedView === 'kickoff') setDraftId(requestId())
+          setView(savedView === 'kickoff' ? 'kickoff' : 'dashboard')
         }
       } catch {
         // A damaged local project should not prevent Studio from opening.
         setProjects([])
         setProject(null)
-        setView(initialBrief.trim() ? 'intake' : 'dashboard')
+        setView(initialBrief.trim() ? 'kickoff' : 'dashboard')
       }
       loadedWorkspaceRef.current = workspaceScope
       setCloudReady(false)
+      setDraftCloudLoaded(!signedIn || Boolean(initialBrief.trim()))
       setSaveState(signedIn ? 'saving' : 'local')
       setHydrated(true)
     })
     return () => {
       mounted = false
     }
-  }, [importAckKey, initialBrief, projectStorageKey, signedIn, viewStorageKey, workspaceScope])
+  }, [draftStorageKey, importAckKey, initialBrief, projectStorageKey, signedIn, viewStorageKey, workspaceScope])
+
+  useEffect(() => {
+    if (!hydrated || !draftId || view !== 'kickoff' || loadedWorkspaceRef.current !== workspaceScope) return
+    if (signedIn && !draftCloudLoaded) return
+    const draft: StudioDraft = {
+      id: draftId,
+      updatedAt: Date.now(),
+      packId: selectedPackId,
+      intake,
+      turns: briefTurns,
+      unsentText: briefInput,
+    }
+    const timer = window.setTimeout(() => {
+      try { localStorage.setItem(draftStorageKey, JSON.stringify(draft)) } catch { /* Local storage can be unavailable. */ }
+      if (signedIn) {
+        void fetch('/api/project-draft', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId() },
+          body: JSON.stringify(draft),
+        })
+      }
+    }, 450)
+    return () => window.clearTimeout(timer)
+  }, [briefInput, briefTurns, draftCloudLoaded, draftId, draftStorageKey, hydrated, intake, selectedPackId, signedIn, view, workspaceScope])
+
+  useEffect(() => {
+    if (!hydrated || !signedIn || initialBrief.trim()) return
+    let cancelled = false
+    fetch('/api/project-draft')
+      .then(async (response) => response.ok ? response.json() : { draft: null })
+      .then(({ draft }) => {
+        if (cancelled) return
+        const cloud = studioDraftSchema.safeParse(draft)
+        const local = studioDraftSchema.safeParse(JSON.parse(localStorage.getItem(draftStorageKey) || 'null'))
+        const chosen = newerDraft(local.success ? local.data : null, cloud.success ? cloud.data : null)
+        if (chosen) {
+          setDraftId(chosen.id)
+          setIntake(chosen.intake)
+          setSelectedPackId(chosen.packId)
+          setBriefTurns(chosen.turns)
+          setBriefInput(chosen.unsentText)
+          setProject(null)
+          setView('kickoff')
+        }
+        setDraftCloudLoaded(true)
+      })
+      .catch(() => { if (!cancelled) setDraftCloudLoaded(true) })
+    return () => { cancelled = true }
+  }, [draftStorageKey, hydrated, initialBrief, signedIn, workspaceScope])
+
+  function clearDraft() {
+    const completedDraftId = draftId
+    setDraftId('')
+    setBriefTurns([])
+    setBriefInput('')
+    try { localStorage.removeItem(draftStorageKey) } catch { /* Local storage can be unavailable. */ }
+    if (signedIn && completedDraftId) {
+      void fetch(`/api/project-draft?id=${encodeURIComponent(completedDraftId)}`, {
+        method: 'DELETE',
+        headers: { 'X-Request-Id': requestId() },
+      })
+    }
+  }
 
   useEffect(() => {
     if (!hydrated || loadedWorkspaceRef.current !== workspaceScope) return
@@ -477,13 +463,13 @@ export function StudioWorkspace({
     const update = () => {
       const seconds = Math.floor((Date.now() - startedAt) / 1_000)
       setBuildElapsed(seconds)
-      setBuildStage(seconds < 4 ? 0 : seconds < 9 ? 1 : seconds < 16 ? 2 : seconds < 25 ? 3 : 4)
     }
     update()
     const timer = window.setInterval(update, 1_000)
     return () => window.clearInterval(timer)
   }, [buildingProject, buildComplete])
 
+  const selectedPack = findPack(selectedPackId) ?? PACKS[0]
   const approvedCount = project?.assets.filter((asset) => asset.status === 'approved').length ?? 0
   const progress = project?.assets.length ? Math.round((approvedCount / project.assets.length) * 100) : 0
   const activeAsset = project?.assets.find((asset) => asset.id === expandedId)
@@ -512,29 +498,6 @@ export function StudioWorkspace({
     }))
   }
 
-  async function handleBrandFile(file?: File) {
-    setError('')
-    if (!file) return
-    if (file.size > 4 * 1024 * 1024) {
-      setError('Choose a brand file smaller than 4 MB.')
-      return
-    }
-    try {
-      if (file.type === 'application/pdf') {
-        setBrandFile({ name: file.name, kind: 'pdf', data: await readDataUrl(file) })
-      } else if (file.type.startsWith('image/')) {
-        setBrandFile({ name: file.name, kind: 'image', data: await readDataUrl(file) })
-      } else if (file.type.startsWith('text/') || /\.(txt|md|csv|json)$/i.test(file.name)) {
-        setBrandFile({ name: file.name, kind: 'text', text: (await file.text()).slice(0, 60_000) })
-      } else {
-        setError('Use a PDF, PNG, JPG, TXT, Markdown, CSV or JSON brand file.')
-      }
-    } catch {
-      setError('That brand file could not be read.')
-    }
-    if (fileRef.current) fileRef.current.value = ''
-  }
-
   async function createProject() {
     setError('')
     if (!intake.businessName || !intake.offer || !intake.audience || !intake.goal) {
@@ -548,51 +511,76 @@ export function StudioWorkspace({
     setBusy(true)
     setBuildingProject(true)
     setBuildComplete(false)
-    setBuildStage(0)
     setBuildElapsed(0)
+    setBuildSectionsCount(0)
+    setBuildReviewNote('')
+    const startedAt = eventTimestamp()
+    let specialistState = initialProjectSpecialists(selectedPack)
+    setBuildSpecialists(specialistState)
     const id = requestId()
     try {
-      const response = await fetch('/api/studio', {
+      const requestIntake = intake
+      const response = await fetch('/api/studio/pack', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
-        body: JSON.stringify({ action: 'create', intake, brandFile }),
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': id, 'Idempotency-Key': id },
+        body: JSON.stringify({ packId: selectedPack.id, intake: requestIntake }),
       })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok || !data.result) {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
         const reference = data.requestId || response.headers.get('X-Request-Id') || id
-        throw new Error(`${data.error || 'Studio could not create this campaign.'} Reference: ${reference}`)
+        throw new Error(`${data.error || 'Create could not start this project.'} Reference: ${reference}`)
       }
-      setBuildStage(BUILD_AGENTS.length)
+
+      const outcome: {
+        result?: Extract<PackEvent, { type: 'result' }>
+        review?: Extract<PackEvent, { type: 'review' }>
+      } = {}
+      await readPackStream(response, (event) => {
+        if (event.type === 'pack') {
+          specialistState = event.specialists.map((specialist) => ({ ...specialist, status: 'pending' }))
+          setBuildSpecialists(specialistState)
+        } else if (event.type === 'specialist') {
+          specialistState = specialistState.map((specialist) => specialist.id === event.id
+            ? { ...specialist, status: event.status, detail: event.detail }
+            : specialist)
+          setBuildSpecialists(specialistState)
+        } else if (event.type === 'section') {
+          setBuildSectionsCount((count) => count + 1)
+        } else if (event.type === 'review') {
+          outcome.review = event
+          setBuildReviewNote(event.detail)
+        } else if (event.type === 'result') {
+          outcome.result = event
+          setBuildSectionsCount(event.sections.length)
+        } else if (event.type === 'error') {
+          throw new Error(event.message)
+        }
+      })
+      const result = outcome.result
+      if (!result) throw new Error('Create finished without returning any deliverables.')
+
       setBuildComplete(true)
-      await new Promise((resolve) => window.setTimeout(resolve, 900))
-      const result = data.result as {
-        brand: BrandProfile
-        campaign: Campaign
-        assets: StudioAsset[]
-        sources?: Array<{ title: string; url: string }>
-      }
-      const next: StudioProject = {
+      const completedAt = eventTimestamp()
+      const next = createPackProject({
         id: requestId(),
-        createdAt: eventTimestamp(),
-        updatedAt: eventTimestamp(),
         intake,
-        brand: result.brand,
-        campaign: result.campaign,
-        sources: result.sources ?? [],
-        assets: result.assets.map((asset, index) => ({
-          ...asset,
-          id: asset.id || `asset-${index + 1}`,
-          status: 'draft',
-        })),
-      }
+        pack: selectedPack,
+        sections: result.sections,
+        sources: result.sources,
+        specialists: specialistState,
+        startedAt,
+        completedAt,
+        evaluations: outcome.review?.evaluations,
+      })
+      await new Promise((resolve) => window.setTimeout(resolve, 500))
+      clearDraft()
       setProject(next)
       setView('project')
       setExpandedId(next.assets[0]?.id || '')
-      setBrandFile(null)
       requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
     } catch (cause) {
-      console.error('[AI360] Studio generation failed', cause)
-      setError(cause instanceof Error ? cause.message : 'Studio could not create this campaign.')
+      console.error('[AI360] Create project failed', cause)
+      setError(cause instanceof Error ? cause.message : 'Create could not complete this project.')
     } finally {
       setBusy(false)
       setBuildingProject(false)
@@ -632,7 +620,14 @@ export function StudioWorkspace({
         const reference = data.requestId || response.headers.get('X-Request-Id') || id
         throw new Error(`${data.error || 'Studio could not improve this asset.'} Reference: ${reference}`)
       }
-      updateAsset(asset.id, { ...data.result, id: asset.id, status: 'draft' })
+      const revised = data.result as Partial<StudioAsset> & { content?: string }
+      const nextAsset = addAssetVersion(
+        { ...asset, ...revised, id: asset.id },
+        revised.content || asset.content,
+        'ai_revision',
+        eventTimestamp(),
+      )
+      updateAsset(asset.id, nextAsset)
       setRevisionId('')
       setRevisionInstruction('')
     } catch (cause) {
@@ -641,6 +636,11 @@ export function StudioWorkspace({
     } finally {
       setBusy(false)
     }
+  }
+
+  function finishManualEdit(asset: StudioAsset) {
+    updateAsset(asset.id, addAssetVersion(asset, asset.content, 'manual_edit', eventTimestamp()))
+    setEditingId('')
   }
 
   async function exportPack(format: 'pdf' | 'docx') {
@@ -653,7 +653,7 @@ export function StudioWorkspace({
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
         body: JSON.stringify({
-          title: `${project.intake.businessName} Marketing Launch Pack`,
+          title: `${project.intake.businessName} ${project.pack?.name || 'Marketing Launch Pack'}`,
           content: projectMarkdown(project),
           format,
         }),
@@ -665,7 +665,7 @@ export function StudioWorkspace({
       }
       const blob = await response.blob()
       const disposition = response.headers.get('Content-Disposition') || ''
-      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `marketing-launch-pack.${format}`
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `${project.pack?.id || 'marketing-launch-pack'}.${format}`
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -941,16 +941,63 @@ export function StudioWorkspace({
     setGuestProjects([])
   }
 
-  function beginProject(goal = '') {
+  function beginProject(packId: PackId = 'launch') {
+    const pack = findPack(packId) ?? PACKS[0]
     setProject(null)
-    setView('intake')
-    setIntake({ ...EMPTY_INTAKE, goal })
-    setBrandFile(null)
+    setView('kickoff')
+    setSelectedPackId(pack.id)
+    setDraftId(requestId())
+    setIntake(EMPTY_INTAKE)
+    setBriefInput('')
+    setBriefTurns([])
+    setBuildSpecialists(initialProjectSpecialists(pack))
+    setBuildSectionsCount(0)
+    setBuildReviewNote('')
     setExpandedId('')
     setEditingId('')
     setRevisionId('')
     setError('')
     requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
+  }
+
+  async function continueBrief() {
+    const message = briefInput.trim()
+    if (!message || briefBusy) return
+    const userTurn: StudioBriefTurn = { id: requestId(), role: 'user', content: message }
+    setBriefTurns((current) => [...current, userTurn])
+    setBriefInput('')
+    setBriefBusy(true)
+    setError('')
+    try {
+      const response = await fetch('/api/studio/brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId() },
+        body: JSON.stringify({ message, intake }),
+      })
+      const data = await response.json().catch(() => ({})) as {
+        error?: string
+        reply?: string
+        packId?: PackId
+        intake?: Intake
+      }
+      if (!response.ok || !data.reply || !data.intake || !data.packId) {
+        throw new Error(data.error || 'AI360 could not update the brief.')
+      }
+      setSelectedPackId(data.packId)
+      setIntake({ ...EMPTY_INTAKE, ...data.intake, channels: data.intake.channels || [] })
+      setBriefTurns((current) => [...current, { id: requestId(), role: 'assistant', content: data.reply! }])
+    } catch (cause) {
+      const messageText = cause instanceof Error ? cause.message : 'AI360 could not update the brief.'
+      setError(messageText)
+      setBriefTurns((current) => [...current, { id: requestId(), role: 'assistant', content: messageText }])
+    } finally {
+      setBriefBusy(false)
+    }
+  }
+
+  function revealPackPicker() {
+    setShowPackPicker(true)
+    requestAnimationFrame(() => mainRef.current?.querySelector('.studio-pack-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
 
   function openProject(next: StudioProject) {
@@ -983,9 +1030,9 @@ export function StudioWorkspace({
         <div className="studio-dashboard">
           <header className="studio-dashboard-head">
             <div>
-              <span className="studio-kicker">AI360 Studio · Project home</span>
-              <h1>Your work,<br />moving forward.</h1>
-              <p>Turn a business goal into a coordinated campaign, then return to improve, approve and produce each asset.</p>
+              <span className="studio-kicker">Projects</span>
+              <h1>What are we<br />building?</h1>
+              <p>Describe the outcome in your own words. AI360 will shape the brief, choose the right workflow and ask only what it still needs.</p>
             </div>
             <div className="studio-dashboard-actions">
               <span className={`studio-save-state ${saveState}`}>
@@ -997,6 +1044,24 @@ export function StudioWorkspace({
               <button onClick={() => beginProject()}>New project <span>+</span></button>
             </div>
           </header>
+
+          <section className="studio-conversation-start" aria-labelledby="project-start-title">
+            <div>
+              <span>Start from a blank page</span>
+              <h2 id="project-start-title">Tell AI360 what you want to make or move forward.</h2>
+              <p>No template or technical setup. A rough idea is enough.</p>
+            </div>
+            <form onSubmit={(event) => { event.preventDefault(); setView('kickoff'); void continueBrief() }}>
+              <textarea
+                rows={3}
+                value={briefInput}
+                onChange={(event) => setBriefInput(event.target.value)}
+                placeholder="For example: Help me launch a catering service for busy offices in Accra..."
+                aria-label="Describe your project"
+              />
+              <button type="submit" disabled={!briefInput.trim()}>Start project <span>↑</span></button>
+            </form>
+          </section>
 
           {error ? <div className="studio-error dashboard-error">{error}</div> : null}
 
@@ -1024,23 +1089,35 @@ export function StudioWorkspace({
               </div>
               <ProjectPulse project={featured} />
             </section>
-          ) : (
-            <section className="studio-empty-projects">
-              <span className="empty-orbit"><i>AI</i></span>
-              <div>
-                <span className="studio-kicker">Your first outcome starts here</span>
-                <h2>Bring the goal. Studio assembles the team.</h2>
-                <p>One guided brief becomes a brand direction, campaign plan and eight editable assets.</p>
+          ) : null}
+
+          {remaining.length ? <section className="studio-project-library studio-project-library-primary">
+            <div className="studio-section-head">
+              <span><b>{remaining.length ? 'More projects' : 'Choose a project outcome'}</b><small>{remaining.length ? 'Each project keeps its brief, decisions and assets together.' : 'Start from your goal. You will review the brief before anything is built.'}</small></span>
+              {remaining.length ? <span>{activeProjects.length} active</span> : null}
+            </div>
+            <div className="studio-project-grid">
+              {remaining.map((item) => <ProjectCard project={item} onOpen={() => openProject(item)} key={item.id} />)}
+            </div>
+          </section> : null}
+
+          {showPackPicker ? (
+            <section className="studio-project-library studio-pack-picker">
+              <div className="studio-section-head">
+                <span><b>Choose the outcome you need</b><small>Each route uses only the specialists and credits needed for that job.</small></span>
+                <button className="pack-picker-close" onClick={() => setShowPackPicker(false)}>Close</button>
               </div>
-              <button onClick={() => beginProject()}>Build my first project <span>→</span></button>
+              <PackPicker onChoose={beginProject} />
             </section>
-          )}
+          ) : null}
+
+          <button className="studio-example-toggle" onClick={revealPackPicker}>Need inspiration? Browse example outcomes</button>
 
           <section className="studio-transformation" aria-labelledby="studio-transformation-title">
             <div className="transformation-copy">
-              <span className="studio-kicker">Before → after · A real creative transformation</span>
-              <h2 id="studio-transformation-title">The brief stays visible.<br />The output becomes tangible.</h2>
-              <p>Studio does not hide the leap between your idea and the finished asset. Review the thinking, change the direction and approve it before production.</p>
+              <span className="studio-kicker">What a project keeps together</span>
+              <h2 id="studio-transformation-title">Your goal stays attached<br />to the work.</h2>
+              <p>See the brief, direction, assets and approvals in one place. Review the thinking and change course without starting over.</p>
               <div className="transformation-brief">
                 <span>Before · Business goal</span>
                 <blockquote>“Launch a modern hibiscus and ginger drink for busy people in Accra.”</blockquote>
@@ -1051,29 +1128,6 @@ export function StudioWorkspace({
               <Image src="/studio-campaign-output.webp" alt="After: a polished campaign image for a hibiscus and ginger drink" fill sizes="(max-width: 820px) 100vw, 38vw" />
               <figcaption><span>After · Approved campaign direction</span><b>Warm, grounded and ready to adapt</b></figcaption>
             </figure>
-          </section>
-
-          <section className="studio-project-library">
-            <div className="studio-section-head">
-              <span><b>{remaining.length ? 'More projects' : 'Start with an outcome'}</b><small>{remaining.length ? 'Everything stays organized by business and campaign.' : 'Choose a route. You can change every detail in the brief.'}</small></span>
-              {remaining.length ? <span>{activeProjects.length} active</span> : null}
-            </div>
-            {remaining.length ? (
-              <div className="studio-project-grid">
-                {remaining.map((item) => <ProjectCard project={item} onOpen={() => openProject(item)} key={item.id} />)}
-                <button className="studio-project-new-card" onClick={() => beginProject()}>
-                  <span>+</span><b>Start another project</b><small>Build a fresh campaign pack</small>
-                </button>
-              </div>
-            ) : (
-              <div className="studio-quick-grid">
-                {QUICK_STARTS.map((start) => (
-                  <button onClick={() => beginProject(start.goal)} key={start.title}>
-                    <span>{start.mark}</span><b>{start.title}</b><small>{start.note}</small><i>↗</i>
-                  </button>
-                ))}
-              </div>
-            )}
           </section>
 
           {archivedProjects.length ? (
@@ -1096,20 +1150,27 @@ export function StudioWorkspace({
       <main className="studio-main" ref={mainRef}>
         <div className="studio-intake build-active">
           <section className="studio-intro build-intro">
-            <span className="studio-kicker">AI360 Studio · Coordinated build</span>
-            <h1>A small team.<br />One complete outcome.</h1>
+            <span className="studio-kicker">Create · {selectedPack.name}</span>
+            <h1>The right team.<br />One complete outcome.</h1>
             <p>
-              Each specialist works on one part of the launch pack, then passes
-              structured output to the next. The final review keeps everything coherent.
+              Each specialist works on one part of the project. Later stages receive
+              the work already completed, so the result stays coherent.
             </p>
             <div className="studio-outcomes">
-              <span><b>01</b> Understand</span>
-              <span><b>02</b> Shape</span>
-              <span><b>03</b> Produce</span>
-              <span><b>04</b> Check</span>
+              {selectedPack.stages.map((stage, index) => (
+                <span key={`${selectedPack.id}-${index}`}><b>{String(index + 1).padStart(2, '0')}</b>{stage.specialists.length > 1 ? 'Build together' : 'Build next part'}</span>
+              ))}
             </div>
           </section>
-          <StudioBuildRoom intake={intake} stage={buildStage} elapsed={buildElapsed} />
+          <StudioBuildRoom
+            intake={intake}
+            pack={selectedPack}
+            specialists={buildSpecialists}
+            sectionsCount={buildSectionsCount}
+            reviewNote={buildReviewNote}
+            complete={buildComplete}
+            elapsed={buildElapsed}
+          />
         </div>
       </main>
     )
@@ -1118,104 +1179,58 @@ export function StudioWorkspace({
   if (!project) {
     return (
       <main className="studio-main" ref={mainRef}>
-        <div className="studio-intake">
-          <section className="studio-intro">
-            <button className="studio-back" onClick={openDashboard}>← Project home</button>
-            <span className="studio-kicker">AI360 Studio · Guided project</span>
-            <h1>Build a complete<br />marketing launch pack.</h1>
-            <p>
-              Tell us about the business once. Studio will create the brand foundation,
-              campaign direction and eight practical assets as a project you can review.
-            </p>
-            <div className="studio-outcomes">
-              <span><b>01</b> Understand the brand</span>
-              <span><b>02</b> Plan the campaign</span>
-              <span><b>03</b> Produce the assets</span>
-              <span><b>04</b> Review and export</span>
-            </div>
-          </section>
+        <div className="project-kickoff">
+          <header className="project-kickoff-head">
+            <button className="studio-back" onClick={openDashboard}>Projects</button>
+            <div><span className="studio-kicker">New project</span><h1>Start with the goal.</h1><p>Talk naturally. AI360 turns the conversation into a brief you can see and correct.</p></div>
+          </header>
 
-          <section className="studio-form">
-            <div className="studio-form-head">
-              <span><b>Project brief</b><small>{readiness} of 5 essentials ready</small></span>
-              <span className="studio-readiness"><i style={{ width: `${readiness * 20}%` }} /></span>
-            </div>
-            <div className="studio-form-grid">
-              <label>
-                Business name <em>Required</em>
-                <input value={intake.businessName} onChange={(event) => updateIntake('businessName', event.target.value)} placeholder="e.g. Naa's Natural Foods" />
-              </label>
-              <label>
-                Industry
-                <input value={intake.industry} onChange={(event) => updateIntake('industry', event.target.value)} placeholder="e.g. Food and hospitality" />
-              </label>
-              <label className="wide">
-                What do you sell? <em>Required</em>
-                <textarea rows={3} value={intake.offer} onChange={(event) => updateIntake('offer', event.target.value)} placeholder="Describe the product, service, price or offer." />
-              </label>
-              <label className="wide">
-                Who should buy it? <em>Required</em>
-                <textarea rows={3} value={intake.audience} onChange={(event) => updateIntake('audience', event.target.value)} placeholder="Describe the ideal customer and the problem they need solved." />
-              </label>
-              <label>
-                Campaign goal <em>Required</em>
-                <select value={intake.goal} onChange={(event) => updateIntake('goal', event.target.value)}>
-                  <option value="">Choose a goal</option>
-                  {GOALS.map((goal) => <option key={goal}>{goal}</option>)}
-                </select>
-              </label>
-              <label>
-                Market or location
-                <input value={intake.location} onChange={(event) => updateIntake('location', event.target.value)} placeholder="e.g. Accra, Ghana" />
-              </label>
-            </div>
-
-            <fieldset className="studio-channels">
-              <legend>Where should the campaign run?</legend>
-              <div>
-                {CHANNELS.map((channel) => (
-                  <button
-                    type="button"
-                    className={intake.channels.includes(channel) ? 'selected' : ''}
-                    onClick={() => toggleChannel(channel)}
-                    key={channel}
-                  >
-                    <span>{intake.channels.includes(channel) ? '✓' : '+'}</span>{channel}
-                  </button>
-                ))}
+          <div className="project-kickoff-layout">
+            <section className="brief-conversation" aria-label="Project setup conversation">
+              <div className="brief-turn assistant">
+                <span>AI360</span>
+                <p>What are you trying to make, launch or improve? A rough idea is enough to start.</p>
               </div>
-            </fieldset>
+              {briefTurns.map((turn) => (
+                <div className={`brief-turn ${turn.role}`} key={turn.id}><span>{turn.role === 'user' ? 'You' : 'AI360'}</span><p>{turn.content}</p></div>
+              ))}
+              {briefBusy ? <div className="brief-turn assistant thinking"><span>AI360</span><p>Shaping the brief<span>...</span></p></div> : null}
+              <form className="brief-composer" onSubmit={(event) => { event.preventDefault(); void continueBrief() }}>
+                <textarea
+                  rows={3}
+                  value={briefInput}
+                  onChange={(event) => setBriefInput(event.target.value)}
+                  placeholder={briefTurns.length ? 'Add a detail or answer AI360...' : 'Describe what you want to achieve...'}
+                  autoFocus
+                />
+                <div><span>AI360 asks only for details that change the work.</span><button type="submit" disabled={!briefInput.trim() || briefBusy}>Send <b>↑</b></button></div>
+              </form>
+            </section>
 
-            <div className="brand-drop">
-              <input
-                ref={fileRef}
-                hidden
-                type="file"
-                accept="application/pdf,image/png,image/jpeg,image/webp,text/plain,text/markdown,text/csv,application/json"
-                onChange={(event) => handleBrandFile(event.target.files?.[0])}
-              />
-              <button type="button" onClick={() => fileRef.current?.click()}>
-                <span className="brand-drop-icon">↥</span>
-                <span>
-                  <b>{brandFile ? brandFile.name : 'Add a brand guide or logo'}</b>
-                  <small>{brandFile ? 'Ready for Studio to review' : 'Optional · PDF, image or text · Up to 4 MB'}</small>
-                </span>
-                <span>{brandFile ? 'Replace' : 'Browse'}</span>
-              </button>
-              {brandFile && <button className="brand-remove" onClick={() => setBrandFile(null)} aria-label="Remove brand file">×</button>}
-            </div>
-
-            <label className="studio-notes">
-              Anything else Studio should know?
-              <textarea rows={2} value={intake.notes} onChange={(event) => updateIntake('notes', event.target.value)} placeholder="Tone, deadline, promotion, competitors or words to avoid." />
-            </label>
-
-            {error && <div className="studio-error">{error}</div>}
-            <button className="studio-create" onClick={createProject} disabled={busy}>
-              {busy ? <><span className="studio-spinner" aria-hidden="true" /> Building your launch pack…</> : <>Create marketing launch pack <span>→</span></>}
-            </button>
-            <p className="studio-form-note">Studio creates drafts for your review. Nothing is published automatically.</p>
-          </section>
+            <aside className="live-brief">
+              <div className="live-brief-head"><span><b>Live brief</b><small>{readiness} of 5 essentials clear</small></span><span className="studio-readiness"><i style={{ width: `${readiness * 20}%` }} /></span></div>
+              <dl>
+                <div><dt>Business</dt><dd>{intake.businessName || 'Not clear yet'}</dd></div>
+                <div><dt>Offer</dt><dd>{intake.offer || 'Not clear yet'}</dd></div>
+                <div><dt>Audience</dt><dd>{intake.audience || 'Not clear yet'}</dd></div>
+                <div><dt>Goal</dt><dd>{intake.goal || 'Not clear yet'}</dd></div>
+                <div><dt>Where it will be used</dt><dd>{intake.channels.length ? intake.channels.join(', ') : 'Not clear yet'}</dd></div>
+              </dl>
+              <details className="brief-edit">
+                <summary>Review or correct details</summary>
+                <div>
+                  <label>Business name<input value={intake.businessName} onChange={(event) => updateIntake('businessName', event.target.value)} /></label>
+                  <label>Offer<textarea rows={2} value={intake.offer} onChange={(event) => updateIntake('offer', event.target.value)} /></label>
+                  <label>Audience<textarea rows={2} value={intake.audience} onChange={(event) => updateIntake('audience', event.target.value)} /></label>
+                  <label>Goal<textarea rows={2} value={intake.goal} onChange={(event) => updateIntake('goal', event.target.value)} /></label>
+                  <fieldset><legend>Channels</legend>{CHANNELS.map((channel) => <button type="button" className={intake.channels.includes(channel) ? 'selected' : ''} onClick={() => toggleChannel(channel)} key={channel}>{channel}</button>)}</fieldset>
+                </div>
+              </details>
+              {error ? <div className="studio-error">{error}</div> : null}
+              <button className="studio-create" onClick={createProject} disabled={busy || readiness < 5}>Build this project <span>→</span></button>
+              <p className="studio-form-note">About {packCredits(selectedPack)} credits. You review the work before anything is published.</p>
+            </aside>
+          </div>
         </div>
       </main>
     )
@@ -1226,7 +1241,7 @@ export function StudioWorkspace({
       <div className="studio-project">
         <header className="project-head">
           <div>
-            <span className="studio-kicker">Marketing launch pack</span>
+            <span className="studio-kicker">{project.pack?.name || 'Marketing launch pack'}</span>
             <h1>{project.campaign.name}</h1>
             <p>{project.intake.businessName} · Updated {new Date(project.updatedAt).toLocaleDateString()}</p>
           </div>
@@ -1249,12 +1264,12 @@ export function StudioWorkspace({
             <span><b>{approvedCount} of {project.assets.length} approved</b><small>Review each asset to complete the pack.</small></span>
           </div>
           <div><span>Objective</span><b>{project.campaign.objective}</b></div>
-          <div><span>Big idea</span><b>{project.campaign.bigIdea}</b></div>
-          <div><span>Primary action</span><b>{project.campaign.callToAction}</b></div>
+          <div><span>{project.pack ? 'Outcome' : 'Big idea'}</span><b>{project.campaign.bigIdea}</b></div>
+          <div><span>{project.pack ? 'Build status' : 'Primary action'}</span><b>{project.run ? `${project.run.producedSections} deliverables · ${project.run.review?.passed ? 'quality checked' : project.run.status}` : project.campaign.callToAction}</b></div>
         </section>
 
-        <div className="project-layout">
-          <aside className="brand-panel">
+        <div className={`project-layout${project.pack ? ' pack-project' : ''}`}>
+          {!project.pack ? <aside className="brand-panel">
             <div className="panel-label">Brand foundation</div>
             <h2>{project.brand.tagline}</h2>
             <p>{project.brand.summary}</p>
@@ -1272,12 +1287,12 @@ export function StudioWorkspace({
               ))}
             </div>
             <div className="brand-value"><span>Value proposition</span><p>{project.brand.valueProposition}</p></div>
-          </aside>
+          </aside> : null}
 
           <section className="asset-board">
             <div className="asset-board-head">
-              <span><b>Production checklist</b><small>Draft, improve and approve each deliverable.</small></span>
-              <span>{project.assets.length} assets</span>
+              <span><b>{project.pack ? 'Project deliverables' : 'Production checklist'}</b><small>Review, improve and approve each deliverable.</small></span>
+              <span>{project.assets.length} deliverables</span>
             </div>
             <div className="asset-list">
               {project.assets.map((asset) => {
@@ -1288,7 +1303,7 @@ export function StudioWorkspace({
                   <article className={`asset-card${expanded ? ' expanded' : ''}${asset.status === 'approved' ? ' approved' : ''}`} key={asset.id}>
                     <button className="asset-summary" onClick={() => setExpandedId(expanded ? '' : asset.id)}>
                       <span className="asset-icon">{ASSET_ICONS[asset.type] || 'Aa'}</span>
-                      <span><b>{asset.title}</b><small>{asset.channel} · {asset.purpose}</small></span>
+                      <span><b>{asset.title}</b><small>{asset.channel} · Version {asset.version ?? 1} · {asset.purpose}</small></span>
                       <span className="asset-status">{asset.status === 'approved' ? '✓ Approved' : 'Draft'}</span>
                       <span className="asset-chevron">{expanded ? '−' : '+'}</span>
                     </button>
@@ -1350,8 +1365,8 @@ export function StudioWorkspace({
                         <div className="asset-actions">
                           <button onClick={() => navigator.clipboard.writeText(asset.content)}>Copy</button>
                           <button onClick={() => shareAsset(asset)}>Share</button>
-                          <button onClick={() => setEditingId(editingId === asset.id ? '' : asset.id)}>
-                            {editingId === asset.id ? 'Finish editing' : 'Edit'}
+                          <button onClick={() => editingId === asset.id ? finishManualEdit(asset) : setEditingId(asset.id)}>
+                            {editingId === asset.id ? 'Save new version' : 'Edit'}
                           </button>
                           <button onClick={() => { setRevisionId(asset.id); setRevisionInstruction('') }}>Improve with AI</button>
                           <button
@@ -1394,10 +1409,10 @@ export function StudioWorkspace({
             </div>
 
             <section className="execution-next live">
-              <span className="execution-mark">ON</span>
+              <span className="execution-mark">01</span>
               <span>
-                <b>Studio production is live</b>
-                <small>Approve an asset, then create its design or video. Approved copy can be shared from any device.</small>
+                <b>{project.pack ? 'Your project stays editable' : 'Studio production is live'}</b>
+                <small>{project.pack ? 'Review the work, request an improvement, approve it, then export the project.' : 'Approve an asset, then create its design or video. Approved copy can be shared from any device.'}</small>
               </span>
               <span>Ready</span>
             </section>
@@ -1463,12 +1478,21 @@ function projectCompletion(project: StudioProject) {
 
 function ProjectPulse({ project }: { project: StudioProject }) {
   const completion = projectCompletion(project)
-  const milestones = [
-    { label: 'Brief', complete: true },
-    { label: 'Brand', complete: true },
-    { label: 'Campaign', complete: true },
-    { label: 'Assets', complete: completion.percent === 100, active: completion.percent < 100 },
-  ]
+  const milestones = project.run
+    ? [
+        ...project.run.specialists.slice(0, 3).map((specialist) => ({
+          label: specialist.label,
+          complete: specialist.status === 'complete',
+          active: specialist.status !== 'complete',
+        })),
+        { label: 'Review', complete: completion.percent === 100, active: completion.percent < 100 },
+      ]
+    : [
+        { label: 'Brief', complete: true },
+        { label: 'Brand', complete: true },
+        { label: 'Campaign', complete: true },
+        { label: 'Assets', complete: completion.percent === 100, active: completion.percent < 100 },
+      ]
   return (
     <div className="project-pulse">
       <div className="pulse-score">
@@ -1499,11 +1523,37 @@ function ProjectCard({ project, onOpen, archived = false }: { project: StudioPro
   )
 }
 
-function readDataUrl(file: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
+function PackPicker({ onChoose }: { onChoose: (packId: PackId) => void }) {
+  return (
+    <div className="studio-quick-grid studio-pack-grid">
+      {PACKS.map((pack) => (
+        <button onClick={() => onChoose(pack.id)} key={pack.id}>
+          <span>{pack.mark}</span>
+          <b>{pack.name}</b>
+          <small>{pack.outcome}</small>
+          <em>{packCredits(pack)} credits · {pack.deliverables.length} deliverables</em>
+          <i aria-hidden="true">→</i>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+async function readPackStream(response: Response, onEvent: (event: PackEvent) => void) {
+  if (!response.body) throw new Error('Create returned no progress stream.')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.trim()) continue
+      onEvent(JSON.parse(line) as PackEvent)
+    }
+  }
+  if (buffer.trim()) onEvent(JSON.parse(buffer) as PackEvent)
 }

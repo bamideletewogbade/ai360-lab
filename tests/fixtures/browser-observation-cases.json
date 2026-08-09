@@ -1,0 +1,12 @@
+[
+  { "id": "allowed-public-page", "expected": "allow", "url": "https://example.com/report" },
+  { "id": "off-domain-page", "expected": "block", "url": "https://example.net/report" },
+  { "id": "loopback-page", "expected": "block", "url": "http://127.0.0.1/admin" },
+  { "id": "file-url", "expected": "block", "url": "file:///etc/passwd" },
+  { "id": "allowed-redirect", "expected": "review_redirect", "url": "https://example.com/next" },
+  { "id": "off-domain-redirect", "expected": "block_redirect", "url": "https://evil.example.net/next" },
+  { "id": "prompt-injection-content", "expected": "untrusted_warning" },
+  { "id": "active-html-content", "expected": "strip_active_content" },
+  { "id": "oversized-page", "expected": "truncate" },
+  { "id": "duplicate-request", "expected": "reuse_idempotency_record" }
+]

@@ -3,19 +3,19 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { MODEL_OPTIONS, type ChatMode } from '@/lib/models'
+import { type ChatMode } from '@/lib/models'
 import { ResponseContent } from '@/components/ResponseContent'
 import {
   browserSpeechLocale, DEFAULT_LANGUAGE, DEFAULT_SPEECH_INPUT, findLanguage, LANGUAGES,
-  SPEECH_INPUT_OPTIONS, type LanguageCode, type SpeechInputCode,
+  type LanguageCode, type SpeechInputCode,
 } from '@/lib/languages'
 import { StudioWorkspace } from '@/components/StudioWorkspace'
 import { AccountControls } from '@/components/AccountControls'
-import { WorkspaceOnboarding, type OnboardingChoice } from '@/components/WorkspaceOnboarding'
 import { WorkspaceBoot } from '@/components/WorkspaceBoot'
 import { QualityFeedback } from '@/components/QualityFeedback'
 import { useAuth } from '@clerk/nextjs'
 import { scopedStorageKey } from '@/lib/workspace'
+import { routeIntentDeterministically, type IntentRoute } from '@/lib/intent-router'
 
 type Attachment = {
   name: string
@@ -30,6 +30,7 @@ type Msg = {
   attachments?: Attachment[]
   agent?: boolean
   agentSteps?: AgentStep[]
+  agentActivity?: AgentActivity[]
   agentPlan?: AgentPlan
   /** Set when the run reports its result, so a streaming draft is not called finished. */
   agentDone?: boolean
@@ -46,6 +47,7 @@ type Msg = {
 }
 type Experience = 'chat' | 'agent' | 'studio'
 type AgentStep = { id: string; label: string; status: 'pending' | 'active' | 'complete' | 'failed' }
+type AgentActivity = { type: string; summary: string; createdAt: string }
 type AgentDepth = 'quick' | 'standard' | 'thorough'
 /** A plan waiting for the person to approve it before any paid work runs. */
 type AgentPlan = {
@@ -121,58 +123,64 @@ const MODE_META: Record<Experience, {
     mark: 'A',
   },
   agent: {
-    label: 'Agent',
-    short: 'Research and execute',
-    description: 'Research & action',
-    eyebrow: 'Outcome-focused agent',
+    label: 'Research',
+    short: 'Current, sourced work',
+    description: 'Current, sourced work',
+    eyebrow: 'Research workspace',
     heading: <>Give us the outcome.<br />We will work the steps.</>,
     intro: 'Set a goal and let AI360 research the web, inspect your materials, reason through the work and return a checked deliverable.',
     mark: 'R',
   },
   studio: {
-    label: 'Build',
-    short: 'Create business assets',
-    description: 'Campaign studio',
-    eyebrow: 'AI360 production studio',
+    label: 'Create',
+    short: 'Ongoing business projects',
+    description: 'Projects and ready-to-use assets',
+    eyebrow: 'Project workspace',
     heading: <>Build the assets that<br />move your business.</>,
     intro: 'Go from a brand brief to a coordinated launch pack, then review, refine, approve and produce each asset.',
     mark: 'C',
   },
 }
 
-const ACTIVITY_STATUS: Record<'chat' | 'agent', Array<{ label: string; detail: string }>> = {
-  chat: [
-    { label: 'Focused analysis', detail: 'Understanding what matters most' },
-    { label: 'Useful exploration', detail: 'Checking the strongest direction' },
-    { label: 'Clear synthesis', detail: 'Shaping an answer you can use' },
-    { label: 'Final polish', detail: 'Making every line easier to follow' },
-  ],
-  agent: [
-    { label: 'Focused planning', detail: 'Breaking the outcome into useful steps' },
-    { label: 'Live investigation', detail: 'Finding and checking relevant evidence' },
-    { label: 'Careful comparison', detail: 'Testing options against your goal' },
-    { label: 'Practical synthesis', detail: 'Preparing a complete deliverable' },
-  ],
-}
-
 function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function freshConversation(): Conversation {
-  return { id: makeId(), title: 'New conversation', messages: [], updatedAt: Date.now(), model: 'auto', experience: 'chat' }
+function freshConversation(experience: Experience = 'chat'): Conversation {
+  return { id: makeId(), title: 'New conversation', messages: [], updatedAt: Date.now(), model: 'auto', experience }
 }
 
 function titleFrom(text: string) {
   const clean = text.replace(/\s+/g, ' ').trim()
+  if (/^(hi|hello|hey|yo|good (morning|afternoon|evening))[!. ]*$/i.test(clean)) return 'Quick chat'
   return clean.length > 38 ? `${clean.slice(0, 38)}…` : clean || 'New conversation'
 }
 
+function displayConversationTitle(title: string) {
+  return /^(hi|hello|hey|yo)[!. ]*$/i.test(title.trim()) ? 'Quick chat' : title
+}
+
 function experienceForPrompt(prompt: string): Experience {
-  const value = prompt.toLowerCase()
-  if (/campaign|brand|logo|flyer|social media|promotion|promotional video|launch pack/.test(value)) return 'studio'
-  if (/research|compare|investigate|latest|current|market|sources|report|proposal/.test(value)) return 'agent'
-  return 'chat'
+  return experienceForRoute(routeIntentDeterministically(prompt).route)
+}
+
+function experienceForRoute(route: IntentRoute): Experience {
+  return route === 'project' ? 'studio' : route === 'research' ? 'agent' : 'chat'
+}
+
+async function routeExperience(prompt: string): Promise<Experience> {
+  try {
+    const response = await fetch('/api/route-intent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Request-Id': crypto.randomUUID() },
+      body: JSON.stringify({ prompt }),
+    })
+    const data = await response.json().catch(() => null) as { route?: IntentRoute } | null
+    if (response.ok && data?.route) return experienceForRoute(data.route)
+  } catch {
+    // Local fallback keeps the composer useful during a routing outage.
+  }
+  return experienceForPrompt(prompt)
 }
 
 function formatDuration(seconds: number) {
@@ -228,32 +236,18 @@ async function readAgentStream(response: Response, onEvent: (event: AgentEvent) 
 }
 
 /**
- * The three things the Lab does, in the order people need them.
- *
- * This is the only control that changes what the whole workspace is, so it
- * lives in one place and is described the same way everywhere.
+ * Durable Studio projects have their own store and project home. The sidebar
+ * only lists conversational work so a mode switch can never masquerade as a
+ * project.
  */
-const EXPERIENCES: Array<{
-  id: Experience
-  mark: string
-  label: string
-  caption: string
-  hint: string
-}> = [
-  { id: 'chat', mark: 'A', label: 'Quick', caption: 'Answers and ideas', hint: 'Ask anything. Fastest and cheapest.' },
-  { id: 'agent', mark: 'R', label: 'Research', caption: 'Current and sourced', hint: 'Searches the live web and cites what it used.' },
-  { id: 'studio', mark: 'C', label: 'Create', caption: 'Projects and assets', hint: 'Build a campaign, brand or set of assets.' },
-]
-
-/** Sidebar grouping. A campaign project is not the same kind of thing as a chat. */
 const SIDEBAR_GROUPS: Array<{
   id: string
   label: string
   mark: string
   match: (experience?: Experience) => boolean
 }> = [
-  { id: 'projects', label: 'Projects', mark: 'P', match: (experience) => experience === 'studio' },
-  { id: 'conversations', label: 'Conversations', mark: 'C', match: (experience) => experience !== 'studio' },
+  { id: 'chats', label: 'Chats', mark: 'A', match: (experience) => !experience || experience === 'chat' },
+  { id: 'research', label: 'Research', mark: 'R', match: (experience) => experience === 'agent' },
 ]
 
 const AGENT_DEPTH_HINTS: Record<AgentDepth, string> = {
@@ -295,16 +289,14 @@ function LabWorkspace({
   const [planFirst, setPlanFirst] = useState(false)
   // Kept for the session so nobody has to reselect their language every message.
   const [responseLanguage, setResponseLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE)
-  const [speechInputLanguage, setSpeechInputLanguage] = useState<SpeechInputCode>(DEFAULT_SPEECH_INPUT)
+  const [speechInputLanguage] = useState<SpeechInputCode>(DEFAULT_SPEECH_INPUT)
   const [languageOpen, setLanguageOpen] = useState(false)
   const recovering = useRef(new Set<string>())
   const [hydrated, setHydrated] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [modelOpen, setModelOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [attachment, setAttachment] = useState<Attachment | null>(null)
   const [fileError, setFileError] = useState('')
-  const [statusIndex, setStatusIndex] = useState(0)
   const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'recorded' | 'transcribing'>('idle')
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null)
@@ -314,9 +306,9 @@ function LabWorkspace({
   const [actionBusy, setActionBusy] = useState(false)
   const [actionError, setActionError] = useState('')
   const [cloudReady, setCloudReady] = useState(false)
-  const [cloudStatus, setCloudStatus] = useState<'local' | 'loading' | 'synced' | 'unavailable'>('local')
-  const [onboardingOpen, setOnboardingOpen] = useState(false)
+  const [, setCloudStatus] = useState<'local' | 'loading' | 'synced' | 'unavailable'>('local')
   const [initialStudioBrief, setInitialStudioBrief] = useState('')
+  const [helpOpen, setHelpOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -330,7 +322,6 @@ function LabWorkspace({
 
   const active = conversations.find((conversation) => conversation.id === activeId) ?? conversations[0]
   const messages = useMemo(() => active?.messages ?? [], [active])
-  const selectedModel = active?.model ?? 'auto'
   const experience = active?.experience ?? 'chat'
   const modeMeta = MODE_META[experience]
 
@@ -415,7 +406,7 @@ function LabWorkspace({
       return
     }
 
-    if (!localStorage.getItem(ONBOARDING_KEY)) setOnboardingOpen(true)
+    localStorage.setItem(ONBOARDING_KEY, 'complete')
   // This handoff should run once after local workspace hydration.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated])
@@ -487,12 +478,6 @@ function LabWorkspace({
   }, [messages, busy])
 
   useEffect(() => {
-    if (!busy) return
-    const timer = window.setInterval(() => setStatusIndex((index) => (index + 1) % ACTIVITY_STATUS.chat.length), 2100)
-    return () => window.clearInterval(timer)
-  }, [busy])
-
-  useEffect(() => {
     if (recordingState !== 'recording') return
     const timer = window.setInterval(() => {
       setRecordingSeconds((seconds) => {
@@ -514,6 +499,7 @@ function LabWorkspace({
     const query = search.trim().toLowerCase()
     return [...conversations]
       .sort((a, b) => b.updatedAt - a.updatedAt)
+      .filter((conversation) => conversation.experience !== 'studio')
       .filter((conversation) => !query || conversation.title.toLowerCase().includes(query))
   }, [conversations, search])
 
@@ -529,7 +515,7 @@ function LabWorkspace({
   }
 
   function newChat() {
-    const next = freshConversation()
+    const next = freshConversation(experience === 'agent' ? 'agent' : 'chat')
     setConversations((items) => [next, ...items])
     setActiveId(next.id)
     setInput('')
@@ -928,6 +914,7 @@ function LabWorkspace({
         content?: string | null
         sources?: SourceLink[]
         usage?: { totalTokens?: number; cost?: number } | null
+        activity?: AgentActivity[]
       }
       try {
         const res = await fetch(`/api/agent/runs/${encodeURIComponent(runId)}`)
@@ -942,6 +929,14 @@ function LabWorkspace({
         applyAgentEvent(conversationId, messageId, {
           type: 'step', id: step.id, label: step.label, status: step.status,
         })
+      }
+      if (run.activity?.length) {
+        setConversations((items) => items.map((item) => item.id !== conversationId ? item : {
+          ...item,
+          messages: item.messages.map((message) => message.id === messageId
+            ? { ...message, agentActivity: run.activity }
+            : message),
+        }))
       }
 
       if (!run.finished) continue
@@ -1037,7 +1032,16 @@ function LabWorkspace({
       ...(sentAttachment ? { attachments: [sentAttachment] } : {}),
     }
     const next = [...baseMessages, userMessage]
-    const currentExperience = experienceOverride ?? targetConversation.experience ?? 'chat'
+    let currentExperience = experienceOverride ?? targetConversation.experience ?? 'chat'
+    if (!experienceOverride && !baseMessages.length && currentExperience === 'chat' && content) {
+      const inferred = await routeExperience(content)
+      if (inferred === 'studio') {
+        setInitialStudioBrief(content)
+        selectExperience('studio')
+        return
+      }
+      currentExperience = inferred
+    }
     const requestId = crypto.randomUUID()
     const placeholder: Msg = {
       id: makeId(),
@@ -1055,6 +1059,7 @@ function LabWorkspace({
         item.id === requestConversationId
           ? {
               ...item,
+              experience: currentExperience,
               title: item.messages.length ? item.title : titleFrom(userMessage.content),
               messages: [...next, placeholder],
               updatedAt: Date.now(),
@@ -1065,7 +1070,6 @@ function LabWorkspace({
     setInput('')
     setAttachment(null)
     setBusy(true)
-    setStatusIndex(0)
     if (taRef.current) taRef.current.style.height = 'auto'
 
     try {
@@ -1161,27 +1165,22 @@ function LabWorkspace({
     send(user.content, user.attachments?.[0] ?? null, prior.slice(0, lastUserIndex))
   }
 
-  function selectModel(mode: ChatMode) {
-    updateActive((conversation) => ({ ...conversation, model: mode, updatedAt: Date.now() }))
-    setModelOpen(false)
-  }
-
   function selectExperience(nextExperience: Experience) {
-    if (busy) return
-    updateActive((conversation) => ({
-      ...conversation,
-      experience: nextExperience,
-      updatedAt: Date.now(),
-    }))
-  }
+    if (busy || nextExperience === experience) return
 
-  function completeOnboarding(choice?: OnboardingChoice) {
-    localStorage.setItem(ONBOARDING_KEY, 'complete')
-    setOnboardingOpen(false)
-    if (!choice) return
-    selectExperience(choice.mode)
-    if (choice.mode === 'studio') setInitialStudioBrief(choice.prompt)
-    else setInput(choice.prompt)
+    // Preserve the identity of completed work. Switching modes starts a fresh
+    // workspace unless the current conversation is still an untouched draft.
+    if (!messages.length && active.title === 'New conversation') {
+      updateActive((conversation) => ({ ...conversation, experience: nextExperience, updatedAt: Date.now() }))
+    } else {
+      const next = freshConversation(nextExperience)
+      setConversations((items) => [next, ...items])
+      setActiveId(next.id)
+    }
+    setInput('')
+    setAttachment(null)
+    discardRecording()
+    setSidebarOpen(false)
   }
 
   if (!hydrated || !active) return <WorkspaceBoot authLoaded={authLoaded} signedIn={signedIn} />
@@ -1193,17 +1192,27 @@ function LabWorkspace({
           <img src="/logo-white.png" alt="AI360" className="wordmark" />
           <button className="icon-button close-side" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">×</button>
         </div>
-        <button className="new-chat" onClick={newChat}><span>＋</span><span>Start something</span></button>
+        <button className="new-chat" onClick={newChat}><span>＋</span><span>New chat</span></button>
+        <div className="workspace-links" aria-label="Your workspace">
+          <p className="side-section-label">Workspace</p>
+          <button className={experience !== 'studio' ? 'active' : ''} onClick={() => { if (experience === 'studio') selectExperience('chat'); setSidebarOpen(false) }}>
+            <span className="side-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 6.5h14v9H9l-4 3v-12Z" /></svg></span>
+            <span><b>Chats</b><small>Ask, write and research</small></span>
+          </button>
+          <button className={experience === 'studio' ? 'active' : ''} onClick={() => { selectExperience('studio'); setSidebarOpen(false) }}>
+            <span className="side-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.5 7.5h6l1.5 2h7.5v9h-15v-11Z" /></svg></span>
+            <span><b>Projects</b><small>Briefs and deliverables</small></span>
+          </button>
+        </div>
         <label className="history-search">
           <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
             <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
             <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your work" />
         </label>
-        {/* Projects and conversations are different objects with different
-            lifespans, so they are listed separately instead of interleaved in
-            one undifferentiated list. */}
+        {/* Studio projects live in Create. This list is intentionally reserved
+            for chats and research threads. */}
         <nav className="history-list">
           {SIDEBAR_GROUPS.map((group) => {
             const items = visibleConversations.filter((conversation) => group.match(conversation.experience))
@@ -1215,7 +1224,7 @@ function LabWorkspace({
                   <div className={`history-item${conversation.id === active.id ? ' active' : ''}`} key={conversation.id}>
                     <button className="history-main" onClick={() => { setActiveId(conversation.id); setSidebarOpen(false) }}>
                       <span className="history-mark">{group.mark}</span>
-                      <span>{conversation.title}</span>
+                      <span>{displayConversationTitle(conversation.title)}</span>
                     </button>
                     <button className="history-more" onClick={() => renameChat(conversation.id)} title="Rename">✎</button>
                     <button className="history-more delete" onClick={() => deleteChat(conversation.id)} title="Delete">×</button>
@@ -1228,31 +1237,14 @@ function LabWorkspace({
             <p className="no-results">{search ? 'Nothing matches that search.' : 'Nothing here yet. Start something above.'}</p>
           )}
         </nav>
-        <QualityFeedback
-          variant="global"
-          context={{
-            sourceSurface: experience === 'chat' ? 'quick' : experience === 'agent' ? 'research' : 'studio',
-            conversationId: active.id,
-            conversationText: messages.slice(-6).map((message) => `${message.role === 'user' ? 'Customer' : 'AI360'}: ${message.content}`).join('\n\n'),
-          }}
-        />
-        <div className="side-foot" aria-live="polite">
-          <div className={`privacy-dot ${signedIn ? cloudStatus : 'local'}`}><span /></div>
-          <div>
-            <b>{signedIn ? 'Private workspace' : 'Saved on this device'}</b>
-            <span>{signedIn
-              ? cloudStatus === 'synced' ? 'Synced securely.' : cloudStatus === 'loading' ? 'Connecting cloud sync...' : 'Saved locally. Cloud sync unavailable.'
-              : 'Sign in to sync across devices.'}</span>
-          </div>
+        <div className="side-support">
+          <button type="button" className="side-help" onClick={() => { setHelpOpen(true); setSidebarOpen(false) }}><span>Help</span><small>Learn the workspace</small></button>
+          <QualityFeedback variant="global" context={{ sourceSurface: experience === 'chat' ? 'quick' : experience === 'agent' ? 'research' : 'studio', conversationId: active.id, conversationText: messages.slice(-6).map((message) => `${message.role === 'user' ? 'Customer' : 'AI360'}: ${message.content}`).join('\n\n') }} />
         </div>
       </aside>
       {sidebarOpen && <button className="scrim" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />}
 
       <section className={`workspace ${experience}`}>
-        {/* Three zones: identity on the left, the one control that changes
-            everything in the middle, account and settings on the right. The
-            capability chip moved down to the composer, where it describes the
-            thing the person is about to use rather than competing with it. */}
         <header className="lab-top">
           <div className="lab-top-left">
             <button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open conversations">☰</button>
@@ -1261,42 +1253,9 @@ function LabWorkspace({
               <span><b>AI360</b> LAB</span>
             </Link>
           </div>
-          <div className="experience-switch" role="group" aria-label="What do you want to do">
-            {EXPERIENCES.map((option) => (
-              <button
-                key={option.id}
-                className={`${option.id === 'chat' ? '' : option.id} ${experience === option.id ? 'active' : ''}`.trim()}
-                onClick={() => selectExperience(option.id)}
-                aria-pressed={experience === option.id}
-                title={option.hint}
-              >
-                <span className="mode-mark">{option.mark}</span>
-                <span className="mode-copy"><b>{option.label}</b><small>{option.caption}</small></span>
-              </button>
-            ))}
-          </div>
+          <div className="workspace-title"><b>{experience === 'studio' ? 'Projects' : 'Chats'}</b><small>{experience === 'studio' ? 'Build and improve lasting work' : experience === 'agent' ? 'Research is on' : 'Ask, write and research'}</small></div>
           <div className="lab-top-right">
-          {experience !== 'studio' && <div className="model-picker">
-            <button className="model-trigger" onClick={() => setModelOpen((open) => !open)} aria-expanded={modelOpen}>
-              <span className="status-dot" />
-              {MODEL_OPTIONS[selectedModel].shortLabel}
-              <span className="chevron">⌄</span>
-            </button>
-            {modelOpen && (
-              <div className="model-menu">
-                <div className="model-menu-title">Choose a model</div>
-                {(Object.keys(MODEL_OPTIONS) as ChatMode[]).map((mode) => (
-                  <button key={mode} className={mode === selectedModel ? 'selected' : ''} onClick={() => selectModel(mode)}>
-                    <span className="model-check">{mode === selectedModel ? '✓' : ''}</span>
-                    <span><b>{MODEL_OPTIONS[mode].label}</b><small>{MODEL_OPTIONS[mode].description}</small></span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>}
-          {experience !== 'studio' && (
-            <button className="new-top" onClick={newChat}><span>＋</span><span className="hide-mobile">New chat</span></button>
-          )}
+          {experience !== 'studio' && <button className="new-top" onClick={newChat}><span>＋</span><span className="hide-mobile">New chat</span></button>}
           <AccountControls enabled={AUTH_ENABLED} />
           </div>
         </header>
@@ -1312,15 +1271,9 @@ function LabWorkspace({
           <main className="lab-main" ref={scrollRef}>
           {messages.length === 0 ? (
             <div className="lab-empty">
-              <img src="/icon-mark-black.png" alt="" className="hero-icon" />
-              <p className="eyebrow">{modeMeta.eyebrow}</p>
-              <h1>{modeMeta.heading}</h1>
-              <p className="intro">{modeMeta.intro}</p>
-              <div className="capability-strip" aria-label="AI360 capabilities">
-                <span><i>01</i><b>Current</b><small>Searches the live web</small></span>
-                <span><i>02</i><b>Multimodal</b><small>Reads files and media</small></span>
-                <span><i>03</i><b>Ready to use</b><small>Exports polished work</small></span>
-              </div>
+              <p className="eyebrow">One workspace, shaped around your goal</p>
+              <h1>{experience === 'agent' ? modeMeta.heading : <>What can I help you<br />move forward?</>}</h1>
+              <p className="intro">Ask, write, research or start a project in your own words. AI360 chooses the right approach and shows its work when that matters.</p>
               <div className="task-grid">
                 {(experience === 'agent' ? AGENT_TASKS : TASKS).map((task) => (
                   <button
@@ -1331,19 +1284,17 @@ function LabWorkspace({
                         : send(task.prompt)
                     }
                   >
-                    <span className="task-icon">{task.icon}</span>
                     <span><b>{task.label}</b><small>{task.prompt.replace(/\.$/, '')}</small></span>
-                    <span className="task-arrow">↗</span>
                   </button>
                 ))}
               </div>
-              <div className="try-line"><span />Choose a starting point or describe your own<span /></div>
+              <div className="try-line"><span />Or just describe what you need<span /></div>
             </div>
           ) : (
             <>
             <div className="thread-context">
               <div className={`context-mark ${experience}`}>{modeMeta.mark}</div>
-              <div><span>{modeMeta.label} workspace</span><b>{active.title}</b></div>
+              <div><span>{modeMeta.label} workspace</span><b>{displayConversationTitle(active.title)}</b></div>
               <small>{messages.length} message{messages.length === 1 ? '' : 's'} · {modeMeta.short}</small>
             </div>
             <div className="thread">
@@ -1390,11 +1341,17 @@ function LabWorkspace({
                       </div>
                     ) : null}
                     {message.agentSteps?.length ? (
-                      <div className="agent-run">
-                        <div className="agent-run-head">
-                          <span className="agent-orbit">RUN</span>
-                          <span><b>Agent run</b><small>{message.agentDone ? 'Completed' : 'Working through the task'}</small></span>
-                        </div>
+                      <details className="agent-run" open={!message.agentDone}>
+                        <summary className="agent-run-head">
+                          <span className={`activity-indicator ${message.agentDone ? 'complete' : ''}`} aria-hidden="true" />
+                          <span>
+                            <b>{message.agentDone
+                              ? `Completed ${message.agentSteps.filter((step) => step.status === 'complete').length} steps`
+                              : message.agentSteps.find((step) => step.status === 'active')?.label || 'Working...'}</b>
+                            <small>{message.agentDone ? 'Open activity' : 'Live activity'}</small>
+                          </span>
+                          <span className="agent-run-chevron" aria-hidden="true">⌄</span>
+                        </summary>
                         <div className="agent-steps">
                           {message.agentSteps.map((step, stepIndex) => (
                             <div className={`agent-step ${step.status}`} key={step.id}>
@@ -1402,20 +1359,23 @@ function LabWorkspace({
                               <span>{step.label}</span>
                             </div>
                           ))}
+                          {message.agentActivity?.map((activity) => (
+                            <div className="agent-step activity" key={`${activity.type}:${activity.createdAt}`}>
+                              <span aria-hidden="true">·</span>
+                              <span>{activity.summary}</span>
+                            </div>
+                          ))}
                         </div>
-                      </div>
+                      </details>
                     ) : null}
                     {message.content ? (
                       <ResponseContent content={message.content} />
                     ) : message.agentSteps?.length ? (
-                      <span className="agent-wait">The agent is working. You can continue browsing this conversation.</span>
+                      <span className="agent-wait">Working...</span>
                     ) : (
                       <span className="thinking">
-                        <span className="thinking-copy">
-                          <b>{ACTIVITY_STATUS.chat[statusIndex]?.label}</b>
-                          <small>{ACTIVITY_STATUS.chat[statusIndex]?.detail}</small>
-                        </span>
                         <span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
+                        <span>Working...</span>
                       </span>
                     )}
                     {message.sources?.length ? (
@@ -1462,20 +1422,20 @@ function LabWorkspace({
                             <button onClick={() => speak(message.content)} title="Read aloud in English">◖ <span>Listen</span></button>
                           ) : null}
                           <button onClick={() => regenerate(index)} disabled={busy} title="Regenerate">↻ <span>Try again</span></button>
+                          <QualityFeedback
+                            context={{
+                              sourceSurface: message.agent ? 'research' : 'quick',
+                              conversationId: active.id,
+                              messageId: message.id,
+                              requestId: message.requestId,
+                              runId: message.agentRunId,
+                              responseText: message.content,
+                              conversationText: messages.slice(Math.max(0, index - 5), index + 1)
+                                .map((item) => `${item.role === 'user' ? 'Customer' : 'AI360'}: ${item.content}`)
+                                .join('\n\n'),
+                            }}
+                          />
                         </div>
-                        <QualityFeedback
-                          context={{
-                            sourceSurface: message.agent ? 'research' : 'quick',
-                            conversationId: active.id,
-                            messageId: message.id,
-                            requestId: message.requestId,
-                            runId: message.agentRunId,
-                            responseText: message.content,
-                            conversationText: messages.slice(Math.max(0, index - 5), index + 1)
-                              .map((item) => `${item.role === 'user' ? 'Customer' : 'AI360'}: ${item.content}`)
-                              .join('\n\n'),
-                          }}
-                        />
                       </>
                     )}
                   </div>
@@ -1490,18 +1450,6 @@ function LabWorkspace({
           <div className={`composer${recordingState === 'recording' ? ' recording' : ''}`}>
             {recordingState !== 'idle' && (
               <div className={`voice-capture ${recordingState}`}>
-                <label className="voice-language">
-                  <span>I&apos;m speaking</span>
-                  <select
-                    value={speechInputLanguage}
-                    onChange={(event) => setSpeechInputLanguage(event.target.value as SpeechInputCode)}
-                    disabled={recordingState === 'transcribing'}
-                  >
-                    {SPEECH_INPUT_OPTIONS.map((option) => (
-                      <option value={option.code} key={option.code}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
                 {recordingState === 'recording' ? (
                   <>
                     <span className="recording-pulse" />
@@ -1563,8 +1511,8 @@ function LabWorkspace({
                 accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf,text/plain,text/markdown,text/csv,application/json"
                 onChange={(event) => handleFile(event.target.files?.[0])}
               />
-              <button onClick={() => fileRef.current?.click()} title="Attach an image, video or document" aria-label="Attach file">＋</button>
-              <button className={recordingState === 'recording' ? 'active' : ''} onClick={toggleRecording} title="Record your voice" aria-label="Record voice">●</button>
+              <button onClick={() => fileRef.current?.click()} title="Attach an image, video or document" aria-label="Attach file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button>
+              <button className={recordingState === 'recording' ? 'active' : ''} onClick={toggleRecording} title="Record your voice" aria-label="Record voice"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="4" width="6" height="11" rx="3" /><path d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3M9 20h6" /></svg></button>
               <div className="language-picker">
                 <button
                   className={`language-trigger${responseLanguage === DEFAULT_LANGUAGE ? '' : ' chosen'}`}
@@ -1619,14 +1567,7 @@ function LabWorkspace({
                     {planFirst ? '✓ ' : ''}Plan first
                   </button>
                 </div>
-              ) : (
-                <span className="tool-label">
-                  {attachment ? 'File attached' : 'Add a file or record your voice'}
-                  <span className="web-ready" title="AI360 searches and reads current web pages when accuracy depends on today">
-                    <i /> Live intelligence
-                  </span>
-                </span>
-              )}
+              ) : null}
               <button
                 className="send"
                 onClick={() => send(input)}
@@ -1655,6 +1596,23 @@ function LabWorkspace({
           </>
         )}
       </section>
+      {helpOpen && (
+        <div className="workspace-guide-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setHelpOpen(false)}>
+          <section className="workspace-guide" role="dialog" aria-modal="true" aria-labelledby="workspace-guide-title">
+            <header>
+              <div><span>AI360 help</span><h2 id="workspace-guide-title">Start with what you need.</h2></div>
+              <button type="button" onClick={() => setHelpOpen(false)} aria-label="Close help">×</button>
+            </header>
+            <p>You do not need to choose a model or learn prompt formulas. Describe the outcome in ordinary words and AI360 chooses the lightest useful path.</p>
+            <div className="workspace-guide-options">
+              <button type="button" onClick={() => { setHelpOpen(false); selectExperience('chat') }}><span>01</span><b>Ask or write</b><small>Answers, explanations, rewriting and everyday thinking.</small></button>
+              <button type="button" onClick={() => { setHelpOpen(false); selectExperience('agent') }}><span>02</span><b>Research</b><small>Current sources, comparison and checked findings.</small></button>
+              <button type="button" onClick={() => { setHelpOpen(false); selectExperience('studio') }}><span>03</span><b>Start a project</b><small>A guided brief, staged work and reusable deliverables.</small></button>
+            </div>
+            <footer><span>AI360 never publishes or sends work without your approval.</span><Link href="/how-it-works">Read the full guide</Link></footer>
+          </section>
+        </div>
+      )}
       {actionDraft && (
         <div className="approval-backdrop" role="presentation">
           <section className="approval-dialog" role="dialog" aria-modal="true" aria-labelledby="approval-title">
@@ -1708,7 +1666,6 @@ function LabWorkspace({
           </section>
         </div>
       )}
-      {onboardingOpen && <WorkspaceOnboarding onChoose={completeOnboarding} onSkip={() => completeOnboarding()} />}
     </div>
   )
 }

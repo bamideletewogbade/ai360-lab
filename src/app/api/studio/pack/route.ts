@@ -4,7 +4,7 @@ import { recordUsageEventSafe } from '@/lib/usage'
 import { openCreditGate } from '@/lib/billing/credit-gate'
 import { DEFAULT_LANGUAGE, isLanguageCode, type LanguageCode } from '@/lib/languages'
 import { findPack, isPackId, packCredits } from '@/lib/studio/packs'
-import { runPack, type Intake, type PackEvent } from '@/lib/studio/coordinator'
+import { packBudgetUsd, runPack, type Intake, type PackEvent } from '@/lib/studio/coordinator'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -92,7 +92,13 @@ export async function POST(request: Request) {
 
   // A pack is one purchase to the person paying, so it is reserved once up
   // front rather than charged per specialist.
-  const credit = await openCreditGate({ request, requester, feature: 'agent', requestId: log.requestId })
+  const credit = await openCreditGate({
+    request,
+    requester,
+    feature: 'agent',
+    requestId: log.requestId,
+    quotedUsd: packBudgetUsd(pack),
+  })
   if (credit.denied) {
     log.finish(credit.denied.status, { outcome: 'credit_denied', packId: pack.id })
     return new Response(credit.denied.body, {

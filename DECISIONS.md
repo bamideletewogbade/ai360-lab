@@ -1,5 +1,56 @@
 # Decision and incident log
 
+## 2026-08-09 · Decision · One conversational surface, projects as context
+
+**Why.** Ask, Research and Create are not three equal destinations. Ask is the
+default interaction, Research is a capability, and Create is what happens when
+work becomes a durable project. Making people choose among them before stating
+their goal exposed our architecture and made the product harder to understand.
+
+**Decision.** AI360 now begins with one conversation. It routes a new request to
+direct help or sourced research from the language of the request. Projects are
+opened from the sidebar as durable workspaces, and a new project starts from a
+blank conversational prompt. Internal project packs remain orchestration data;
+examples are optional inspiration rather than the front door.
+
+**Implementation.** The global mode switch and first-use intent modal were
+removed. `/api/studio/brief` turns ordinary project conversation into a visible,
+correctable brief and silently selects the internal workflow. The setup screen
+keeps conversation and live brief side by side, while mobile stacks them.
+Global feedback moved into the sidebar; response feedback stays with its answer.
+Voice recording uses mixed-language detection and reply language stays in the
+composer.
+
+**Guardrail.** Automatic routing may change the method, never the customer's
+goal. No project build starts until the visible brief is complete and the
+customer presses Build.
+
+## 2026-08-09 · Decision · Modes describe intentions and projects keep their identity
+
+**Why.** The workspace mixed `Quick`, `Research`, `Create`, `Ask`, `Agent` and
+`Build`. Those labels described different kinds of things. Worse, changing a
+conversation to Create changed its stored experience and made an ordinary chat
+appear under a Projects heading. The interface therefore taught a false mental
+model of the product.
+
+**Decision.** The three user intentions are Ask, Research and Create. Ask owns
+conversations, Research owns sourced research threads, and Create owns durable
+business projects. The primary navigation no longer exposes provider/model
+names. The Start new work action opens the outcome chooser. The Create project
+choices appear before the large proof example.
+
+**Implementation.** `src/app/app/page.tsx` now preserves completed conversation
+identity when a mode changes and excludes Studio placeholders from chat history.
+`StudioWorkspace` presents its real durable project store as the Create home.
+The six-pack coordinator is now connected to that project store. The interface
+shows its real streamed specialist states, normalizes sections into reviewable
+deliverables, records the pack promise and quality result, and keeps versions
+when a deliverable is improved.
+
+**Product architecture.** See `PRODUCT_EXPERIENCE_ARCHITECTURE.md` for the mode
+matrix, bounded-loop rationale, Ghana and African context, evaluation plan and
+the next Create integration boundary.
+
 Choices that would otherwise be re-argued, and faults that must never be
 rediscovered. Newest first. Each entry records what was decided, why, and what
 would have to change for the decision to be revisited.
@@ -170,9 +221,12 @@ candidates taken, every `.com.gh` returned as cannot confirm rather than guessed
 - Sections are streamed as each completes, so the first output is readable long
   before the pack finishes.
 
-**Still open.** The progress view is not in the interface. `StudioWorkspace`
-still runs its original single hardcoded flow, so the coordinator is reachable
-by API but not yet by a person.
+**Closed on 9 August 2026.** `StudioWorkspace` now reads this stream directly.
+All six registry outcomes are customer-selectable, the displayed specialists
+and progress come from coordinator events, and final sections are normalized
+into the durable project model. A deterministic quality gate checks every
+section and may run one bounded correction pass without exceeding the reserved
+pack budget.
 
 ---
 
@@ -572,3 +626,17 @@ and the 25% cost target.
 **Superseded 2026-08-08.** Builder and Team exceeded the 25% target at full
 utilisation (34.7% and 40.4%). The research-calibrated v3 catalog reduced those
 shares to 29.7% and 30.3%; see the newer decision above.
+## 2026-08-09 · Decision · Browser evidence is private, short-lived and outside the request process
+
+Read-only visual navigation runs in an isolated Browserbase Function. Next.js
+owns policy, durable actions and polling. Supabase Storage owns screenshot
+bytes; Postgres owns workspace metadata, integrity hashes and expiry.
+
+**Why.** A browser must survive a dropped customer connection without giving a
+web page access to application secrets. Keeping base64 screenshots out of run
+rows also avoids database bloat and accidental evidence exposure.
+
+**Revisit if.** The closed pilot clears its safety, recovery and task-success
+gates and needs reversible form drafting.
+
+---

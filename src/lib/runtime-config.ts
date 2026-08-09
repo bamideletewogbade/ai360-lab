@@ -37,6 +37,17 @@ export function productionReadinessChecks(): ReadinessCheck[] {
     && (process.env.EXPRESSPAY_ENV === 'sandbox' || process.env.EXPRESSPAY_ENV === 'live')
     && configured('EXPRESSPAY_MERCHANT_ID')
     && configured('EXPRESSPAY_API_KEY')
+  const browserEnabled = process.env.AI360_BROWSER_PILOT_ENABLED === 'true'
+  const browserReady = process.env.AI360_BROWSER_PROVIDER === 'browserbase'
+    && configured('BROWSERBASE_API_KEY')
+    && configured('BROWSERBASE_PROJECT_ID')
+    && configured('AI360_BROWSER_PILOT_USER_IDS')
+    && configured('AI360_BROWSER_ALLOWED_DOMAINS')
+    && configured('BROWSERBASE_NAVIGATE_FUNCTION_ID')
+    && configured('NEXT_PUBLIC_SUPABASE_URL')
+    && configured('SUPABASE_SECRET_KEY')
+    && configured('SUPABASE_PRIVATE_BUCKET')
+    && configured('AI360_BROWSER_CLEANUP_SECRET')
 
   return [
     {
@@ -84,6 +95,14 @@ export function productionReadinessChecks(): ReadinessCheck[] {
       message: billingEnabled
         ? 'Billing is enabled and requires complete ExpressPay hosted-checkout configuration.'
         : 'Billing remains safely disabled until an ExpressPay sandbox payment and server verification pass.',
+    },
+    {
+      key: 'browser_pilot',
+      status: !browserEnabled ? 'pending' : browserReady ? 'ready' : 'missing',
+      required: browserEnabled,
+      message: browserEnabled
+        ? 'The closed read-only browser pilot requires its worker, private evidence storage, user allowlist and domain allowlist.'
+        : 'Browser work remains safely disabled until the closed pilot is configured.',
     },
   ]
 }

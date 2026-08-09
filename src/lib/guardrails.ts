@@ -66,7 +66,7 @@ function configuredLimit(key: string, fallback: number) {
 export type RateScope =
   | 'chat' | 'agent' | 'studio' | 'studio_image' | 'studio_video'
   | 'studio_video_quote' | 'studio_video_status' | 'voice' | 'export' | 'action' | 'feedback'
-  | 'billing_checkout' | 'payment_callback'
+  | 'billing_checkout' | 'payment_callback' | 'browser'
 
 /**
  * Scopes that spend enough per request that an anonymous caller should not be

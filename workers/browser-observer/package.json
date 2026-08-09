@@ -1,0 +1,19 @@
+{
+  "name": "ai360-read-only-browser-observer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bb dev index.ts",
+    "publish": "bb publish index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@browserbasehq/sdk-functions": "latest",
+    "playwright-core": "latest",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.9",
+    "typescript": "^5.7.3"
+  }
+}

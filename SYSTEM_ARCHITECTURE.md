@@ -1,5 +1,7 @@
 # AI360 system architecture and quality budgets
 
+The recovery and evaluated-routing design, including rollout gates, is maintained in [RECOVERABLE_EXECUTION_ARCHITECTURE.md](./RECOVERABLE_EXECUTION_ARCHITECTURE.md).
+
 Last reviewed: 2026-08-08
 
 ## Operating principle
@@ -45,8 +47,10 @@ Optimize in that same order of scope:
 
 The public UI now follows this shape: shared brand content and links,
 independent hero/mission/proof/outcome/process sections, and one shared public
-footer. The next decomposition priorities are the large Studio and export route
-handlers, followed by a shared OpenRouter adapter for duplicated headers,
+footer. Studio now has separate registry, coordinator, evaluator and normalized
+project-model boundaries, but its large client workspace should be split by
+dashboard, intake, progress and project views next. The export route follows,
+then a shared OpenRouter adapter for duplicated headers,
 timeouts, error normalization and usage capture. These refactors should preserve
 the existing route contracts and be completed one boundary at a time.
 
@@ -60,6 +64,9 @@ flowchart LR
   A --> O["Coordinator and specialist runtime"]
   O --> M["Model gateway and routing"]
   O --> T["Search, files, voice and production tools"]
+  O --> G["Browser policy and durable actions"]
+  G --> W["Isolated read-only browser worker"]
+  W --> S
   A --> D["Supabase Postgres"]
   A --> Q["Quality Loop: rules, review and test candidates"]
   T --> S["Supabase private Storage"]
@@ -78,11 +85,11 @@ flowchart LR
 | Product experience | Turn goals into completed work for technical and non-technical people | Landing, Chat, Agent, Studio, pricing, responsive UI | Instrument funnel and accessibility; split bundles only when users cannot find the right workflow |
 | Identity and tenancy | Give every private record and cost a trusted owner | Clerk users, personal workspace and optional Organizations | Add tenant-isolation tests before team launch; upgrade Clerk only when security or B2B limits require it |
 | API and policy | Keep secrets, entitlements and ownership decisions on the server | Next.js routes, request IDs, validation and readiness checks | Extract services only when independent scaling or deployment cadence is measured, not anticipated |
-| Agent runtime | Make multi-step work durable, bounded and explainable | Fixed plan/execute/verify pipeline with schema-level tool isolation, per-run cost and deadline ceilings, and runs, tasks, events and artifacts persisted at each boundary | Add a queue and worker so a run survives process restart; add task dependencies and approvals when work becomes side-effecting |
+| Agent runtime | Make multi-step work durable, bounded and explainable | Research uses a fixed plan/execute/verify pipeline with durable boundaries. Create uses registry-defined stages, real parallel specialists, deterministic evaluation and one bounded correction pass | Persist Create pack runs and events so a project can recover after disconnection; add a queue and worker so work survives process restart |
 | Model gateway | Balance quality, latency and cost without vendor lock-in | OpenRouter model selection and usage logging | Route by capability and provider health; add model eval gates before changing defaults |
-| Tools and retrieval | Ground answers and execute useful work | Web research, uploads, voice, image, video and exports | Add permissioned tool registry, malware scanning and prompt-injection isolation before broad connectors |
+| Tools and retrieval | Ground answers and execute useful work | Web research, uploads, voice, image, video, exports and a disabled read-only browser pilot with isolated execution | Publish and evaluate the browser worker before model routing; add interaction only after the read-only exit gate passes |
 | Data | Preserve truth, ownership, state and billing evidence | Supabase Postgres is the only data plane, with RLS, indexes and runtime repositories | Verify production-host connectivity and tenant isolation; partition only after table and query metrics justify it |
-| Asset storage | Store large private files outside relational tables | Private Supabase bucket defined; metadata schema prepared | Signed URLs, lifecycle rules, checksums and CDN; separate hot and archival retention when storage cost warrants it |
+| Asset storage | Store large private files outside relational tables | Private Supabase storage adapter, browser evidence hashes, authenticated streaming and expiry cleanup | Add lifecycle monitoring and separate hot and archival retention when measured storage cost warrants it |
 | Billing and payments | Convert variable AI cost into understandable access | Versioned plans, durable payment attempts, hosted ExpressPay checkout, query-verified activation, subscriptions and an append-only ledger | Pass the sandbox matrix, add scheduled reconciliation and enable production credentials only after operational approval |
 | Observability and evaluation | Detect failures and prove that changes improve outcomes | Request, token, cost and latency logging | Central tracing, alerts, product analytics and representative eval suite before public scale |
 | Customer quality | Turn feedback into evidence, accountable decisions and regression tests | Opt-in evidence, rule-first severity, bounded AI evaluation, private receipts and a human Quality Desk | Measure acknowledgement and verification time; add durable alert delivery and benchmark execution before public scale |

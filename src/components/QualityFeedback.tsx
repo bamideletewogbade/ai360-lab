@@ -37,6 +37,7 @@ export function QualityFeedback({ context, variant = 'response' }: Props) {
   const [error, setError] = useState('')
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [quickThanks, setQuickThanks] = useState(false)
+  const [responseStep, setResponseStep] = useState<'choice' | 'form'>('choice')
 
   useEffect(() => {
     if (!open) return
@@ -50,6 +51,22 @@ export function QualityFeedback({ context, variant = 'response' }: Props) {
   function beginReport(isSerious: boolean) {
     setSerious(isSerious)
     setCategory(isSerious ? 'unsafe_or_harmful' : 'wrong_or_outdated')
+    setError('')
+    setReceipt(null)
+    setResponseStep('form')
+    setOpen(true)
+  }
+
+  function beginResponseFeedback() {
+    setError('')
+    setReceipt(null)
+    setResponseStep('choice')
+    setOpen(true)
+  }
+
+  function beginProductFeedback() {
+    setSerious(false)
+    setCategory('feature_request')
     setError('')
     setReceipt(null)
     setOpen(true)
@@ -95,8 +112,9 @@ export function QualityFeedback({ context, variant = 'response' }: Props) {
     setBusy(true)
     setError('')
     try {
-      await sendFeedback({ reportKind: 'reaction', sentiment: 'helpful', category: 'other' })
+      const nextReceipt = await sendFeedback({ reportKind: 'reaction', sentiment: 'helpful', category: 'other' })
       setQuickThanks(true)
+      setReceipt(nextReceipt)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Your feedback could not be saved.')
     } finally {
@@ -130,18 +148,24 @@ export function QualityFeedback({ context, variant = 'response' }: Props) {
   return (
     <>
       {variant === 'response' ? (
-        <div className={styles.responseActions} aria-label="Rate this answer">
-          <span>Was this useful?</span>
-          <button type="button" onClick={markHelpful} disabled={busy || quickThanks}>{quickThanks ? 'Thanks' : 'Helpful'}</button>
-          <button type="button" onClick={() => beginReport(false)}>Needs work</button>
-          <button type="button" className={styles.reportLink} onClick={() => beginReport(true)}>Report a problem</button>
-          {error && !open ? <small role="alert">{error}</small> : null}
-        </div>
-      ) : typeof document !== 'undefined' ? createPortal((
-        <button type="button" className={styles.globalButton} onClick={() => beginReport(true)}>
-          <span>Report a problem</span><small>Tell us if something feels wrong</small>
+        <button
+          type="button"
+          className={styles.responseTrigger}
+          onClick={beginResponseFeedback}
+          title="Give feedback"
+          aria-label="Give feedback on this answer"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 18.5 3.5 21v-5.1A8.4 8.4 0 0 1 2 11c0-5 4.5-9 10-9s10 4 10 9-4.5 9-10 9a11 11 0 0 1-5-.5Z" />
+            <path d="M8 11h.01M12 11h.01M16 11h.01" />
+          </svg>
+          <span>Feedback</span>
         </button>
-      ), document.body) : null}
+      ) : (
+        <button type="button" className={styles.globalButton} onClick={beginProductFeedback}>
+          <span>Help and feedback</span><small>Share an idea or report a problem</small>
+        </button>
+      )}
 
       {open && typeof document !== 'undefined' ? createPortal((
         <div className={styles.backdrop} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
@@ -154,6 +178,30 @@ export function QualityFeedback({ context, variant = 'response' }: Props) {
                 <p>{receipt.message}</p>
                 <div><small>Your reference</small><strong>{receipt.id}</strong></div>
                 <Link href={`/feedback/${encodeURIComponent(receipt.id)}`}>Check report status</Link>
+              </div>
+            ) : variant === 'response' && responseStep === 'choice' ? (
+              <div className={styles.feedbackChoice}>
+                <p className={styles.eyebrow}>Feedback on this answer</p>
+                <h2 id={titleId}>How did this answer do?</h2>
+                <p className={styles.intro}>Choose one. You can add details if something needs attention.</p>
+                <div className={styles.choiceActions}>
+                  <button type="button" onClick={markHelpful} disabled={busy || quickThanks}>
+                    <span aria-hidden="true">+</span>
+                    <b>{busy ? 'Saving...' : quickThanks ? 'Already shared' : 'Useful'}</b>
+                    <small>This helped me move forward</small>
+                  </button>
+                  <button type="button" onClick={() => beginReport(false)}>
+                    <span aria-hidden="true">&#8722;</span>
+                    <b>Needs improvement</b>
+                    <small>Something is wrong or missing</small>
+                  </button>
+                  <button type="button" onClick={() => beginReport(true)}>
+                    <span aria-hidden="true">!</span>
+                    <b>Report a serious issue</b>
+                    <small>Safety, privacy or harmful content</small>
+                  </button>
+                </div>
+                {error ? <p className={styles.error} role="alert">{error}</p> : null}
               </div>
             ) : (
               <form onSubmit={submitReport}>

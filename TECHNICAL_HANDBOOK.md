@@ -1,5 +1,9 @@
 # AI360 Lab technical handbook
 
+For unfinished brief recovery, shared intent routing, African connectivity constraints and the durable coordinator rollout, read [RECOVERABLE_EXECUTION_ARCHITECTURE.md](./RECOVERABLE_EXECUTION_ARCHITECTURE.md).
+
+For the layer-by-layer path from a person’s words to a checked result, read [CONTEXT_ENGINEERING.md](./CONTEXT_ENGINEERING.md).
+
 Last reviewed: 2026-08-08
 
 This is the canonical entry point for engineers and operators picking up AI360
@@ -153,13 +157,48 @@ written to Postgres at boundaries. State survives a failed request, but work is
 not yet replayed automatically after a process restart. A durable queue and
 worker are a public-scale gate.
 
+### Read-only browser pilot
+
+Browser work uses a separate execution plane. Next.js creates a durable action,
+then invokes the Browserbase Function in `workers/browser-observer`. The worker
+receives only the approved URL and domain list. It has no AI360 database,
+payment, model or identity secrets. Its Playwright context permits GET and HEAD,
+blocks navigation outside the approved domains, disables CAPTCHA solving and
+ends after five minutes.
+
+`POST /api/browser/navigate` returns an action ID immediately. The client can
+poll `GET /api/browser/navigate/[actionId]` after a refresh or dropped
+connection. The completed observation is validated again by AI360. JPEG bytes
+are integrity checked, written to a private Supabase bucket and represented in
+Postgres only by workspace metadata, SHA-256 and expiry. Authenticated evidence
+is streamed through `/api/browser/artifacts/[artifactId]`. The cleanup route
+removes expired objects through the Storage API and then marks their metadata
+deleted. Base64 images, provider connection URLs and credentials never enter
+run events.
+
+The pilot remains disabled until every browser environment value is present.
+It is not yet a model tool and it cannot click, type, upload, submit, pay or use
+the customer's desktop. See `BROWSER_COMPUTER_USE_IMPLEMENTATION_PLAN.md`.
+
 ### Studio production
 
-Studio converts an approved direction into a defined pack of outcomes.
-Specialists inside a compatible stage may run concurrently; stages with
-dependencies run in sequence. Image and video production require asset approval
-and a provider-cost confirmation. A payment redirect or client response never
-grants credits.
+Create reads six project types from `src/lib/studio/packs.ts`. The selected pack
+defines its promise, specialist stages, deliverables and estimated credits.
+`POST /api/studio/pack` reserves the quoted pack budget once, streams real NDJSON
+events, runs dependent stages in sequence and compatible specialists at the
+same time, and settles measured cost when the run finishes.
+
+A deterministic evaluator checks every specialist section for minimum
+usefulness, unresolved placeholders, document structure and research sources.
+At most one correction pass runs for up to two failing sections, inside the
+same deadline and reserved budget. `src/lib/studio-project-model.ts` normalizes
+the final sections into durable, reviewable and versioned deliverables. Existing
+campaign projects remain readable through the older project fields.
+
+Image and video production require asset approval and a provider-cost
+confirmation. A payment redirect or client response never grants credits. Pack
+runs still need durable run IDs and event persistence before a disconnected
+browser can recover their final result.
 
 ### Credits
 
@@ -199,6 +238,9 @@ Supabase Postgres is the only application database. The ordered migrations are:
 5. `0005_resumable_runs.sql`
 6. `0006_quality_loop.sql`
 7. `0007_expresspay_foundation.sql`
+8. `0008_recoverable_project_drafts.sql`
+9. `0009_browser_action_foundation.sql`
+10. `0010_browser_artifact_retention.sql`
 
 Use `DATABASE_URL` for the Hostinger runtime and `DIRECT_URL` for migrations.
 The Hostinger runtime should use the Supabase shared session pooler on port
@@ -213,6 +255,8 @@ Provider boundaries:
 - OpenRouter: model and media gateway
 - ExpressPay hosted-checkout adapter: implemented but deliberately disabled
   until sandbox checkout, delayed notification and Query reconciliation pass
+- Browserbase Functions: isolated read-only visual page execution for the
+  closed browser pilot
 
 Never put secrets in `NEXT_PUBLIC_*`. Never log prompts, file contents,
 recordings, cookies, authorization headers, full generated media or provider
@@ -231,6 +275,7 @@ keys.
 | `NEXT_PUBLIC_BILLING_ENABLED`, payment secrets | verified checkout only |
 | `AI360_RATE_*` | pilot request limits |
 | `AI360_QUALITY_*` | reviewer access, urgent alert delivery and isolated quality evaluation |
+| `AI360_BROWSER_*`, `BROWSERBASE_*` | closed read-only browser pilot, allowlists and evidence cleanup |
 | search verification tokens | search-console ownership verification |
 
 Treat `NEXT_PUBLIC_APP_URL` as canonical. Production is

@@ -69,6 +69,7 @@ export async function GET(
       sources: run.sources,
       usage: run.usage,
       error: run.errorCode,
+      activity: run.activity,
     }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
   } catch (error) {
     log.error('agent.run_lookup_failed', errorDetails(error))

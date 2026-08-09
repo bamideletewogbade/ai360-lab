@@ -33,7 +33,7 @@ export const CHANGELOG_RELEASES: readonly ChangelogRelease[] = [
     title: 'A clearer way to report problems and track what happens next',
     summary: 'Customers can now flag weak answers, serious concerns and missing features without leaving their work.',
     changes: [
-      'Added simple Helpful, Needs work and Report a problem controls beside AI answers.',
+      'Added one quiet feedback action beside each answer, with useful, improvement and serious-issue paths available when opened.',
       'Made message sharing optional and gave every report a private status receipt.',
       'Added rule-first urgent review, a bounded AI quality check and a human decision queue.',
       'Turned approved failures into private test candidates so fixes can be checked before release.',
