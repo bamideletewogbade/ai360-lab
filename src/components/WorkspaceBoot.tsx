@@ -15,7 +15,7 @@ export function WorkspaceBoot({ authLoaded, signedIn }: { authLoaded: boolean; s
       </div>
       <div className="session-orbit" aria-hidden="true">
         <i /><i /><i />
-        <span><Image src="/icon-mark-black.png" width={43} height={50} alt="" /></span>
+        <span><Image src="/icon-mark-black.png" width={43} height={50} alt="" priority /></span>
       </div>
       <p>{status}</p>
       <div className="session-progress" aria-hidden="true"><span /></div>

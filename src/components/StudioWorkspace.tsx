@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import Image from 'next/image'
 import { ResponseContent } from '@/components/ResponseContent'
+import { ProjectStageNavigator } from '@/components/ProjectStageNavigator'
 import { mergeProjects, setProjectArchived, sortProjects, upsertProject } from '@/lib/studio-projects'
 import { PACKS, findPack, packCredits, type Pack, type PackId, type SpecialistId } from '@/lib/studio/packs'
 import {
@@ -17,6 +18,7 @@ import {
 import type { PackEvent } from '@/lib/studio/coordinator'
 import { scopedStorageKey } from '@/lib/workspace'
 import { newerDraft, studioDraftSchema, type StudioDraft, type StudioBriefTurn } from '@/lib/studio-draft'
+import { currentProjectStage, type ProjectStage } from '@/lib/studio-stages'
 import {
   defaultMediaIntent,
   MEDIA_CHANNELS,
@@ -269,6 +271,7 @@ export function StudioWorkspace({
   const [briefInput, setBriefInput] = useState('')
   const [briefTurns, setBriefTurns] = useState<StudioBriefTurn[]>([])
   const [briefBusy, setBriefBusy] = useState(false)
+  const [activeProjectStage, setActiveProjectStage] = useState<ProjectStage>('review')
   const [draftId, setDraftId] = useState('')
   const [draftCloudLoaded, setDraftCloudLoaded] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
@@ -523,6 +526,7 @@ export function StudioWorkspace({
   const approvedCount = project?.assets.filter((asset) => asset.status === 'approved').length ?? 0
   const progress = project?.assets.length ? Math.round((approvedCount / project.assets.length) * 100) : 0
   const activeAsset = project?.assets.find((asset) => asset.id === expandedId)
+  const approvedAssets = project?.assets.filter((asset) => asset.status === 'approved') ?? []
 
   const readiness = useMemo(() => {
     const checks = [
@@ -534,6 +538,21 @@ export function StudioWorkspace({
     ]
     return checks.filter(Boolean).length
   }, [intake])
+
+  useEffect(() => {
+    if (view !== 'project' || !project || !mainRef.current) return
+    const root = mainRef.current
+    const sections = Array.from(root.querySelectorAll<HTMLElement>('[data-project-stage]'))
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((first, second) => second.intersectionRatio - first.intersectionRatio)[0]
+      const stage = visible?.target.getAttribute('data-project-stage') as ProjectStage | null
+      if (stage) setActiveProjectStage(stage)
+    }, { root, rootMargin: '-118px 0px -58% 0px', threshold: [0.05, 0.25, 0.5] })
+    sections.forEach((section) => observer.observe(section))
+    return () => observer.disconnect()
+  }, [project, view])
 
   function updateIntake(field: keyof Intake, value: string | string[]) {
     setIntake((current) => ({ ...current, [field]: value }))
@@ -1107,8 +1126,18 @@ export function StudioWorkspace({
     setProject(next)
     setView('project')
     setExpandedId(next.assets[0]?.id || '')
+    setActiveProjectStage(currentProjectStage({
+      approved: next.assets.filter((asset) => asset.status === 'approved').length,
+      total: next.assets.length,
+    }))
     setError('')
     requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
+  }
+
+  function goToProjectStage(stage: ProjectStage) {
+    setActiveProjectStage(stage)
+    const section = mainRef.current?.querySelector<HTMLElement>(`#project-stage-${stage}`)
+    section?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   function openDashboard() {
@@ -1251,6 +1280,9 @@ export function StudioWorkspace({
   if (!project && buildingProject) {
     return (
       <main className="studio-main" ref={mainRef}>
+        <div className="studio-stage-shell">
+          <ProjectStageNavigator phase="building" activeStage="build" />
+        </div>
         <div className="studio-intake build-active">
           <section className="studio-intro build-intro">
             <span className="studio-kicker">Create · {selectedPack.name}</span>
@@ -1287,6 +1319,8 @@ export function StudioWorkspace({
             <button className="studio-back" onClick={openDashboard}>Projects</button>
             <div><span className="studio-kicker">New project</span><h1>Start with the goal.</h1><p>Talk naturally. AI360 turns the conversation into a brief you can see and correct.</p></div>
           </header>
+
+          <ProjectStageNavigator phase="briefing" activeStage="brief" />
 
           <div className="project-kickoff-layout">
             <section className="brief-conversation" aria-label="Project setup conversation">
@@ -1350,16 +1384,27 @@ export function StudioWorkspace({
           </div>
           <div className="project-head-actions">
             <button onClick={openDashboard}>All projects</button>
-            <button onClick={() => exportPack('pdf')} disabled={Boolean(exporting)}>{exporting === 'pdf' ? 'Creating…' : 'Export PDF'}</button>
-            <button onClick={() => exportPack('docx')} disabled={Boolean(exporting)}>{exporting === 'docx' ? 'Creating…' : 'Export Word'}</button>
             <button onClick={() => changeProjectLifecycle(project, 'archive')}>Archive</button>
             <button className="project-new" onClick={() => beginProject()}>New project</button>
           </div>
         </header>
 
+        <ProjectStageNavigator
+          phase="project"
+          activeStage={activeProjectStage}
+          approved={approvedCount}
+          total={project.assets.length}
+          onSelect={goToProjectStage}
+        />
+
         {error && <div className="studio-error project-error">{error}</div>}
 
-        <section className="project-summary">
+        <section className="project-stage-section" id="project-stage-brief" data-project-stage="brief">
+          <div className="project-stage-heading">
+            <span>01</span>
+            <div><b>Approved brief</b><small>The goal and context that guided this project.</small></div>
+          </div>
+          <div className="project-summary">
           <div className="project-progress">
             <div className="progress-ring" style={{ '--progress': `${progress * 3.6}deg` } as CSSProperties}>
               <span>{progress}%</span>
@@ -1369,7 +1414,36 @@ export function StudioWorkspace({
           <div><span>Objective</span><b>{project.campaign.objective}</b></div>
           <div><span>{project.pack ? 'Outcome' : 'Big idea'}</span><b>{project.campaign.bigIdea}</b></div>
           <div><span>{project.pack ? 'Build status' : 'Primary action'}</span><b>{project.run ? `${project.run.producedSections} deliverables · ${project.run.review?.passed ? 'quality checked' : project.run.status}` : project.campaign.callToAction}</b></div>
+          </div>
         </section>
+
+        <section className="project-stage-section" id="project-stage-build" data-project-stage="build">
+          <div className="project-stage-heading">
+            <span>02</span>
+            <div><b>Build record</b><small>What AI360 completed and how the work was checked.</small></div>
+            <em>{project.run?.review?.passed ? 'Quality checked' : project.run?.status === 'partial' ? 'Needs attention' : 'Build complete'}</em>
+          </div>
+          <div className="project-build-record">
+            {(project.run?.specialists ?? [
+              { id: 'brand', label: 'Direction', working: 'The project direction was shaped from the brief.', status: 'complete' as const },
+              { id: 'campaign', label: 'Production', working: 'Connected project assets were prepared.', status: 'complete' as const },
+              { id: 'copy', label: 'Quality check', working: 'The result was prepared for your review.', status: 'complete' as const },
+            ]).map((specialist, index) => (
+              <div className={specialist.status} key={`${specialist.id}-${index}`}>
+                <span>{specialist.status === 'complete' ? '✓' : specialist.status === 'failed' ? '!' : String(index + 1).padStart(2, '0')}</span>
+                <span><b>{specialist.label}</b><small>{specialist.detail || specialist.working}</small></span>
+                <em>{specialist.status === 'complete' ? 'Ready' : specialist.status === 'failed' ? 'Check' : 'Working'}</em>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="project-stage-section" id="project-stage-review" data-project-stage="review">
+          <div className="project-stage-heading">
+            <span>03</span>
+            <div><b>Review and approve</b><small>Open each item, request changes and approve only what is ready.</small></div>
+            <em>{approvedCount} of {project.assets.length} approved</em>
+          </div>
 
         <div className={`project-layout${project.pack ? ' pack-project' : ''}`}>
           {!project.pack ? <aside className="brand-panel">
@@ -1538,6 +1612,47 @@ export function StudioWorkspace({
             ) : null}
           </section>
         </div>
+        </section>
+
+        <section className="project-stage-section project-deliverables" id="project-stage-deliverables" data-project-stage="deliverables">
+          <div className="project-stage-heading">
+            <span>04</span>
+            <div><b>Deliverables</b><small>Approved work, generated files and complete project exports.</small></div>
+            <em>{approvedAssets.length} ready</em>
+          </div>
+          {approvedAssets.length ? (
+            <div className="deliverable-grid">
+              {approvedAssets.map((asset) => {
+                const media = generatedMedia[asset.id]
+                return (
+                  <article key={asset.id}>
+                    <span className="asset-icon">{ASSET_ICONS[asset.type] || 'Aa'}</span>
+                    <div><b>{asset.title}</b><small>{asset.channel} · Version {asset.version ?? 1}</small></div>
+                    <span className="deliverable-state">{media?.status === 'completed' ? 'File ready' : 'Approved'}</span>
+                    <div className="deliverable-actions">
+                      <button onClick={() => { setExpandedId(asset.id); goToProjectStage('review') }}>Open</button>
+                      <button onClick={() => navigator.clipboard.writeText(asset.content)}>Copy</button>
+                      {media?.status === 'completed' && media.url ? <button onClick={() => downloadGenerated(asset, media)}>Download</button> : null}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="deliverables-empty">
+              <span>Nothing has been approved yet.</span>
+              <p>Review the work above. Approved items will collect here automatically, ready to copy, download or export.</p>
+              <button onClick={() => goToProjectStage('review')}>Go to review</button>
+            </div>
+          )}
+          <div className="project-export-bar">
+            <span><b>Export the complete project</b><small>Take the brief, sources and every deliverable with you.</small></span>
+            <div>
+              <button onClick={() => exportPack('pdf')} disabled={Boolean(exporting)}>{exporting === 'pdf' ? 'Creating…' : 'Export PDF'}</button>
+              <button onClick={() => exportPack('docx')} disabled={Boolean(exporting)}>{exporting === 'docx' ? 'Creating…' : 'Export Word'}</button>
+            </div>
+          </div>
+        </section>
       </div>
       {activeAsset ? <span className="sr-only">Selected asset: {activeAsset.title}</span> : null}
       {executionApproval ? (

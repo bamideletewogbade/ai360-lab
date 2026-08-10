@@ -98,6 +98,7 @@ type Conversation = {
 
 const STORAGE_KEY = 'ai360-lab-conversations-v2'
 const ACTIVE_KEY = 'ai360-lab-active-v2'
+const SIDEBAR_KEY = 'ai360-lab-sidebar-collapsed-v1'
 const ONBOARDING_KEY = 'ai360-lab-onboarding-v1'
 const MAX_FILE_BYTES = 4 * 1024 * 1024
 const MAX_VIDEO_BYTES = 8 * 1024 * 1024
@@ -325,6 +326,7 @@ function LabWorkspace({
   const recovering = useRef(new Set<string>())
   const [hydrated, setHydrated] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [search, setSearch] = useState('')
   const [conversationMenuId, setConversationMenuId] = useState('')
   const [attachment, setAttachment] = useState<Attachment | null>(null)
@@ -347,6 +349,7 @@ function LabWorkspace({
   const followLatestRef = useRef(true)
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const sidebarOpenButtonRef = useRef<HTMLButtonElement>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recordingStreamRef = useRef<MediaStream | null>(null)
   const loadedWorkspaceRef = useRef('')
@@ -354,6 +357,7 @@ function LabWorkspace({
 
   const workspaceStorageKey = scopedStorageKey(STORAGE_KEY, workspaceScope)
   const workspaceActiveKey = scopedStorageKey(ACTIVE_KEY, workspaceScope)
+  const sidebarPreferenceKey = scopedStorageKey(SIDEBAR_KEY, workspaceScope)
 
   const active = conversations.find((conversation) => conversation.id === activeId) ?? conversations[0]
   const messages = useMemo(() => active?.messages ?? [], [active])
@@ -394,6 +398,7 @@ function LabWorkspace({
         const saved = JSON.parse(localStorage.getItem(workspaceStorageKey) || '[]') as Conversation[]
         const next = saved.length ? saved : [freshConversation()]
         const savedActive = localStorage.getItem(workspaceActiveKey)
+        setSidebarCollapsed(localStorage.getItem(sidebarPreferenceKey) === 'true')
         setConversations(next)
         setActiveId(next.some((item) => item.id === savedActive) ? savedActive! : next[0].id)
       } catch {
@@ -407,7 +412,23 @@ function LabWorkspace({
     return () => {
       mounted = false
     }
-  }, [authLoaded, workspaceActiveKey, workspaceScope, workspaceStorageKey])
+  }, [authLoaded, sidebarPreferenceKey, workspaceActiveKey, workspaceScope, workspaceStorageKey])
+
+  useEffect(() => {
+    if (!hydrated) return
+    try { localStorage.setItem(sidebarPreferenceKey, String(sidebarCollapsed)) } catch { /* Preferences remain optional. */ }
+  }, [hydrated, sidebarCollapsed, sidebarPreferenceKey])
+
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setSidebarOpen(false)
+      sidebarOpenButtonRef.current?.focus()
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [sidebarOpen])
 
   useEffect(() => {
     if (!hydrated || loadedWorkspaceRef.current !== workspaceScope) return
@@ -1321,14 +1342,34 @@ function LabWorkspace({
     setSidebarOpen(false)
   }
 
+  function collapseDesktopSidebar() {
+    setSidebarCollapsed(true)
+    requestAnimationFrame(() => sidebarOpenButtonRef.current?.focus())
+  }
+
+  function openWorkspaceSidebar() {
+    if (window.matchMedia('(max-width: 820px)').matches) {
+      setSidebarOpen(true)
+      window.setTimeout(() => document.querySelector<HTMLButtonElement>('.close-side')?.focus(), 260)
+      return
+    }
+    setSidebarCollapsed(false)
+    window.setTimeout(() => document.querySelector<HTMLButtonElement>('.desktop-side-toggle')?.focus(), 300)
+  }
+
   if (!hydrated || !active) return <WorkspaceBoot authLoaded={authLoaded} signedIn={signedIn} />
 
   return (
-    <div className="lab-shell">
-      <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
+    <div className={`lab-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+      <aside className={`sidebar${sidebarOpen ? ' open' : ''}${sidebarCollapsed ? ' collapsed' : ''}`} id="workspace-sidebar">
         <div className="side-head">
           <img src="/logo-white.png" alt="AI360" className="wordmark" />
-          <button className="icon-button close-side" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">×</button>
+          <button className="icon-button desktop-side-toggle" onClick={collapseDesktopSidebar} aria-label="Close sidebar" title="Close sidebar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2.5" /><path d="M9 4v16M14 9l-3 3 3 3" /></svg>
+          </button>
+          <button className="icon-button close-side" onClick={() => { setSidebarOpen(false); sidebarOpenButtonRef.current?.focus() }} aria-label="Close sidebar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
         </div>
         <button className="new-chat" onClick={newChat}><span>＋</span><span>New chat</span></button>
         <div className="workspace-links" aria-label="Your workspace">
@@ -1407,7 +1448,9 @@ function LabWorkspace({
       <section className={`workspace ${experience}`}>
         <header className="lab-top">
           <div className="lab-top-left">
-            <button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open conversations">☰</button>
+            <button ref={sidebarOpenButtonRef} className="icon-button sidebar-open-button" onClick={openWorkspaceSidebar} aria-label="Open sidebar" aria-controls="workspace-sidebar" title="Open sidebar">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2.5" /><path d="M9 4v16M11.5 9l3 3-3 3" /></svg>
+            </button>
             <Link className="lab-brand" href="/" aria-label="AI360 Lab home">
               <img src="/icon-mark-black.png" alt="" />
               <span><b>AI360</b> LAB</span>
