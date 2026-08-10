@@ -11,15 +11,20 @@ import {
 } from '@/lib/languages'
 import { StudioWorkspace } from '@/components/StudioWorkspace'
 import { AppsDirectory } from '@/components/AppsDirectory'
+import { MediaStudio } from '@/components/MediaStudio'
 import { AccountControls } from '@/components/AccountControls'
 import { WorkspaceBoot } from '@/components/WorkspaceBoot'
 import { QualityFeedback } from '@/components/QualityFeedback'
 import { ConversationMinimap, type ConversationPrompt } from '@/components/ConversationMinimap'
 import { PromptComposer } from '@/components/PromptComposer'
 import { ResponseActions } from '@/components/ResponseActions'
+import { WorkspaceOnboarding } from '@/components/WorkspaceOnboarding'
 import { useAuth } from '@clerk/nextjs'
 import { scopedStorageKey } from '@/lib/workspace'
 import { routeIntentDeterministically, type IntentRoute } from '@/lib/intent-router'
+import {
+  parseProfile, personalizedIntro, personalizedTasks, type OnboardingProfile,
+} from '@/lib/onboarding'
 
 type Attachment = {
   name: string
@@ -57,7 +62,7 @@ type MessageFailure = {
   creditNotice: string
   requestId: string
 }
-type Experience = 'chat' | 'agent' | 'studio' | 'apps'
+type Experience = 'chat' | 'agent' | 'studio' | 'apps' | 'media'
 type AgentStep = { id: string; label: string; status: 'pending' | 'active' | 'complete' | 'failed' }
 type AgentActivity = { type: string; summary: string; createdAt: string }
 type AgentDepth = 'quick' | 'standard' | 'thorough'
@@ -101,6 +106,7 @@ const STORAGE_KEY = 'ai360-lab-conversations-v2'
 const ACTIVE_KEY = 'ai360-lab-active-v2'
 const SIDEBAR_KEY = 'ai360-lab-sidebar-collapsed-v1'
 const ONBOARDING_KEY = 'ai360-lab-onboarding-v1'
+const PROFILE_KEY = 'ai360-lab-profile-v1'
 const MAX_FILE_BYTES = 4 * 1024 * 1024
 const MAX_VIDEO_BYTES = 8 * 1024 * 1024
 
@@ -114,12 +120,6 @@ function promptPreview(message: Msg) {
   return 'Prompt'
 }
 
-const TASKS = [
-  { icon: 'Aa', label: 'Write an SMS', prompt: 'Draft a friendly SMS reminding parents about PTA this Friday at 3pm.' },
-  { icon: '≡', label: 'Summarize a document', prompt: 'Summarize this document into key points and clear next steps.' },
-  { icon: 'PR', label: 'Draft a proposal', prompt: 'Write a short business proposal for a smoothie stand in Accra.' },
-  { icon: 'WK', label: 'Plan my week', prompt: 'Help me build a practical plan for my week. Ask what commitments and priorities I have.' },
-]
 const AGENT_TASKS = [
   { icon: 'RS', label: 'Research and report', prompt: 'Research this topic using reliable current sources and create a concise report with practical recommendations: ' },
   { icon: '⇄', label: 'Compare documents', prompt: 'Compare the attached documents, identify the important differences, and recommend the best next steps.' },
@@ -166,6 +166,14 @@ const MODE_META: Record<Experience, {
     eyebrow: 'App & Outcome Directory',
     heading: <>Your published outcomes<br />and project apps.</>,
     intro: 'Explore and manage generated deliverables, document exports, and project outcomes created across your workspace.',
+  },
+  media: {
+    label: 'Media Studio',
+    short: 'AI Images & Videos',
+    description: 'Generate high-res AI images and video clips',
+    eyebrow: 'Creative Media Studio',
+    heading: <>Generate AI visuals<br />and motion clips.</>,
+    intro: 'Create high-resolution AI images, marketing graphics, video animations, and visual assets for your projects.',
   },
 }
 
@@ -294,8 +302,7 @@ const SIDEBAR_GROUPS: Array<{
   label: string
   match: (experience?: Experience) => boolean
 }> = [
-  { id: 'chats', label: 'Chats', match: (experience) => !experience || experience === 'chat' },
-  { id: 'research', label: 'Research', match: (experience) => experience === 'agent' },
+  { id: 'chats', label: 'Chats', match: (experience) => !experience || experience === 'chat' || experience === 'agent' },
 ]
 
 const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
@@ -340,6 +347,8 @@ function LabWorkspace({
   const [historyFilter, setHistoryFilter] = useState<'all' | 'chat' | 'agent'>('all')
   const [studioProjects, setStudioProjects] = useState<Array<{ id: string; title: string; updatedAt: number }>>([])
   const [conversationMenuId, setConversationMenuId] = useState('')
+  const [profile, setProfile] = useState<OnboardingProfile | null>(null)
+  const [showIntake, setShowIntake] = useState(false)
   const [attachment, setAttachment] = useState<Attachment | null>(null)
   const [fileError, setFileError] = useState('')
   const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'recorded' | 'transcribing'>('idle')
@@ -429,6 +438,34 @@ function LabWorkspace({
     if (!hydrated) return
     try { localStorage.setItem(sidebarPreferenceKey, String(sidebarCollapsed)) } catch { /* Preferences remain optional. */ }
   }, [hydrated, sidebarCollapsed, sidebarPreferenceKey])
+
+  // First run: read any saved profile, and offer the two-question intake once.
+  // A stored profile personalizes the workspace; a 'skipped' marker means the
+  // person declined, so the intake never returns on its own.
+  useEffect(() => {
+    if (!hydrated) return
+    let stored: string | null = null
+    try { stored = localStorage.getItem(PROFILE_KEY) } catch { stored = null }
+    if (stored === 'skipped') return
+    if (stored) {
+      try {
+        const saved = parseProfile(JSON.parse(stored))
+        if (saved) { setProfile(saved); return }
+      } catch { /* fall through to offering the intake */ }
+    }
+    setShowIntake(true)
+  }, [hydrated])
+
+  const completeIntake = (chosen: OnboardingProfile) => {
+    setProfile(chosen)
+    setShowIntake(false)
+    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(chosen)) } catch { /* Personalization is best-effort. */ }
+  }
+
+  const skipIntake = () => {
+    setShowIntake(false)
+    try { localStorage.setItem(PROFILE_KEY, 'skipped') } catch { /* Personalization is best-effort. */ }
+  }
 
   useEffect(() => {
     if (!sidebarOpen) return
@@ -1398,6 +1435,7 @@ function LabWorkspace({
 
   return (
     <div className={`lab-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+      {showIntake ? <WorkspaceOnboarding onComplete={completeIntake} onSkip={skipIntake} /> : null}
       <aside className={`sidebar${sidebarOpen ? ' open' : ''}${sidebarCollapsed ? ' collapsed' : ''}`} id="workspace-sidebar">
         <div className="side-head">
           <img src="/logo-white.png" alt="AI360" className="wordmark" />
@@ -1438,6 +1476,17 @@ function LabWorkspace({
 
           <button
             type="button"
+            className={`nav-menu-item${experience === 'media' ? ' active' : ''}`}
+            onClick={() => { selectExperience('media'); setSidebarOpen(false) }}
+          >
+            <span className="nav-menu-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </span>
+            <span>Media Studio</span>
+          </button>
+
+          <button
+            type="button"
             className={`nav-menu-item${experience === 'apps' ? ' active' : ''}`}
             onClick={() => { selectExperience('apps'); setSidebarOpen(false) }}
           >
@@ -1469,7 +1518,6 @@ function LabWorkspace({
             if (!items.length) return null
             return (
               <div className="history-group" key={group.id}>
-                <div className="history-label">{group.label}<span>{items.length}</span></div>
                 {items.map((conversation) => (
                   <div className={`history-item${conversation.id === active.id ? ' active' : ''}${conversationMenuId === conversation.id ? ' menu-open' : ''}`} key={conversation.id}>
                     <button className="history-main" onClick={() => { setConversationMenuId(''); setActiveId(conversation.id); setSidebarOpen(false) }}>
@@ -1541,6 +1589,8 @@ function LabWorkspace({
           />
         ) : experience === 'apps' ? (
           <AppsDirectory />
+        ) : experience === 'media' ? (
+          <MediaStudio />
         ) : (
           <>
           <ConversationMinimap
@@ -1555,9 +1605,9 @@ function LabWorkspace({
             <div className="lab-empty">
               <p className="eyebrow">One workspace, shaped around your goal</p>
               <h1>{experience === 'agent' ? modeMeta.heading : <>What can I help you<br />move forward?</>}</h1>
-              <p className="intro">Ask, write, research or start a project in your own words. AI360 chooses the right approach and shows its work when that matters.</p>
+              <p className="intro">{experience === 'agent' ? modeMeta.intro : personalizedIntro(profile)}</p>
               <div className="task-grid">
-                {(experience === 'agent' ? AGENT_TASKS : TASKS).map((task) => (
+                {(experience === 'agent' ? AGENT_TASKS : personalizedTasks(profile)).map((task) => (
                   <button
                     key={task.label}
                     onClick={() =>

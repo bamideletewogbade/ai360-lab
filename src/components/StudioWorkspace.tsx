@@ -527,12 +527,13 @@ export function StudioWorkspace({
   const approvedAssets = project?.assets.filter((asset) => asset.status === 'approved') ?? []
 
   const readiness = useMemo(() => {
+    const effectiveName = intake.businessName || intake.offer || intake.goal
     const checks = [
-      Boolean(intake.businessName),
-      Boolean(intake.offer),
-      Boolean(intake.audience),
-      Boolean(intake.goal),
-      intake.channels.length > 0,
+      Boolean(effectiveName),
+      Boolean(intake.offer || intake.goal),
+      Boolean(intake.audience || intake.goal),
+      Boolean(intake.goal || intake.offer),
+      intake.channels.length > 0 || Boolean(intake.goal),
     ]
     return checks.filter(Boolean).length
   }, [intake])
@@ -567,13 +568,17 @@ export function StudioWorkspace({
 
   async function createProject() {
     setError('')
-    if (!intake.businessName || !intake.offer || !intake.audience || !intake.goal) {
-      setError('Complete the business name, offer, audience and campaign goal.')
+    const effectiveGoal = intake.goal || intake.offer || briefInput
+    if (!effectiveGoal.trim()) {
+      setError('Describe your project goal or purpose to proceed.')
       return
     }
+    const resolvedName = intake.businessName.trim() || intake.offer.trim() || effectiveGoal.trim().slice(0, 32) || 'Project Workspace'
+    if (!intake.businessName) {
+      updateIntake('businessName', resolvedName)
+    }
     if (!intake.channels.length) {
-      setError('Select at least one campaign channel.')
-      return
+      updateIntake('channels', ['Web', 'Digital'])
     }
     setBusy(true)
     setBuildingProject(true)
@@ -1180,21 +1185,40 @@ export function StudioWorkspace({
             </div>
           </header>
 
-          <section className="studio-goal-bar" aria-labelledby="project-start-title">
-            <form className="goal-bar-form" onSubmit={(event) => { event.preventDefault(); setView('kickoff'); void continueBrief() }}>
-              <div className="goal-input-wrapper">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                <input
-                  type="text"
+          <section className="studio-composer-box" aria-labelledby="project-composer-title">
+            <form onSubmit={(event) => { event.preventDefault(); if (briefInput.trim()) { setView('kickoff'); void continueBrief() } }}>
+              <div className="composer-card">
+                <div className="composer-header">
+                  <span className="composer-badge">✨ AI Brief & Project Creator</span>
+                  <span className="composer-hint">Shift + Enter for new lines</span>
+                </div>
+                <textarea
+                  className="composer-textarea"
+                  rows={3}
                   value={briefInput}
                   onChange={(event) => setBriefInput(event.target.value)}
-                  placeholder="Describe your project goal (e.g. Launch a catering business for tech offices in Accra)..."
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault()
+                      if (briefInput.trim()) {
+                        setView('kickoff')
+                        void continueBrief()
+                      }
+                    }
+                  }}
+                  placeholder="Describe what you want to build, launch, or improve in your own words... (e.g. Help me launch a catering business for tech offices in Accra)"
                   aria-label="Describe your project goal"
                 />
-                <button type="submit" className="goal-submit-btn" disabled={!briefInput.trim()}>
-                  <span>Start project</span>
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                </button>
+                <div className="composer-footer">
+                  <div className="composer-tools">
+                    <span className="tool-pill"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg> Natural Language Briefing</span>
+                    <span className="tool-pill"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Multi-Specialist Agents</span>
+                  </div>
+                  <button type="submit" className="composer-submit-btn" disabled={!briefInput.trim()}>
+                    <span>Start project</span>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                  </button>
+                </div>
               </div>
             </form>
           </section>
@@ -1249,6 +1273,23 @@ export function StudioWorkspace({
             </button>
           </div>
 
+          <section className="studio-transformation" aria-labelledby="studio-transformation-title">
+            <div className="transformation-copy">
+              <span className="studio-kicker">What a project keeps together</span>
+              <h2 id="studio-transformation-title">Your goal stays attached<br />to the work.</h2>
+              <p>See the brief, direction, assets and approvals in one place. Review the thinking and change course without starting over.</p>
+              <div className="transformation-brief">
+                <span>Before · Business goal</span>
+                <blockquote>“Launch a modern hibiscus and ginger drink for busy people in Accra.”</blockquote>
+                <small>Audience · Offer · Voice · Channel</small>
+              </div>
+            </div>
+            <figure className="transformation-output">
+              <Image src="/studio-campaign-output.webp" alt="After: a polished campaign image for a hibiscus and ginger drink" fill sizes="(max-width: 820px) 100vw, 38vw" />
+              <figcaption><span>After · Approved campaign direction</span><b>Warm, grounded and ready to adapt</b></figcaption>
+            </figure>
+          </section>
+
           {error ? <div className="studio-error dashboard-error">{error}</div> : null}
 
           {guestProjects.length ? (
@@ -1299,23 +1340,6 @@ export function StudioWorkspace({
           <button type="button" className="studio-example-toggle" onClick={togglePackPicker}>
             {showPackPicker ? 'Hide example outcomes ↑' : 'Need inspiration? Browse example outcomes ↓'}
           </button>
-
-          <section className="studio-transformation" aria-labelledby="studio-transformation-title">
-            <div className="transformation-copy">
-              <span className="studio-kicker">What a project keeps together</span>
-              <h2 id="studio-transformation-title">Your goal stays attached<br />to the work.</h2>
-              <p>See the brief, direction, assets and approvals in one place. Review the thinking and change course without starting over.</p>
-              <div className="transformation-brief">
-                <span>Before · Business goal</span>
-                <blockquote>“Launch a modern hibiscus and ginger drink for busy people in Accra.”</blockquote>
-                <small>Audience · Offer · Voice · Channel</small>
-              </div>
-            </div>
-            <figure className="transformation-output">
-              <Image src="/studio-campaign-output.webp" alt="After: a polished campaign image for a hibiscus and ginger drink" fill sizes="(max-width: 820px) 100vw, 38vw" />
-              <figcaption><span>After · Approved campaign direction</span><b>Warm, grounded and ready to adapt</b></figcaption>
-            </figure>
-          </section>
 
           {archivedProjects.length ? (
             <details className="studio-archive">
