@@ -1248,6 +1248,10 @@ function LabWorkspace({
       } else {
         let accumulated = ''
         await readChatStream(res, (event) => {
+          if (event.type === 'delta') {
+            accumulated += event.text
+          }
+          const currentText = accumulated
           setConversations((items) =>
             items.map((item) =>
               item.id === requestConversationId
@@ -1257,7 +1261,7 @@ function LabWorkspace({
                       message.id !== placeholder.id
                         ? message
                         : event.type === 'delta'
-                          ? { ...message, content: (accumulated += event.text), failure: undefined }
+                          ? { ...message, content: currentText, failure: undefined }
                           : event.type === 'error'
                             ? { ...message, content: '', failure: event }
                             : message,

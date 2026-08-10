@@ -307,10 +307,15 @@ button { color: inherit; }
 .external-mark { display: inline-block; margin-left: 3px; color: var(--grey); font-size: 9px; text-decoration: none; }
 .response-content blockquote { position: relative; margin: 17px 0; padding: 13px 16px; border: 1px solid var(--line); border-left: 2px solid var(--black); border-radius: 0 11px 11px 0; background: rgba(255,255,255,.6); color: var(--charcoal); }
 .response-content blockquote p { margin: 0; }
-.response-content :not(pre) > code { padding: 2px 5px; border: 1px solid var(--line); border-radius: 5px; background: #f0efea; color: #343536; font-family: Consolas, 'SFMono-Regular', monospace; font-size: .88em; }
-.response-content pre { position: relative; max-width: 100%; overflow-x: auto; margin: 17px 0; padding: 34px 16px 16px; border: 1px solid #2c2d2e; border-radius: 12px; background: var(--black); color: var(--warm-white); font-family: Consolas, 'SFMono-Regular', monospace; font-size: 12px; line-height: 1.58; tab-size: 2; }
-.response-content pre::before { content: 'CODE'; position: absolute; top: 10px; left: 15px; color: #8f9294; font-family: var(--font-body); font-size: 8px; font-weight: 750; letter-spacing: .14em; }
-.response-content pre code { color: inherit; font: inherit; }
+.response-content code.inline-code, .response-content :not(pre) > code { padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: #f0efea; color: #2c2d2e; font-family: Consolas, 'SFMono-Regular', monospace; font-size: .88em; }
+.code-block-card { margin: 16px 0; border: 1px solid #28292c; border-radius: 10px; background: #0e0f12; color: #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+.code-block-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 14px; background: #16181d; border-bottom: 1px solid #24262b; font-family: var(--font-body); }
+.code-block-lang { font-family: Consolas, 'SFMono-Regular', monospace; font-size: 11px; font-weight: 700; color: #8a909d; letter-spacing: 0.06em; }
+.code-copy-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; background: transparent; border: 1px solid #2d3036; border-radius: 6px; color: #9da3ae; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+.code-copy-btn:hover { background: #22252a; color: #ffffff; border-color: #3f434c; }
+.code-copy-btn.copied { color: #10b981; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.1); }
+.code-block-pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: Consolas, 'SFMono-Regular', Menlo, Monaco, monospace; font-size: 12.5px; line-height: 1.6; tab-size: 2; color: #e2e8f0; background: transparent; }
+.code-block-pre code { color: inherit; font: inherit; background: transparent; padding: 0; border: 0; }
 .table-scroll { max-width: 100%; margin: 17px 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.55); }
 .response-content table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .response-content th { background: #efeee9; color: var(--black); font-size: 9px; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
