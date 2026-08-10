@@ -10,6 +10,7 @@ import {
   type LanguageCode, type SpeechInputCode,
 } from '@/lib/languages'
 import { StudioWorkspace } from '@/components/StudioWorkspace'
+import { AppsDirectory } from '@/components/AppsDirectory'
 import { AccountControls } from '@/components/AccountControls'
 import { WorkspaceBoot } from '@/components/WorkspaceBoot'
 import { QualityFeedback } from '@/components/QualityFeedback'
@@ -56,7 +57,7 @@ type MessageFailure = {
   creditNotice: string
   requestId: string
 }
-type Experience = 'chat' | 'agent' | 'studio'
+type Experience = 'chat' | 'agent' | 'studio' | 'apps'
 type AgentStep = { id: string; label: string; status: 'pending' | 'active' | 'complete' | 'failed' }
 type AgentActivity = { type: string; summary: string; createdAt: string }
 type AgentDepth = 'quick' | 'standard' | 'thorough'
@@ -157,6 +158,14 @@ const MODE_META: Record<Experience, {
     eyebrow: 'Project workspace',
     heading: <>Build the assets that<br />move your business.</>,
     intro: 'Go from a brand brief to a coordinated launch pack, then review, refine, approve and produce each asset.',
+  },
+  apps: {
+    label: 'Apps & Outcomes',
+    short: 'Deliverables & Showcase',
+    description: 'Project outcomes and exported apps',
+    eyebrow: 'App & Outcome Directory',
+    heading: <>Your published outcomes<br />and project apps.</>,
+    intro: 'Explore and manage generated deliverables, document exports, and project outcomes created across your workspace.',
   },
 }
 
@@ -328,6 +337,8 @@ function LabWorkspace({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [search, setSearch] = useState('')
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'chat' | 'agent'>('all')
+  const [studioProjects, setStudioProjects] = useState<Array<{ id: string; title: string; updatedAt: number }>>([])
   const [conversationMenuId, setConversationMenuId] = useState('')
   const [attachment, setAttachment] = useState<Attachment | null>(null)
   const [fileError, setFileError] = useState('')
@@ -607,13 +618,35 @@ function LabWorkspace({
     }
   }, [recordingUrl])
 
+  useEffect(() => {
+    if (!hydrated) return
+    try {
+      const raw = localStorage.getItem(scopedStorageKey('ai360-lab-studio-projects-v1', workspaceScope))
+      if (raw) {
+        const list = JSON.parse(raw) as Array<{ id: string; intake?: { idea?: string; businessName?: string }; updatedAt?: number }>
+        if (Array.isArray(list)) {
+          setStudioProjects(
+            list.map((p) => ({
+              id: p.id,
+              title: p.intake?.businessName || p.intake?.idea || 'Untitled project',
+              updatedAt: p.updatedAt || Date.now(),
+            }))
+          )
+        }
+      }
+    } catch {
+      // optional storage read
+    }
+  }, [hydrated, workspaceScope])
+
   const visibleConversations = useMemo(() => {
     const query = search.trim().toLowerCase()
     return [...conversations]
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .filter((conversation) => conversation.experience !== 'studio')
+      .filter((conversation) => historyFilter === 'all' || conversation.experience === historyFilter)
       .filter((conversation) => !query || conversation.title.toLowerCase().includes(query))
-  }, [conversations, search])
+  }, [conversations, historyFilter, search])
 
   function updateActive(updater: (conversation: Conversation) => Conversation) {
     setConversations((items) => items.map((item) => (item.id === activeId ? updater(item) : item)))
@@ -1375,27 +1408,61 @@ function LabWorkspace({
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
           </button>
         </div>
-        <button className="new-chat" onClick={newChat}><span>＋</span><span>New chat</span></button>
-        <div className="workspace-links" aria-label="Your workspace">
-          <p className="side-section-label">Workspace</p>
-          <button className={experience !== 'studio' ? 'active' : ''} onClick={() => { if (experience === 'studio') selectExperience('chat'); setSidebarOpen(false) }}>
-            <span className="side-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 6.5h14v9H9l-4 3v-12Z" /></svg></span>
-            <span><b>Chats</b><small>Ask, write and research</small></span>
+        <button className="new-chat-primary" onClick={newChat}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14"/></svg>
+          <span>New chat</span>
+        </button>
+
+        <nav className="nav-main-menu" aria-label="Main menu">
+          <button
+            type="button"
+            className={`nav-menu-item${experience === 'chat' ? ' active' : ''}`}
+            onClick={() => { selectExperience('chat'); setSidebarOpen(false) }}
+          >
+            <span className="nav-menu-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <span>Chats</span>
           </button>
-          <button className={experience === 'studio' ? 'active' : ''} onClick={() => { selectExperience('studio'); setSidebarOpen(false) }}>
-            <span className="side-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.5 7.5h6l1.5 2h7.5v9h-15v-11Z" /></svg></span>
-            <span><b>Projects</b><small>Briefs and deliverables</small></span>
+
+          <button
+            type="button"
+            className={`nav-menu-item${experience === 'studio' ? ' active' : ''}`}
+            onClick={() => { selectExperience('studio'); setSidebarOpen(false) }}
+          >
+            <span className="nav-menu-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <span>Projects</span>
           </button>
+
+          <button
+            type="button"
+            className={`nav-menu-item${experience === 'apps' ? ' active' : ''}`}
+            onClick={() => { selectExperience('apps'); setSidebarOpen(false) }}
+          >
+            <span className="nav-menu-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+            </span>
+            <span>Apps & Outcomes</span>
+          </button>
+        </nav>
+
+        <div className="recents-section-head">
+          <span>Recents</span>
         </div>
+
         <label className="history-search">
-          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
             <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
             <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your work" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats..." />
+          {search ? (
+            <button type="button" className="clear-search-btn" onClick={() => setSearch('')} aria-label="Clear search">✕</button>
+          ) : null}
         </label>
-        {/* Studio projects live in Create. This list is intentionally reserved
-            for chats and research threads. */}
+
         <nav className="history-list">
           {SIDEBAR_GROUPS.map((group) => {
             const items = visibleConversations.filter((conversation) => group.match(conversation.experience))
@@ -1472,6 +1539,8 @@ function LabWorkspace({
             signedIn={signedIn}
             workspaceScope={workspaceScope}
           />
+        ) : experience === 'apps' ? (
+          <AppsDirectory />
         ) : (
           <>
           <ConversationMinimap

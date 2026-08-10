@@ -313,21 +313,19 @@ export function StudioWorkspace({
           setBriefInput(initialBrief.trim())
           setView('kickoff')
           setProject(null)
-        } else if (localDraft) {
-          setDraftId(localDraft.id)
-          setIntake(localDraft.intake)
-          setSelectedPackId(localDraft.packId)
-          setBriefTurns(localDraft.turns)
-          setBriefInput(localDraft.unsentText)
-          setView('kickoff')
-          setProject(null)
         } else if (savedView === 'project' && loaded[0]) {
           setProject(loaded[0])
           setView('project')
         } else {
           setProject(null)
-          if (savedView === 'kickoff') setDraftId(requestId())
-          setView(savedView === 'kickoff' ? 'kickoff' : 'dashboard')
+          if (localDraft) {
+            setDraftId(localDraft.id)
+            setIntake(localDraft.intake)
+            setSelectedPackId(localDraft.packId)
+            setBriefTurns(localDraft.turns)
+            setBriefInput(localDraft.unsentText)
+          }
+          setView('dashboard')
         }
       } catch {
         // A damaged local project should not prevent Studio from opening.
@@ -1117,9 +1115,14 @@ export function StudioWorkspace({
     }
   }
 
-  function revealPackPicker() {
-    setShowPackPicker(true)
-    requestAnimationFrame(() => mainRef.current?.querySelector('.studio-pack-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  function togglePackPicker() {
+    setShowPackPicker((prev) => {
+      const next = !prev
+      if (next) {
+        requestAnimationFrame(() => mainRef.current?.querySelector('.studio-pack-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+      }
+      return next
+    })
   }
 
   function openProject(next: StudioProject) {
@@ -1162,9 +1165,9 @@ export function StudioWorkspace({
         <div className="studio-dashboard">
           <header className="studio-dashboard-head">
             <div>
-              <span className="studio-kicker">Projects</span>
-              <h1>What are we<br />building?</h1>
-              <p>Describe the outcome in your own words. AI360 will shape the brief, choose the right workflow and ask only what it still needs.</p>
+              <span className="studio-kicker">Workspace Hub</span>
+              <h1>Projects</h1>
+              <p>Organize business initiatives, launch packs, and active studio deliverables in one place.</p>
             </div>
             <div className="studio-dashboard-actions">
               <span className={`studio-save-state ${saveState}`}>
@@ -1173,27 +1176,78 @@ export function StudioWorkspace({
                   ? saveState === 'saving' ? 'Saving securely' : saveState === 'saved' ? 'Saved securely' : saveState === 'unavailable' ? 'Saved on this device' : 'Cloud ready'
                   : 'Saved on this device'}
               </span>
-              <button onClick={() => beginProject()}>New project <span>+</span></button>
+              <button className="new-project-primary-btn" onClick={() => beginProject()}>Start new project <span>+</span></button>
             </div>
           </header>
 
-          <section className="studio-conversation-start" aria-labelledby="project-start-title">
-            <div>
-              <span>Start from a blank page</span>
-              <h2 id="project-start-title">Tell AI360 what you want to make or move forward.</h2>
-              <p>No template or technical setup. A rough idea is enough.</p>
-            </div>
-            <form onSubmit={(event) => { event.preventDefault(); setView('kickoff'); void continueBrief() }}>
-              <textarea
-                rows={3}
-                value={briefInput}
-                onChange={(event) => setBriefInput(event.target.value)}
-                placeholder="For example: Help me launch a catering service for busy offices in Accra..."
-                aria-label="Describe your project"
-              />
-              <button type="submit" disabled={!briefInput.trim()}>Start project <span>↑</span></button>
+          <section className="studio-goal-bar" aria-labelledby="project-start-title">
+            <form className="goal-bar-form" onSubmit={(event) => { event.preventDefault(); setView('kickoff'); void continueBrief() }}>
+              <div className="goal-input-wrapper">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input
+                  type="text"
+                  value={briefInput}
+                  onChange={(event) => setBriefInput(event.target.value)}
+                  placeholder="Describe your project goal (e.g. Launch a catering business for tech offices in Accra)..."
+                  aria-label="Describe your project goal"
+                />
+                <button type="submit" className="goal-submit-btn" disabled={!briefInput.trim()}>
+                  <span>Start project</span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
+              </div>
             </form>
           </section>
+
+          <div className="project-preset-grid">
+            <button
+              type="button"
+              className="preset-card"
+              onClick={() => { setBriefInput('Help me build a complete startup launch package including business model, brand brief, and marketing plan for: '); setView('kickoff'); void continueBrief() }}
+            >
+              <div className="preset-icon">🚀</div>
+              <div className="preset-info">
+                <b>Startup Launch Pack</b>
+                <small>Business model, brand strategy & GTM plan</small>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="preset-card"
+              onClick={() => { setBriefInput('Create a digital marketing and growth campaign for: '); setView('kickoff'); void continueBrief() }}
+            >
+              <div className="preset-icon">📈</div>
+              <div className="preset-info">
+                <b>Growth & Marketing</b>
+                <small>Messaging, social ads & landing page copy</small>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="preset-card"
+              onClick={() => { setBriefInput('Define the brand identity, positioning, voice, and visual direction for: '); setView('kickoff'); void continueBrief() }}
+            >
+              <div className="preset-icon">🎨</div>
+              <div className="preset-info">
+                <b>Brand Identity</b>
+                <small>Brand positioning, tone of voice & taglines</small>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="preset-card"
+              onClick={() => { setBriefInput('Draft an executive summary and financial proposal for: '); setView('kickoff'); void continueBrief() }}
+            >
+              <div className="preset-icon">📄</div>
+              <div className="preset-info">
+                <b>Executive Strategy</b>
+                <small>Investor proposal & unit economics breakdown</small>
+              </div>
+            </button>
+          </div>
 
           {error ? <div className="studio-error dashboard-error">{error}</div> : null}
 
@@ -1211,27 +1265,26 @@ export function StudioWorkspace({
             </section>
           ) : null}
 
-          {featured ? (
-            <section className="studio-continue" aria-labelledby="continue-project-title">
-              <div className="continue-copy">
-                <span className="continue-label"><i /> Continue where you left off</span>
-                <h2 id="continue-project-title">{featured.campaign.name}</h2>
-                <p>{featured.intake.businessName} · {featured.campaign.objective}</p>
-                <button onClick={() => openProject(featured)}>Open project <span>→</span></button>
+          {featured || remaining.length ? (
+            <section className="studio-project-library studio-project-library-primary">
+              <div className="studio-section-head">
+                <span><b>Your Projects</b><small>Each project keeps its brief, decisions, and deliverables together.</small></span>
+                <span>{activeProjects.length} active</span>
               </div>
-              <ProjectPulse project={featured} />
+              <div className="studio-project-grid">
+                {featured ? <ProjectCard project={featured} onOpen={() => openProject(featured)} key={featured.id} /> : null}
+                {remaining.map((item) => <ProjectCard project={item} onOpen={() => openProject(item)} key={item.id} />)}
+              </div>
             </section>
-          ) : null}
-
-          {remaining.length ? <section className="studio-project-library studio-project-library-primary">
-            <div className="studio-section-head">
-              <span><b>{remaining.length ? 'More projects' : 'Choose a project outcome'}</b><small>{remaining.length ? 'Each project keeps its brief, decisions and assets together.' : 'Start from your goal. You will review the brief before anything is built.'}</small></span>
-              {remaining.length ? <span>{activeProjects.length} active</span> : null}
-            </div>
-            <div className="studio-project-grid">
-              {remaining.map((item) => <ProjectCard project={item} onOpen={() => openProject(item)} key={item.id} />)}
-            </div>
-          </section> : null}
+          ) : (
+            <section className="studio-project-library studio-empty-state">
+              <div className="empty-projects-card">
+                <span className="empty-icon">📁</span>
+                <h3>No active projects yet</h3>
+                <p>Start from your business goal above or select a starter pack to build your first deliverable suite.</p>
+              </div>
+            </section>
+          )}
 
           {showPackPicker ? (
             <section className="studio-project-library studio-pack-picker">
@@ -1243,7 +1296,9 @@ export function StudioWorkspace({
             </section>
           ) : null}
 
-          <button className="studio-example-toggle" onClick={revealPackPicker}>Need inspiration? Browse example outcomes</button>
+          <button type="button" className="studio-example-toggle" onClick={togglePackPicker}>
+            {showPackPicker ? 'Hide example outcomes ↑' : 'Need inspiration? Browse example outcomes ↓'}
+          </button>
 
           <section className="studio-transformation" aria-labelledby="studio-transformation-title">
             <div className="transformation-copy">
