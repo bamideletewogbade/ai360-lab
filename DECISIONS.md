@@ -1,5 +1,52 @@
 # Decision and incident log
 
+## 2026-08-10 · Incident · Chat displayed raw JSON and leaked model reasoning
+
+**Symptom.** A real first-time user (Leo) received an answer rendered as a raw
+JSON string, `{"type":"text","text":"Hello Leo..."}`, instead of formatted
+prose. Other runs of the same prompt returned the model's private planning
+("Thinking Process: 1. Analyze the user...") as the whole answer, or stopped
+mid-sentence on the token limit.
+
+**Root cause.** Every failing response was served by `qwen/qwen3.7-plus`. Under
+`sort: 'price'` in the provider preferences, OpenRouter ignored the primary
+model that leads each fallback chain and served the cheapest one instead, which
+was Qwen. Qwen through OpenRouter returned its content as a raw JSON envelope,
+leaked reasoning as content, and ignored the reasoning token cap. The primary
+`openai/gpt-5.6-luna` was clean in every test. Qwen was also 2.3x the primary's
+price per turn, so as a fallback it was neither cheaper nor more reliable.
+
+**Fixes.**
+1. Removed `sort: 'price'`. The `models` array is already ordered primary-first,
+   so honouring that order serves the intended model instead of the cheapest.
+2. Removed the `preferred_max_latency` and `preferred_min_throughput` hints from
+   the no-tools branch. They steered chat to `gemini-3.5-flash-lite` (about 3x
+   the primary's price) because the primary's endpoint did not meet them. First
+   content still streams in 1.5 to 2.5 seconds without them.
+3. Replaced the fallback backstop `qwen/qwen3.7-plus` with
+   `google/gemini-3.5-flash-lite`, which is cheaper, supports structured outputs
+   and produced clean output in every test.
+4. Added `src/lib/provider-content.ts` as the one place that normalizes provider
+   content: it flattens string, array-of-parts and single-part shapes, drops
+   reasoning parts, and recovers a complete JSON envelope. The chat route and the
+   agent both use it now instead of each hand-reading `delta.content`.
+5. Added `reasoning: { exclude: true }` so a thinking model cannot spend the
+   whole budget narrating and return nothing. Defence in depth now that the
+   flaky model is gone.
+6. The chat route now records the model that actually served the request rather
+   than the one requested, and marks truncated or reasoning-leaked answers as
+   `success_degraded` so the fault is countable.
+
+**Verified.** 184 unit tests pass. Live against the running server: Leo's exact
+prompt returned clean formatted Markdown 6 of 6 times, every one served by
+`gpt-5.6-luna` at about GHS 0.01 per turn.
+
+**Guardrail.** `sort: 'price'` over a fallback chain silently substitutes the
+model. If cost routing is wanted again, express it by ordering the chain, not by
+a sort that can pick a model whose output quality was never checked. New models
+must be probed for output shape before entering a chain; the primary was clean
+and the fallback was not, and only a live check showed the difference.
+
 ## 2026-08-10 · Incident · Database tooling failed on an unencoded `@` in the password
 
 **Symptom.** Since 2026-08-08, `npm run db:postgres:verify` and

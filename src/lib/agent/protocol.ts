@@ -1,12 +1,15 @@
 /**
  * Parsing and context handling for the agent pipeline.
  *
- * Kept free of imports so it can be unit tested directly. Everything here deals
- * with output from a language model, which means malformed JSON, prose wrapped
- * around JSON, and missing fields are all normal inputs rather than exceptional
- * ones. Every function degrades to a safe default instead of throwing, because
- * a planner that returns nonsense should cost the user one task, not the run.
+ * Depends only on the provider-content normalizer, which is itself dependency
+ * free, so this stays directly unit testable. Everything here deals with output
+ * from a language model, which means malformed JSON, prose wrapped around JSON,
+ * and missing fields are all normal inputs rather than exceptional ones. Every
+ * function degrades to a safe default instead of throwing, because a planner
+ * that returns nonsense should cost the user one task, not the run.
  */
+
+import { providerContentText, stripThinkingBlocks } from '@/lib/provider-content'
 
 export const MAX_TASKS = 3
 
@@ -60,9 +63,11 @@ export function readStreamLine(line: string): StreamChunk | null {
   try {
     const json = JSON.parse(payload)
     const choice = json.choices?.[0]
-    const delta = choice?.delta?.content
+    // Structured content parts were previously dropped entirely rather than
+    // read, so a provider that returned them produced a silently empty answer.
+    const delta = stripThinkingBlocks(providerContentText(choice?.delta?.content))
     return {
-      delta: typeof delta === 'string' && delta.length ? delta : undefined,
+      delta: delta.length ? delta : undefined,
       annotations: choice?.delta?.annotations || choice?.message?.annotations || choice?.annotations,
       usage: json.usage && typeof json.usage === 'object' ? json.usage : undefined,
       done: false,
@@ -83,12 +88,9 @@ export function reconcileApprovedPlan(proposed: string[], approved: unknown): st
     .slice(0, MAX_TASKS)
 }
 
+/** Kept as the agent-side name for one shared rule about provider content. */
 export function textOf(value: unknown): string {
-  if (typeof value === 'string') return value
-  if (!Array.isArray(value)) return ''
-  return value.map((part) => (
-    part && typeof part === 'object' && 'text' in part && typeof part.text === 'string' ? part.text : ''
-  )).join('')
+  return providerContentText(value)
 }
 
 export function shorten(value: string, max = 52) {

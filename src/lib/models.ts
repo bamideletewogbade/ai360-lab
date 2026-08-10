@@ -33,7 +33,15 @@ export const MODEL_OPTIONS = {
 
 export type ChatMode = keyof typeof MODEL_OPTIONS
 
-const FALLBACK = 'qwen/qwen3.7-plus'
+// The last-resort model in every chain. It is only reached if the primary and
+// the automatic model both fail, so it has to be reliable rather than merely
+// cheap. `qwen/qwen3.7-plus` held this slot until 2026-08-10 and was the source
+// of malformed answers: served through OpenRouter it returned its content as a
+// raw JSON envelope and leaked its reasoning as the answer. It is also 2.3x the
+// price of the primary per turn, so it failed on both counts a fallback is for.
+// gemini-3.5-flash-lite is cheaper, supports structured outputs, and produced
+// clean output in every test.
+const FALLBACK = 'google/gemini-3.5-flash-lite'
 const FAST_TEXT_MODEL = MODEL_OPTIONS.gpt.model
 const MULTIMODAL_MODEL = MODEL_OPTIONS.gemini.model
 
@@ -51,8 +59,15 @@ export function isChatMode(value: unknown): value is ChatMode {
  * answer is written, which returns an empty result. Verified against the live
  * API on 2026-08-05: uncapped, Gemini 3.6 Flash finished on `length` with 65
  * characters of content; capped, it finished on `stop` with a full answer.
+ *
+ * `exclude` keeps the reasoning out of the response entirely. Without it, some
+ * models (Qwen served through OpenRouter, verified 2026-08-10) ignore the token
+ * cap, spend the whole budget narrating their plan as ordinary content, and the
+ * person receives the working instead of the answer. Excluding it also removes
+ * the reasoning tokens from the streamed content, so the cap is no longer the
+ * only thing standing between a thinking model and an empty reply.
  */
-export const REASONING_BUDGET = { max_tokens: 256 } as const
+export const REASONING_BUDGET = { max_tokens: 256, exclude: true } as const
 
 export function routeFor(
   mode: ChatMode,
@@ -86,6 +101,14 @@ export function routeFor(
  *
  * Sending the full block alongside tools failed every request on the chat and
  * agent routes, so any call that attaches tools must pass `withTools`.
+ *
+ * Deliberately no `sort: 'price'`. It used to be here, and it silently overrode
+ * the fallback order: instead of using the primary model that leads each chain,
+ * OpenRouter served whichever model in the chain was cheapest, which routed
+ * ordinary chat to a flaky model and produced malformed answers. The `models`
+ * array is already ordered primary-first, so honouring that order gives the
+ * intended model. The primary is also the cheapest quality option, so removing
+ * the price sort does not raise cost. `max_price` still caps runaway spend.
  */
 export function providerPreferences(
   workload: ModelWorkload,
@@ -94,12 +117,15 @@ export function providerPreferences(
   const latency = { p90: workload === 'chat' ? 3 : 5 }
   if (options.withTools) return { preferred_max_latency: latency }
 
+  // No throughput or latency preference. Verified 2026-08-10: those hints made
+  // OpenRouter prefer whichever endpoint was fastest over the model actually
+  // asked for, so chat was served by gemini-3.5-flash-lite (roughly three times
+  // the primary's price) instead of gpt-5.6-luna. Without them the primary is
+  // served, first content still arrives in 1.5 to 2.5 seconds, and `max_price`
+  // remains as the hard ceiling on spend.
   return {
-    sort: 'price' as const,
     allow_fallbacks: true,
     require_parameters: true,
-    preferred_max_latency: latency,
-    preferred_min_throughput: { p50: workload === 'chat' ? 45 : 30 },
     max_price: {
       prompt: workload === 'chat' ? 4 : 6,
       completion: workload === 'chat' ? 18 : 22,

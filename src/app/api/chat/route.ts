@@ -8,6 +8,9 @@ import { openCreditGate } from '@/lib/billing/credit-gate'
 import { chatFeature } from '@/lib/billing/credits'
 import { DEFAULT_LANGUAGE, isLanguageCode, languageDirective, type LanguageCode } from '@/lib/languages'
 import { policyForConversation, prepareConversationContext, type ContextMessage } from '@/lib/context-engineering'
+import {
+  looksLikeLeakedReasoning, providerContentText, servedModel, stripThinkingBlocks, wasTruncated,
+} from '@/lib/provider-content'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -223,6 +226,11 @@ export async function POST(req: NextRequest) {
         let chunkCount = 0
         let outputCharacters = 0
         let outputText = ''
+        // Price-sorted routing over the fallback list often serves a different
+        // model than the one asked for. Recording the requested model made the
+        // usage ledger attribute every cost to the wrong place.
+        let answeredBy = model
+        let finishReason: string | undefined
         const sources = new Map<string, string>()
         let usage: {
           prompt_tokens?: number
@@ -252,21 +260,36 @@ export async function POST(req: NextRequest) {
             const data = trimmed.slice(5).trim()
             if (data === '[DONE]') {
               appendLiveSources()
+              const truncated = wasTruncated(finishReason)
+              const leaked = looksLikeLeakedReasoning(outputText)
+              if (truncated || leaked) {
+                // The person still receives whatever arrived. Recording it is
+                // what makes an intermittent provider fault countable instead
+                // of a thing one user mentions once.
+                log.warn('chat.answer.degraded', {
+                  model: answeredBy, finishReason, truncated, leakedReasoning: leaked, outputCharacters,
+                })
+              }
               await recordUsageEventSafe({
-                requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter', model,
+                requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter',
+                model: answeredBy,
                 inputTokens: usage?.prompt_tokens, outputTokens: usage?.completion_tokens,
                 actualCostUsd: usage?.cost, latencyMs: Math.round(performance.now() - providerStartedAt),
-                outcome: 'success', metadata: {
+                outcome: truncated || leaked ? 'success_degraded' : 'success', metadata: {
                   mode, liveWebUsed: sources.size > 0, sourceCount: sources.size,
                   webSearchRequests: usage?.server_tool_use?.web_search_requests || 0,
                   attachmentCount: attachments.length,
+                  requestedModel: model, finishReason: finishReason ?? null,
+                  truncated, leakedReasoning: leaked,
                 },
               })
               await gate?.settle('success', usage?.cost)
               log.finish(200, {
-                outcome: 'success',
+                outcome: truncated || leaked ? 'success_degraded' : 'success',
                 provider: 'openrouter',
-                model,
+                model: answeredBy,
+                requestedModel: model,
+                finishReason,
                 creditsReserved: gate?.reserved,
                 chunkCount,
                 outputCharacters,
@@ -284,7 +307,12 @@ export async function POST(req: NextRequest) {
             }
             try {
               const json = JSON.parse(data)
-              const delta: string | undefined = json.choices?.[0]?.delta?.content
+              // Providers return this field as a string, as an array of content
+              // parts, or as a single bare part. Only the first was handled, so
+              // the other two reached the browser as raw JSON.
+              answeredBy = servedModel(json, answeredBy)
+              if (json.choices?.[0]?.finish_reason) finishReason = json.choices[0].finish_reason
+              const delta = stripThinkingBlocks(providerContentText(json.choices?.[0]?.delta?.content))
               if (delta) {
                 outputCharacters += delta.length
                 outputText += delta
@@ -303,16 +331,23 @@ export async function POST(req: NextRequest) {
         }
         appendLiveSources()
         await recordUsageEventSafe({
-          requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter', model,
+          requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter',
+          model: answeredBy,
           inputTokens: usage?.prompt_tokens, outputTokens: usage?.completion_tokens,
           actualCostUsd: usage?.cost, latencyMs: Math.round(performance.now() - providerStartedAt),
-          outcome: 'success_without_done_event', metadata: { mode, sourceCount: sources.size, attachmentCount: attachments.length },
+          outcome: 'success_without_done_event', metadata: {
+            mode, sourceCount: sources.size, attachmentCount: attachments.length,
+            requestedModel: model, finishReason: finishReason ?? null,
+            truncated: wasTruncated(finishReason), leakedReasoning: looksLikeLeakedReasoning(outputText),
+          },
         })
         await gate?.settle('success', usage?.cost)
         log.finish(200, {
           outcome: 'success_without_done_event',
           provider: 'openrouter',
-          model,
+          model: answeredBy,
+          requestedModel: model,
+          finishReason,
           chunkCount,
           outputCharacters,
           totalTokens: usage?.total_tokens,

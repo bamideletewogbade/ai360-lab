@@ -16,8 +16,23 @@ test('provider routing constraints are dropped when server-side tools are attach
 test('cost and routing controls still apply when no tools are attached', () => {
   const plain = providerPreferences('chat') as Record<string, unknown>
   assert.equal(plain.require_parameters, true)
-  assert.equal(plain.sort, 'price')
   assert.ok(plain.max_price)
+})
+
+test('price sorting never overrides the primary model in the chain', () => {
+  // sort:price silently served the cheapest model in the fallback chain instead
+  // of the intended primary, which routed chat to a flaky model. The order of
+  // the models array must be what decides, so this field must stay absent.
+  const plain = providerPreferences('chat') as Record<string, unknown>
+  assert.equal('sort' in plain, false, 'sort must not be sent; it overrides fallback order')
+  assert.equal(plain.allow_fallbacks, true, 'fallbacks must still be allowed')
+})
+
+test('the fallback backstop is a reliable model, not the retired flaky one', () => {
+  for (const mode of ['auto', 'gemini', 'claude'] as const) {
+    const chain = routeFor(mode, { workload: 'chat' }).models
+    assert.equal(chain.includes('qwen/qwen3.7-plus'), false, `${mode} must not fall back to qwen3.7-plus`)
+  }
 })
 
 test('automatic routing keeps a fallback chain without repeating a model', () => {
