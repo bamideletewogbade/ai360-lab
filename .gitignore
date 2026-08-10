@@ -8,6 +8,11 @@
 /tmp
 .env
 .env*.local
+# Anything derived from an env file still holds the same secrets.
+.env.local.*
+*.env.backup*
+# The nested worker installs its own dependencies; they are not source.
+node_modules/
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store

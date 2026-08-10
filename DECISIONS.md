@@ -1,5 +1,35 @@
 # Decision and incident log
 
+## 2026-08-10 · Incident · Database tooling failed on an unencoded `@` in the password
+
+**Symptom.** Since 2026-08-08, `npm run db:postgres:verify` and
+`npm run db:migrate` both failed with `28P01 password authentication failed for
+user "postgres"`. The 2026-08-08 audit recorded the cause as the Supabase direct
+host resolving AAAA only, and concluded the checks could not run from an
+IPv4-only environment.
+
+**Actual cause.** That diagnosis was wrong. The database password contains a
+literal `@`, which must be percent-encoded as `%40` inside a connection URL and
+was not. `.env.local` also declared `DATABASE_URL` and `DIRECT_URL` twice each,
+and the second `DIRECT_URL` carried an accidental extra `@`.
+
+**Why it stayed hidden.** The `postgres` client splits user information at the
+last `@`, so `DATABASE_URL` happened to recover the correct password and the
+application never broke. Only `DIRECT_URL`, which the scripts prefer, was
+corrupted by the extra character. A failure confined to the tooling reads as an
+environment problem rather than a configuration one.
+
+**Fix.** Percent-encoded the password in both URLs and removed the shadowed
+duplicate declarations, leaving a single session-pooler pair. Verified: 30
+tables, row-level security on every one, zero grants to the `anon` role, 10
+migrations applied. `npm run credits:verify` 16/16 and `npm run data:verify`
+12/12 pass against the live database.
+
+**Guardrail.** A connection string is a URL, so any reserved character in a
+password has to be percent-encoded. Prefer reproducing the actual error over
+reasoning about a plausible cause: the IPv6 explanation was coherent, written
+down, and stopped anyone looking further for two days.
+
 ## 2026-08-09 · Decision · One conversational surface, projects as context
 
 **Why.** Ask, Research and Create are not three equal destinations. Ask is the

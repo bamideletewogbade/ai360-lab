@@ -17,19 +17,25 @@ identity verification, runtime database connectivity from the production host,
 a durable queue, distributed cost controls, monitoring and verification of
 external media and payment providers.
 
-## Audit snapshot: 2026-08-08
+## Audit snapshot: 2026-08-10
 
-- `npm test`: 113/113 pass.
+- `npm test`: 169/169 pass.
 - `npm run lint` and `npm run build`: pass on Next.js 16.3.0.
 - `npm audit --omit=dev`: zero known production dependency vulnerabilities.
 - Live public-provider checks: domains 6/6 and video catalogue 4/4 pass.
 - Browser smoke test: landing, onboarding and Quick/Research/Create workspace
   navigation work; security headers are present; health returns 200 and
   readiness correctly returns 503 while required services are unavailable.
-- The configured Supabase direct hostname resolves only to IPv6 from this
-  environment and the database verification scripts cannot connect. Replace
-  the runtime URL with the Supabase session-pooler URL before the live data
-  checks can be repeated from an IPv4-only host.
+- `npm run db:postgres:verify` passes against the live database: 30 tables,
+  row-level security on every one, zero grants to the `anon` role, 10
+  migrations applied. `npm run credits:verify` 16/16 and `npm run data:verify`
+  12/12 also pass.
+- The 2026-08-08 note attributing the database verification failure to an
+  IPv6-only direct hostname was wrong. The password contained an unencoded `@`
+  and `.env.local` declared the connection URLs twice. Both are fixed; see
+  `DECISIONS.md`. Whether the Hostinger runtime can reach IPv6 is still worth
+  confirming, but it was never the cause and the session pooler is used
+  regardless.
 - Clerk and the canonical application URL are absent locally, so sign-in,
   webhook and tenant-isolation flows remain unverified.
 - The local shell is Node 24.15.0 while the supported production runtime is
@@ -107,10 +113,10 @@ external media and payment providers.
 - [x] Apply `database/postgres/0001_initial.sql` and `0002_runtime_foundation.sql`
   using the direct migration URL. Verified with `npm run db:postgres:verify`:
   22 tables, row-level security on every one, zero grants to the anon role.
-- [ ] Confirm whether the Hostinger runtime can reach IPv6. The direct host
-  `db.<ref>.supabase.co` resolves AAAA only, so `DATABASE_URL` must use the
-  session pooler if the host is IPv4-only.
-- [ ] Connect Hostinger through Supabase's shared session pooler (port 5432).
+- [x] Percent-encode reserved characters in the database password. The password
+  contains a literal `@` and must be written as `%40` in any connection URL.
+- [x] Connect through Supabase's shared session pooler (port 5432). Verified
+  locally; the same URL must be set on Hostinger.
 - [ ] Use the transaction pooler (port 6543) only if the API moves to a
   serverless or short-lived runtime.
 - [x] Replace MySQL-specific repositories; Postgres is the only data plane.
