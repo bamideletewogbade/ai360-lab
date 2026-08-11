@@ -895,7 +895,14 @@ button { color: inherit; }
 .composer-submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Preset Starter Cards Grid */
-.project-preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 36px; }
+/* Templates read as the secondary path beneath the primary goal composer. */
+.preset-lead { margin: 22px 0 12px; color: var(--soft-grey); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.project-preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 40px; }
+/* Empty state lives inside the projects block, so it reads as one section. */
+.studio-projects-empty { display: flex; align-items: center; gap: 14px; padding: 22px; border: 1px dashed var(--line-dark); border-radius: 16px; background: rgba(255,255,255,.5); }
+.studio-projects-empty .empty-icon { font-size: 22px; opacity: .8; }
+.studio-projects-empty b { display: block; font-size: 13px; font-weight: 750; color: var(--black); }
+.studio-projects-empty small { display: block; margin-top: 3px; color: var(--grey); font-size: 11px; line-height: 1.5; }
 .preset-card { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); cursor: pointer; text-align: left; transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease; }
 .preset-card:hover { transform: translateY(-2px); border-color: #c5c3bd; box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
 .preset-icon { font-size: 22px; flex: 0 0 auto; }

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import Image from 'next/image'
 import { ResponseContent } from '@/components/ResponseContent'
 import { ProjectStageNavigator } from '@/components/ProjectStageNavigator'
 import { mergeProjects, setProjectArchived, sortProjects, upsertProject } from '@/lib/studio-projects'
@@ -1170,9 +1169,9 @@ export function StudioWorkspace({
         <div className="studio-dashboard">
           <header className="studio-dashboard-head">
             <div>
-              <span className="studio-kicker">Workspace Hub</span>
-              <h1>Projects</h1>
-              <p>Organize business initiatives, launch packs, and active studio deliverables in one place.</p>
+              <span className="studio-kicker">Projects</span>
+              <h1>Turn a goal into<br />finished work.</h1>
+              <p>Describe what you want to achieve. AI360 brings in the right specialists and keeps the brief, decisions and deliverables together, in one place.</p>
             </div>
             <div className="studio-dashboard-actions">
               <span className={`studio-save-state ${saveState}`}>
@@ -1181,7 +1180,6 @@ export function StudioWorkspace({
                   ? saveState === 'saving' ? 'Saving securely' : saveState === 'saved' ? 'Saved securely' : saveState === 'unavailable' ? 'Saved on this device' : 'Cloud ready'
                   : 'Saved on this device'}
               </span>
-              <button className="new-project-primary-btn" onClick={() => beginProject()}>Start new project <span>+</span></button>
             </div>
           </header>
 
@@ -1189,7 +1187,7 @@ export function StudioWorkspace({
             <form onSubmit={(event) => { event.preventDefault(); if (briefInput.trim()) { setView('kickoff'); void continueBrief() } }}>
               <div className="composer-card">
                 <div className="composer-header">
-                  <span className="composer-badge">✨ AI Brief & Project Creator</span>
+                  <span className="composer-badge">Describe your goal</span>
                   <span className="composer-hint">Shift + Enter for new lines</span>
                 </div>
                 <textarea
@@ -1223,6 +1221,7 @@ export function StudioWorkspace({
             </form>
           </section>
 
+          <p className="preset-lead">Or start from a template</p>
           <div className="project-preset-grid">
             <button
               type="button"
@@ -1273,23 +1272,6 @@ export function StudioWorkspace({
             </button>
           </div>
 
-          <section className="studio-transformation" aria-labelledby="studio-transformation-title">
-            <div className="transformation-copy">
-              <span className="studio-kicker">What a project keeps together</span>
-              <h2 id="studio-transformation-title">Your goal stays attached<br />to the work.</h2>
-              <p>See the brief, direction, assets and approvals in one place. Review the thinking and change course without starting over.</p>
-              <div className="transformation-brief">
-                <span>Before · Business goal</span>
-                <blockquote>“Launch a modern hibiscus and ginger drink for busy people in Accra.”</blockquote>
-                <small>Audience · Offer · Voice · Channel</small>
-              </div>
-            </div>
-            <figure className="transformation-output">
-              <Image src="/studio-campaign-output.webp" alt="After: a polished campaign image for a hibiscus and ginger drink" fill sizes="(max-width: 820px) 100vw, 38vw" />
-              <figcaption><span>After · Approved campaign direction</span><b>Warm, grounded and ready to adapt</b></figcaption>
-            </figure>
-          </section>
-
           {error ? <div className="studio-error dashboard-error">{error}</div> : null}
 
           {guestProjects.length ? (
@@ -1306,26 +1288,26 @@ export function StudioWorkspace({
             </section>
           ) : null}
 
-          {featured || remaining.length ? (
-            <section className="studio-project-library studio-project-library-primary">
-              <div className="studio-section-head">
-                <span><b>Your Projects</b><small>Each project keeps its brief, decisions, and deliverables together.</small></span>
-                <span>{activeProjects.length} active</span>
-              </div>
+          <section className="studio-project-library studio-project-library-primary">
+            <div className="studio-section-head">
+              <span><b>Your projects</b><small>Each keeps its brief, decisions and deliverables together.</small></span>
+              {activeProjects.length ? <span>{activeProjects.length} active</span> : null}
+            </div>
+            {featured || remaining.length ? (
               <div className="studio-project-grid">
                 {featured ? <ProjectCard project={featured} onOpen={() => openProject(featured)} key={featured.id} /> : null}
                 {remaining.map((item) => <ProjectCard project={item} onOpen={() => openProject(item)} key={item.id} />)}
               </div>
-            </section>
-          ) : (
-            <section className="studio-project-library studio-empty-state">
-              <div className="empty-projects-card">
+            ) : (
+              <div className="studio-projects-empty">
                 <span className="empty-icon">📁</span>
-                <h3>No active projects yet</h3>
-                <p>Start from your business goal above or select a starter pack to build your first deliverable suite.</p>
+                <div>
+                  <b>No projects yet</b>
+                  <small>Describe a goal above, or start from a template, and your first project appears here.</small>
+                </div>
               </div>
-            </section>
-          )}
+            )}
+          </section>
 
           {showPackPicker ? (
             <section className="studio-project-library studio-pack-picker">
