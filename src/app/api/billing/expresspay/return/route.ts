@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { createExpressPayProvider, isExpressPayOrderId, isExpressPayToken } from '@/lib/payments/expresspay'
 import { applyVerifiedPayment } from '@/lib/payments/payment-repository'
+import { sendPaymentReceipt } from '@/lib/payments/receipts'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
     const verified = await createExpressPayProvider().queryPayment(token)
     if (verified.orderId !== orderId) throw new Error('PAYMENT_RETURN_ORDER_MISMATCH')
     const result = await applyVerifiedPayment(verified)
+    if (result.activated) after(() => sendPaymentReceipt(orderId))
     log.finish(303, { outcome: 'return_verified', orderId, paymentStatus: result.status })
     return NextResponse.redirect(statusUrl(request, orderId), 303)
   } catch (error) {

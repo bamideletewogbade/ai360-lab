@@ -1,7 +1,7 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { type ChatMode } from '@/lib/models'
 import { ResponseContent } from '@/components/ResponseContent'
@@ -24,7 +24,7 @@ import { useAuth } from '@clerk/nextjs'
 import { scopedStorageKey } from '@/lib/workspace'
 import { routeIntentDeterministically, type IntentRoute } from '@/lib/intent-router'
 import {
-  parseProfile, personalizedIntro, personalizedTasks, type OnboardingProfile,
+  personalizedIntro, personalizedTasks, readStoredProfile, resolveFirstRun, SKIPPED, type OnboardingProfile,
 } from '@/lib/onboarding'
 
 type Attachment = {
@@ -381,6 +381,9 @@ function LabWorkspace({
   const workspaceStorageKey = scopedStorageKey(STORAGE_KEY, workspaceScope)
   const workspaceActiveKey = scopedStorageKey(ACTIVE_KEY, workspaceScope)
   const sidebarPreferenceKey = scopedStorageKey(SIDEBAR_KEY, workspaceScope)
+  // Personalization is remembered per identity, so each signed-in person — and
+  // the guest — keeps their own first-run record on a shared device.
+  const workspaceProfileKey = scopedStorageKey(PROFILE_KEY, workspaceScope)
 
   const active = conversations.find((conversation) => conversation.id === activeId) ?? conversations[0]
   const messages = useMemo(() => active?.messages ?? [], [active])
@@ -442,32 +445,111 @@ function LabWorkspace({
     try { localStorage.setItem(sidebarPreferenceKey, String(sidebarCollapsed)) } catch { /* Preferences remain optional. */ }
   }, [hydrated, sidebarCollapsed, sidebarPreferenceKey])
 
-  // First run: read any saved profile, and offer the two-question intake once.
-  // A stored profile personalizes the workspace; a 'skipped' marker means the
-  // person declined, so the intake never returns on its own.
+  // First run, resolved per identity. A guest is personalized immediately; when
+  // they sign in, the answer they already gave follows them into their account
+  // instead of asking again, while a genuinely new identity is offered the
+  // intake. Waiting for auth to load avoids flashing the intake during the
+  // brief guest phase before a signed-in scope is known.
   useEffect(() => {
-    if (!hydrated) return
-    let stored: string | null = null
-    try { stored = localStorage.getItem(PROFILE_KEY) } catch { stored = null }
-    if (stored === 'skipped') return
-    if (stored) {
+    if (!hydrated || !authLoaded) return
+    let scopedRaw: string | null = null
+    let guestRaw: string | null = null
+    try {
+      scopedRaw = localStorage.getItem(workspaceProfileKey)
+      guestRaw = localStorage.getItem(PROFILE_KEY)
+    } catch { scopedRaw = null; guestRaw = null }
+
+    const decision = resolveFirstRun({
+      scopedRaw,
+      guestRaw,
+      signedIn,
+      isGuestScope: workspaceScope === 'guest',
+    })
+    if (decision.adopt) {
       try {
-        const saved = parseProfile(JSON.parse(stored))
-        if (saved) { setProfile(saved); return }
-      } catch { /* fall through to offering the intake */ }
+        localStorage.setItem(
+          workspaceProfileKey,
+          decision.adopt === SKIPPED ? SKIPPED : JSON.stringify(decision.adopt),
+        )
+      } catch { /* Personalization is best-effort. */ }
     }
-    setShowIntake(true)
-  }, [hydrated])
+    setProfile(decision.profile)
+    // For a signed-in person the durable store is authoritative, so the intake
+    // decision is deferred to the sync effect below to avoid flashing it on a
+    // new device before their saved answer arrives. A guest decides locally.
+    setShowIntake(signedIn ? false : decision.showIntake)
+  }, [hydrated, authLoaded, signedIn, workspaceScope, workspaceProfileKey])
+
+  const persistOnboardingToServer = useCallback((
+    payload: { status: 'completed'; role: OnboardingProfile['role']; goal: OnboardingProfile['goal'] } | { status: 'skipped' },
+  ) => {
+    void fetch('/api/onboarding', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => { /* The local cache already holds the answer. */ })
+  }, [])
+
+  // Personalization that follows a person across devices. When signed in, the
+  // durable store decides: a saved answer is applied (and cached locally); an
+  // empty store is filled from any local choice — including one adopted from a
+  // guest session — so the answer given once on any device is theirs on the
+  // next; and only a truly new identity is offered the intake.
+  useEffect(() => {
+    if (!hydrated || !authLoaded || !signedIn) return
+    const controller = new AbortController()
+    void fetch('/api/onboarding', { cache: 'no-store', signal: controller.signal })
+      .then((response) => (response.ok ? response.json() as Promise<{ status?: string; profile?: OnboardingProfile }> : null))
+      .then((state) => {
+        if (!state) return
+        if (state.status === 'completed' && state.profile) {
+          setProfile(state.profile)
+          setShowIntake(false)
+          try { localStorage.setItem(workspaceProfileKey, JSON.stringify(state.profile)) } catch { /* best-effort cache */ }
+          return
+        }
+        if (state.status === 'skipped') {
+          setProfile(null)
+          setShowIntake(false)
+          try { localStorage.setItem(workspaceProfileKey, SKIPPED) } catch { /* best-effort cache */ }
+          return
+        }
+        // The store has nothing yet: promote a local choice, or offer the intake.
+        let scopedRaw: string | null = null
+        try { scopedRaw = localStorage.getItem(workspaceProfileKey) } catch { scopedRaw = null }
+        const local = readStoredProfile(scopedRaw)
+        if (local) {
+          persistOnboardingToServer({ status: 'completed', role: local.role, goal: local.goal })
+          setProfile(local)
+          setShowIntake(false)
+        } else if (scopedRaw === SKIPPED) {
+          persistOnboardingToServer({ status: 'skipped' })
+          setShowIntake(false)
+        } else {
+          setShowIntake(true)
+        }
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        // Offline or the store is unavailable: fall back to the local decision.
+        let scopedRaw: string | null = null
+        try { scopedRaw = localStorage.getItem(workspaceProfileKey) } catch { scopedRaw = null }
+        if (!readStoredProfile(scopedRaw) && scopedRaw !== SKIPPED) setShowIntake(true)
+      })
+    return () => controller.abort()
+  }, [hydrated, authLoaded, signedIn, workspaceScope, workspaceProfileKey, persistOnboardingToServer])
 
   const completeIntake = (chosen: OnboardingProfile) => {
     setProfile(chosen)
     setShowIntake(false)
-    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(chosen)) } catch { /* Personalization is best-effort. */ }
+    try { localStorage.setItem(workspaceProfileKey, JSON.stringify(chosen)) } catch { /* Personalization is best-effort. */ }
+    if (signedIn) persistOnboardingToServer({ status: 'completed', role: chosen.role, goal: chosen.goal })
   }
 
   const skipIntake = () => {
     setShowIntake(false)
-    try { localStorage.setItem(PROFILE_KEY, 'skipped') } catch { /* Personalization is best-effort. */ }
+    try { localStorage.setItem(workspaceProfileKey, SKIPPED) } catch { /* Personalization is best-effort. */ }
+    if (signedIn) persistOnboardingToServer({ status: 'skipped' })
   }
 
   useEffect(() => {

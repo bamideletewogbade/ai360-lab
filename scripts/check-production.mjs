@@ -49,7 +49,21 @@ export function evaluateProductionEnvironment(env = process.env) {
   if (!Number.isInteger(poolSize) || poolSize < 1 || poolSize > 10) errors.push('DATABASE_POOL_SIZE: use an integer from 1 to 10')
   if ((env.DATABASE_SSL || 'require') !== 'require') errors.push('DATABASE_SSL: production and staging must use require')
 
-  for (const flag of ['NEXT_PUBLIC_BILLING_ENABLED', 'AI360_BROWSER_PILOT_ENABLED', 'NEXT_PUBLIC_AI360_TEAM_WORKSPACES']) requireFlag(flag)
+  for (const flag of ['NEXT_PUBLIC_BILLING_ENABLED', 'AI360_BROWSER_PILOT_ENABLED', 'NEXT_PUBLIC_AI360_TEAM_WORKSPACES', 'EMAIL_ENABLED']) requireFlag(flag)
+
+  if (env.EMAIL_ENABLED === 'true') {
+    requireValue('RESEND_API_KEY', 'required when transactional email is enabled')
+    if (env.EMAIL_PROVIDER && env.EMAIL_PROVIDER !== 'resend') errors.push('EMAIL_PROVIDER: only "resend" is supported')
+    const from = (env.EMAIL_FROM || '').trim()
+    if (!/^(?:[^<>]{1,64}<)?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]{2,}>?$/.test(from)) {
+      errors.push('EMAIL_FROM: set a verified sender address, optionally as "Name <address>"')
+    }
+    if (env.EMAIL_REPLY_TO && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]{2,}$/.test(env.EMAIL_REPLY_TO.trim())) {
+      errors.push('EMAIL_REPLY_TO: must be a bare email address when set')
+    }
+  } else {
+    warnings.push('Transactional email is disabled. Receipts, welcome and alert mail will not send until EMAIL_ENABLED=true with a verified Resend domain.')
+  }
 
   if (env.NEXT_PUBLIC_BILLING_ENABLED === 'true') {
     for (const name of ['EXPRESSPAY_MERCHANT_ID', 'EXPRESSPAY_API_KEY']) requireValue(name, 'required when billing is enabled')

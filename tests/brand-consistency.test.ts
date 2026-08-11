@@ -5,7 +5,10 @@ import test from 'node:test'
 
 const sourceExtensions = new Set(['.ts', '.tsx', '.css', '.json', '.txt', '.webmanifest', '.md', '.mjs'])
 const legacySpellings = [`AI${' '}360`, `AI${' '}Three${' '}Sixty`]
-const excludedDirectories = new Set(['.git', '.next', 'node_modules'])
+// Tooling and build directories, not product or public copy. `.claude` holds
+// local agent settings that record verbatim shell commands, so it can contain
+// arbitrary strings a contributor never wrote as brand copy.
+const excludedDirectories = new Set(['.git', '.next', 'node_modules', '.claude'])
 
 function filesUnder(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

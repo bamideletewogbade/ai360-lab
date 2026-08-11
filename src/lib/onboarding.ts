@@ -85,6 +85,67 @@ export function parseProfile(raw: unknown): OnboardingProfile | null {
   return null
 }
 
+/** The literal a stored key holds when the person declined the intake. */
+export const SKIPPED = 'skipped'
+
+/** Parses a raw localStorage string into a profile, tolerating any corruption. */
+export function readStoredProfile(raw: string | null): OnboardingProfile | null {
+  if (!raw || raw === SKIPPED) return null
+  try {
+    return parseProfile(JSON.parse(raw))
+  } catch {
+    return null
+  }
+}
+
+export type FirstRunDecision = {
+  /** The personalization to apply now, if any. */
+  profile: OnboardingProfile | null
+  /** Whether to open the two-question intake. */
+  showIntake: boolean
+  /**
+   * A decision to write to this identity's own key so it is not recomputed on
+   * every load. Set only when a signed-in identity inherits the choice its
+   * person already made as a guest on this device (claim-on-login).
+   */
+  adopt: OnboardingProfile | 'skipped' | null
+}
+
+/**
+ * Decides the first run for the active identity.
+ *
+ * Onboarding is guest-first and remembered per identity, not per device. A
+ * guest is personalized immediately and their answer follows them into their
+ * account the moment they sign in, so signing up never re-asks the same person.
+ * But each distinct signed-in identity keeps its own record, so a shared device
+ * — common on campus and office connections — never leaks one person's
+ * personalization to the next, and a brand-new identity still gets its intake.
+ */
+export function resolveFirstRun(input: {
+  /** Raw value at this identity's scoped key. */
+  scopedRaw: string | null
+  /** Raw value at the guest/base key on this device. */
+  guestRaw: string | null
+  signedIn: boolean
+  isGuestScope: boolean
+}): FirstRunDecision {
+  const { scopedRaw, guestRaw, signedIn, isGuestScope } = input
+
+  if (scopedRaw === SKIPPED) return { profile: null, showIntake: false, adopt: null }
+  const own = readStoredProfile(scopedRaw)
+  if (own) return { profile: own, showIntake: false, adopt: null }
+
+  // This identity has no record of its own. A signed-in person inherits the
+  // choice they made as a guest on this device rather than answering twice.
+  if (signedIn && !isGuestScope) {
+    if (guestRaw === SKIPPED) return { profile: null, showIntake: false, adopt: SKIPPED }
+    const guest = readStoredProfile(guestRaw)
+    if (guest) return { profile: guest, showIntake: false, adopt: guest }
+  }
+
+  return { profile: null, showIntake: true, adopt: null }
+}
+
 /** The four suggested prompts to show, shaped by the person's goal. */
 export function personalizedTasks(profile: OnboardingProfile | null): SuggestedTask[] {
   if (!profile) return DEFAULT_TASKS

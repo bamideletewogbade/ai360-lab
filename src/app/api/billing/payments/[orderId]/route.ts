@@ -1,7 +1,9 @@
+import { after } from 'next/server'
 import { getOptionalAuthContext } from '@/lib/auth'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { createExpressPayProvider, isExpressPayOrderId } from '@/lib/payments/expresspay'
 import { applyVerifiedPayment, claimPaymentReconciliation, readPaymentAttempt } from '@/lib/payments/payment-repository'
+import { sendPaymentReceipt } from '@/lib/payments/receipts'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -29,7 +31,8 @@ export async function GET(request: Request, context: RouteContext<'/api/billing/
       try {
         const verified = await createExpressPayProvider().queryPayment(claim.providerReference)
         if (verified.orderId !== orderId) throw new Error('PAYMENT_STATUS_ORDER_MISMATCH')
-        await applyVerifiedPayment(verified)
+        const applied = await applyVerifiedPayment(verified)
+        if (applied.activated) after(() => sendPaymentReceipt(orderId))
         attempt = await readPaymentAttempt(identity, orderId) ?? attempt
       } catch (error) {
         log.error('billing.status_reconciliation_failed', errorDetails(error))

@@ -20,6 +20,7 @@ function releaseEnvironment() {
     NEXT_PUBLIC_BILLING_ENABLED: 'false',
     AI360_BROWSER_PILOT_ENABLED: 'false',
     NEXT_PUBLIC_AI360_TEAM_WORKSPACES: 'false',
+    EMAIL_ENABLED: 'false',
   }
 }
 
@@ -36,6 +37,20 @@ test('enabling browser work requires the complete worker and cleanup boundary', 
   for (const name of ['BROWSERBASE_API_KEY', 'BROWSERBASE_NAVIGATE_FUNCTION_ID', 'AI360_BROWSER_CLEANUP_SECRET']) {
     assert.match(result.errors.join('\n'), new RegExp(name))
   }
+})
+
+test('enabling transactional email requires a provider key and a valid sender', () => {
+  const enabled = evaluateProductionEnvironment({ ...releaseEnvironment(), EMAIL_ENABLED: 'true' })
+  assert.match(enabled.errors.join('\n'), /RESEND_API_KEY/)
+  assert.match(enabled.errors.join('\n'), /EMAIL_FROM/)
+
+  const configured = evaluateProductionEnvironment({
+    ...releaseEnvironment(),
+    EMAIL_ENABLED: 'true',
+    RESEND_API_KEY: 're_live_example',
+    EMAIL_FROM: 'AI360 Lab <lab@aithreesixty.tech>',
+  })
+  assert.deepEqual(configured.errors, [])
 })
 
 test('sensitive-looking public variables block a release', () => {

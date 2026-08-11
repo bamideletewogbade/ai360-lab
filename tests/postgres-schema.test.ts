@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const runtimeMigrationUrl = new URL('../database/postgres/0002_runtime_foundation.sql', import.meta.url)
+const onboardingMigrationUrl = new URL('../database/postgres/0013_workspace_onboarding.sql', import.meta.url)
 
 test('the Supabase runtime foundation persists every durable agent boundary', async () => {
   const migration = await readFile(runtimeMigrationUrl, 'utf8')
@@ -30,6 +31,22 @@ test('private assets and agent data are read-only to the authenticated browser r
   assert.match(migration, /revoke all on public\.lab_assets[\s\S]+from anon, authenticated/)
   assert.doesNotMatch(migration, /grant (?:insert|update|delete|all)[^;]+lab_agent_/i)
   assert.match(migration, /values \('ai360-private', 'ai360-private', false, 104857600\)/)
+})
+
+test('workspace onboarding is workspace-scoped, guarded and not writable by the browser role', async () => {
+  const migration = await readFile(onboardingMigrationUrl, 'utf8')
+
+  assert.match(migration, /create table if not exists public\.lab_workspace_onboarding/)
+  assert.match(migration, /alter table public\.lab_workspace_onboarding enable row level security/)
+  // Referential integrity to the workspace and the owning user.
+  assert.match(migration, /references public\.lab_workspaces\(workspace_key\) on delete cascade/)
+  assert.match(migration, /references public\.lab_users\(clerk_user_id\) on delete cascade/)
+  // A completed record must carry both answers; a skip must carry neither.
+  assert.match(migration, /status = 'completed' and role is not null and goal is not null/)
+  assert.match(migration, /status = 'skipped' and role is null and goal is null/)
+  // Read-only to the authenticated browser role; writes go through the service path.
+  assert.match(migration, /revoke all on public\.lab_workspace_onboarding\s+from anon, authenticated/)
+  assert.doesNotMatch(migration, /grant (?:insert|update|delete|all)[^;]+lab_workspace_onboarding/i)
 })
 
 test('task dependencies cannot cross agent runs', async () => {

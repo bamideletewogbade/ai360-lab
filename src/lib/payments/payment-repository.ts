@@ -268,6 +268,38 @@ export async function recordPaymentNotification(input: {
   return { accepted: true, duplicate: result.count === 0 }
 }
 
+/**
+ * The data a payment receipt email needs, resolved from the order alone.
+ *
+ * The payment callback is a server-to-server request with no workspace context,
+ * so the recipient is looked up from the attempt's owner. Returns null when the
+ * order or the owner's email is missing, which a caller treats as "no receipt",
+ * never as a failure.
+ */
+export async function readPaymentReceipt(orderId: string) {
+  if (!isPostgresConfigured()) return null
+  const [row] = await getPostgres()<{
+    plan_slug: string
+    amount_minor: string
+    email: string | null
+    display_name: string | null
+  }[]>`
+    select a.plan_slug, a.amount_minor, u.email, u.display_name
+      from public.lab_payment_attempts a
+      join public.lab_users u on u.clerk_user_id = a.owner_id
+     where a.id = ${orderId} and a.provider = 'expresspay'`
+  if (!row?.email) return null
+  const plan = findBillingPlan(row.plan_slug)
+  return {
+    email: row.email,
+    name: row.display_name,
+    planName: plan?.name ?? row.plan_slug,
+    amountGhs: Number(row.amount_minor) / 100,
+    credits: plan?.includedCredits ?? 0,
+    orderId,
+  }
+}
+
 function subscriptionId(workspaceKey: string) {
   return `sub_${createHash('sha256').update(`expresspay:${workspaceKey}`).digest('hex').slice(0, 32)}`
 }

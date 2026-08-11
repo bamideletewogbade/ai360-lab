@@ -48,6 +48,15 @@ function write(level: LogLevel, event: string, fields: LogFields = {}) {
   else console.info(entry)
 }
 
+/**
+ * Emit a structured, redacted log line outside a request context — background
+ * work such as email delivery or a scheduled sweep, where there is no
+ * `requestLogger` to hang the event on.
+ */
+export function logEvent(level: LogLevel, event: string, fields: LogFields = {}) {
+  write(level, event, fields)
+}
+
 export function errorDetails(error: unknown) {
   if (error instanceof Error) {
     const cause =

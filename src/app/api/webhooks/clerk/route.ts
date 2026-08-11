@@ -1,7 +1,9 @@
 import type { NextRequest } from 'next/server'
+import { after } from 'next/server'
 import { verifyWebhook } from '@clerk/nextjs/webhooks'
 import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { clerkUserProfile, webhookEventId } from '@/lib/clerk-sync'
+import { deliverEmailSafe } from '@/lib/email/dispatch'
 import { errorDetails, requestLogger } from '@/lib/observability'
 
 export const runtime = 'nodejs'
@@ -110,6 +112,17 @@ export async function POST(request: NextRequest) {
       }
       return 'processed'
     })
+
+    // A first-time user is synchronized exactly once — the idempotency receipt
+    // guarantees `processed` fires a single time per Clerk event — so the
+    // welcome email is sent from here without a second dedupe.
+    if (result === 'processed' && event.type === 'user.created') {
+      const profile = clerkUserProfile(event.data)
+      const email = profile.email
+      if (email) {
+        after(() => deliverEmailSafe('welcome', { to: email, data: { name: profile.displayName } }))
+      }
+    }
 
     log.info('clerk.webhook.processed', { eventType: event.type, result })
     log.finish(200, { outcome: result, eventType: event.type })

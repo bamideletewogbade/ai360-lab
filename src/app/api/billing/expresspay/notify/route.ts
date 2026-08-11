@@ -1,7 +1,9 @@
+import { after } from 'next/server'
 import { rateLimit, rejectLargeRequest } from '@/lib/guardrails'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { createExpressPayProvider, isExpressPayOrderId, isExpressPayToken } from '@/lib/payments/expresspay'
 import { applyVerifiedPayment, recordPaymentNotification } from '@/lib/payments/payment-repository'
+import { sendPaymentReceipt } from '@/lib/payments/receipts'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,6 +27,7 @@ export async function POST(request: Request) {
     const verified = await createExpressPayProvider().queryPayment(token)
     if (verified.orderId !== orderId) throw new Error('PAYMENT_NOTIFICATION_ORDER_MISMATCH')
     const result = await applyVerifiedPayment(verified)
+    if (result.activated) after(() => sendPaymentReceipt(orderId))
     log.finish(200, { outcome: 'notification_verified', orderId, paymentStatus: result.status, duplicate: notification.duplicate })
     return Response.json({ received: true }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
   } catch (error) {
