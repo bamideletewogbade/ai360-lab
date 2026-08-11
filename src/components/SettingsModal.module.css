@@ -1,0 +1,328 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 990;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(16, 17, 18, 0.48);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.18s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.modal {
+  width: min(720px, 100%);
+  height: min(540px, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 28px 72px rgba(16, 17, 18, 0.3);
+  overflow: hidden;
+  animation: slideUp 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid #f0efea;
+  background: #faf9f6;
+}
+
+.header h2 {
+  margin: 0;
+  font-family: var(--font-heading, inherit);
+  font-size: 19px;
+  font-weight: 850;
+  color: #101112;
+}
+
+.closeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e2ded4;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #5c584e;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.closeButton:hover {
+  background: #101112;
+  color: #ffffff;
+  border-color: #101112;
+}
+
+.layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.nav {
+  width: 200px;
+  padding: 16px 12px;
+  border-right: 1px solid #f0efea;
+  background: #fbfaf7;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tabButton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #5c584e;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.tabButton:hover {
+  background: #f2efe9;
+  color: #101112;
+}
+
+.tabActive {
+  background: #101112 !important;
+  color: #ffffff !important;
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sectionTitle {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #858074;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldGroup label {
+  font-size: 13px;
+  font-weight: 750;
+  color: #101112;
+}
+
+.select {
+  padding: 10px 14px;
+  border: 1px solid #e2ded4;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 14px;
+  color: #101112;
+  outline: 0;
+  cursor: pointer;
+}
+
+.select:focus {
+  border-color: #101112;
+}
+
+.planCard {
+  padding: 18px 20px;
+  border: 1px solid #e2ded4;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fbfaf7 0%, #f4f2eb 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.planHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.planBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #101112;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.statusActive {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #e6f4ea;
+  color: #137333;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.statusActiveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #137333;
+}
+
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.planMetric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.planMetric label {
+  font-size: 11px;
+  color: #757065;
+}
+
+.planMetric strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: #101112;
+}
+
+.guestNotice {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f7f6f2;
+  color: #5c584e;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.guestNotice a {
+  color: #101112;
+  font-weight: 750;
+}
+
+.historyList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.historyItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid #f0efea;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.historyInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.historyPlan {
+  font-weight: 750;
+  color: #101112;
+}
+
+.historyMeta {
+  font-size: 11px;
+  color: #858074;
+}
+
+.historyStatus {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.statusApproved { background: #e6f4ea; color: #137333; }
+.statusPending { background: #fef7e0; color: #b06000; }
+.statusFailed { background: #fce8e6; color: #c5221f; }
+.statusDefault { background: #f1f3f4; color: #5f6368; }
+
+.emptyHistory {
+  padding: 20px;
+  text-align: center;
+  border: 1px dashed #e2ded4;
+  border-radius: 12px;
+  color: #858074;
+  font-size: 13px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-top: 1px solid #f0efea;
+  background: #faf9f6;
+}
+
+.upgradeLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  background: #101112;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+  transition: transform 0.16s ease;
+}
+
+.upgradeLink:hover {
+  transform: translateY(-1px);
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+@media (max-width: 600px) {
+  .layout { flex-direction: column; }
+  .nav { width: 100%; border-right: 0; border-bottom: 1px solid #f0efea; flex-direction: row; overflow-x: auto; }
+  .modal { height: auto; max-height: calc(100vh - 32px); }
+}

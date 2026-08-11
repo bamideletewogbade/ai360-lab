@@ -12,8 +12,13 @@ export async function GET(request: Request) {
   try {
     const context = await getOptionalAuthContext()
     if (!context) {
-      log.finish(401, { outcome: 'auth_required' })
-      return Response.json({ error: 'Sign in to view billing details.' }, { status: 401, headers: log.headers() })
+      log.finish(200, { outcome: 'guest_subscription' })
+      return Response.json({
+        subscription: null,
+        attempts: [],
+        billingEnabled: process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true',
+        signedIn: false,
+      }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
     }
 
     if (!isPostgresConfigured()) {
@@ -55,6 +60,7 @@ export async function GET(request: Request) {
         activatedAt: attempt.activatedAt,
       })),
       billingEnabled: process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true',
+      signedIn: true,
     }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
   } catch (error) {
     log.error('billing.subscription_read_failed', errorDetails(error))
