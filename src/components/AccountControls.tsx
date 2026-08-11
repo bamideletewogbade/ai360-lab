@@ -34,7 +34,7 @@ export function AccountControls({ enabled }: { enabled: boolean }) {
 
   return (
     <div className="account-controls">
-      <Show when="signed-out"><SignedOutControls onOpenSettings={() => { setInitialTab('general'); setSettingsOpen(true) }} /></Show>
+      <Show when="signed-out"><SignedOutControls /></Show>
       <Show when="signed-in">
         {TEAM_WORKSPACES_ENABLED ? (
           <OrganizationSwitcher
@@ -82,7 +82,7 @@ export function AccountControls({ enabled }: { enabled: boolean }) {
   )
 }
 
-function SignedOutControls({ onOpenSettings }: { onOpenSettings?: () => void }) {
+function SignedOutControls() {
   return (
     <div className="signed-out-controls">
       <Link href="/sign-in" className="auth-sign-in">Sign in</Link>

@@ -48,17 +48,19 @@ export function SettingsModal({
   const [preferredLang, setPreferredLang] = useState('en')
 
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return
+    const savedLang = localStorage.getItem('ai360_preferred_lang') || 'en'
+    // Deferred so the two updates do not cascade synchronously in the effect.
+    queueMicrotask(() => {
       setActiveTab(initialTab)
-      const savedLang = localStorage.getItem('ai360_preferred_lang') || 'en'
       setPreferredLang(savedLang)
-    }
+    })
   }, [isOpen, initialTab])
 
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
-    setLoading(true)
+    queueMicrotask(() => setLoading(true))
 
     fetch('/api/billing/subscription', { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))

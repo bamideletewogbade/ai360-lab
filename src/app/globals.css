@@ -149,6 +149,10 @@ button { color: inherit; }
 .library-title { display: flex; align-items: baseline; gap: 11px; }
 .library-title h1 { margin: 0; font-family: var(--font-heading); font-size: clamp(25px, 3.2vw, 32px); font-weight: 800; letter-spacing: -.03em; }
 .library-title span { color: var(--soft-grey); font-size: 13px; font-variant-numeric: tabular-nums; }
+.library-save { display: inline-flex; align-items: center; gap: 5px; color: var(--soft-grey); font-size: 11px; font-variant-numeric: normal; }
+.library-save i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px rgba(67,106,85,.12); }
+.library-save.saving i { background: #b28442; box-shadow: 0 0 0 3px rgba(178,132,66,.12); animation: sync-pulse 1.1s ease-in-out infinite; }
+.library-save.unavailable i, .library-save.local i { background: var(--soft-grey); box-shadow: none; }
 .library-actions { display: flex; align-items: center; gap: 9px; }
 .library-search { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line-dark); border-radius: 11px; background: var(--white); color: var(--soft-grey); min-width: 210px; transition: border-color .16s; }
 .library-search:focus-within { border-color: var(--black); }
