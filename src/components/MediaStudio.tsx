@@ -390,6 +390,7 @@ export function MediaStudio() {
                       <source src={item.url} type="video/mp4" />
                     </video>
                   ) : (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img src={item.url} alt={item.prompt} className="card-media-img" />
                   )}
                   <div className="card-overlay">

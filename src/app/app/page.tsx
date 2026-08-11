@@ -13,6 +13,7 @@ import { StudioWorkspace } from '@/components/StudioWorkspace'
 import { AppsDirectory } from '@/components/AppsDirectory'
 import { MediaStudio } from '@/components/MediaStudio'
 import { AccountControls } from '@/components/AccountControls'
+import { CreditBalance } from '@/components/CreditBalance'
 import { WorkspaceBoot } from '@/components/WorkspaceBoot'
 import { QualityFeedback } from '@/components/QualityFeedback'
 import { ConversationMinimap, type ConversationPrompt } from '@/components/ConversationMinimap'
@@ -344,8 +345,6 @@ function LabWorkspace({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [search, setSearch] = useState('')
-  const [historyFilter, setHistoryFilter] = useState<'all' | 'chat' | 'agent'>('all')
-  const [studioProjects, setStudioProjects] = useState<Array<{ id: string; title: string; updatedAt: number }>>([])
   const [conversationMenuId, setConversationMenuId] = useState('')
   const [profile, setProfile] = useState<OnboardingProfile | null>(null)
   const [showIntake, setShowIntake] = useState(false)
@@ -362,6 +361,10 @@ function LabWorkspace({
   const [cloudReady, setCloudReady] = useState(false)
   const [, setCloudStatus] = useState<'local' | 'loading' | 'synced' | 'unavailable'>('local')
   const [initialStudioBrief, setInitialStudioBrief] = useState('')
+  // Incremented by the sidebar "+", it tells the Studio workspace to open its
+  // create-project modal. A counter rather than a boolean so a second click
+  // after closing still fires.
+  const [createProjectSignal, setCreateProjectSignal] = useState(0)
   const [helpOpen, setHelpOpen] = useState(false)
   const [showReturnToLatest, setShowReturnToLatest] = useState(false)
   const [copiedPromptId, setCopiedPromptId] = useState('')
@@ -655,35 +658,14 @@ function LabWorkspace({
     }
   }, [recordingUrl])
 
-  useEffect(() => {
-    if (!hydrated) return
-    try {
-      const raw = localStorage.getItem(scopedStorageKey('ai360-lab-studio-projects-v1', workspaceScope))
-      if (raw) {
-        const list = JSON.parse(raw) as Array<{ id: string; intake?: { idea?: string; businessName?: string }; updatedAt?: number }>
-        if (Array.isArray(list)) {
-          setStudioProjects(
-            list.map((p) => ({
-              id: p.id,
-              title: p.intake?.businessName || p.intake?.idea || 'Untitled project',
-              updatedAt: p.updatedAt || Date.now(),
-            }))
-          )
-        }
-      }
-    } catch {
-      // optional storage read
-    }
-  }, [hydrated, workspaceScope])
 
   const visibleConversations = useMemo(() => {
     const query = search.trim().toLowerCase()
     return [...conversations]
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .filter((conversation) => conversation.experience !== 'studio')
-      .filter((conversation) => historyFilter === 'all' || conversation.experience === historyFilter)
       .filter((conversation) => !query || conversation.title.toLowerCase().includes(query))
-  }, [conversations, historyFilter, search])
+  }, [conversations, search])
 
   function updateActive(updater: (conversation: Conversation) => Conversation) {
     setConversations((items) => items.map((item) => (item.id === activeId ? updater(item) : item)))
@@ -1463,16 +1445,27 @@ function LabWorkspace({
             <span>Chats</span>
           </button>
 
-          <button
-            type="button"
-            className={`nav-menu-item${experience === 'studio' ? ' active' : ''}`}
-            onClick={() => { selectExperience('studio'); setSidebarOpen(false) }}
-          >
-            <span className="nav-menu-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            </span>
-            <span>Projects</span>
-          </button>
+          <div className={`nav-menu-item-wrap${experience === 'studio' ? ' active' : ''}`}>
+            <button
+              type="button"
+              className={`nav-menu-item${experience === 'studio' ? ' active' : ''}`}
+              onClick={() => { selectExperience('studio'); setSidebarOpen(false) }}
+            >
+              <span className="nav-menu-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              </span>
+              <span>Projects</span>
+            </button>
+            <button
+              type="button"
+              className="nav-menu-add"
+              aria-label="New project"
+              title="New project"
+              onClick={() => { selectExperience('studio'); setSidebarOpen(false); setCreateProjectSignal((n) => n + 1) }}
+            >
+              +
+            </button>
+          </div>
 
           <button
             type="button"
@@ -1577,6 +1570,7 @@ function LabWorkspace({
           </div>
           <div className="workspace-title"><b>{experience === 'studio' ? 'Projects' : 'Chats'}</b><small>{experience === 'studio' ? 'Build and improve lasting work' : experience === 'agent' ? 'Research is on' : 'Ask, write and research'}</small></div>
           <div className="lab-top-right">
+          <CreditBalance signedIn={signedIn} busy={busy} />
           <AccountControls enabled={AUTH_ENABLED} />
           </div>
         </header>
@@ -1586,6 +1580,7 @@ function LabWorkspace({
             initialBrief={initialStudioBrief}
             signedIn={signedIn}
             workspaceScope={workspaceScope}
+            createSignal={createProjectSignal}
           />
         ) : experience === 'apps' ? (
           <AppsDirectory />
@@ -1624,9 +1619,6 @@ function LabWorkspace({
             </div>
           ) : (
             <>
-            <div className="thread-context">
-              <div><span>{modeMeta.label} workspace</span><b>{displayConversationTitle(active.title)}</b></div>
-            </div>
             <div className="thread">
               {messages.map((message, index) => (
                 <article

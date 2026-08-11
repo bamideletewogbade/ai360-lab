@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ResponseContent } from '@/components/ResponseContent'
 import { ProjectStageNavigator } from '@/components/ProjectStageNavigator'
+import { ProjectKnowledge } from '@/components/ProjectKnowledge'
+import { CreateProjectModal } from '@/components/CreateProjectModal'
 import { mergeProjects, setProjectArchived, sortProjects, upsertProject } from '@/lib/studio-projects'
 import { PACKS, findPack, packCredits, type Pack, type PackId, type SpecialistId } from '@/lib/studio/packs'
 import {
   addAssetVersion,
+  createEmptyProject,
   createPackProject,
   initialProjectSpecialists,
   type Intake,
@@ -234,16 +237,22 @@ export function StudioWorkspace({
   initialBrief = '',
   signedIn = false,
   workspaceScope = 'guest',
+  createSignal = 0,
 }: {
   initialBrief?: string
   signedIn?: boolean
   workspaceScope?: string
+  createSignal?: number
 }) {
   const [hydrated, setHydrated] = useState(false)
   const [intake, setIntake] = useState<Intake>(EMPTY_INTAKE)
   const [project, setProject] = useState<StudioProject | null>(null)
   const [projects, setProjects] = useState<StudioProject[]>([])
   const [view, setView] = useState<StudioView>('dashboard')
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [projectFilter, setProjectFilter] = useState<'all' | 'active' | 'archived'>('all')
+  const [projectSearch, setProjectSearch] = useState('')
+  const [showQuickStart, setShowQuickStart] = useState(false)
   const [cloudReady, setCloudReady] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>('local')
   const [guestProjects, setGuestProjects] = useState<StudioProject[]>([])
@@ -266,7 +275,6 @@ export function StudioWorkspace({
   const [buildSpecialists, setBuildSpecialists] = useState<ProjectSpecialist[]>(initialProjectSpecialists(PACKS[0]))
   const [buildSectionsCount, setBuildSectionsCount] = useState(0)
   const [buildReviewNote, setBuildReviewNote] = useState('')
-  const [showPackPicker, setShowPackPicker] = useState(false)
   const [briefInput, setBriefInput] = useState('')
   const [briefTurns, setBriefTurns] = useState<StudioBriefTurn[]>([])
   const [briefBusy, setBriefBusy] = useState(false)
@@ -420,6 +428,16 @@ export function StudioWorkspace({
     if (!project || loadedWorkspaceRef.current !== workspaceScope) return
     setProjects((current) => upsertProject(current, project))
   }, [project, workspaceScope])
+
+  // The sidebar "+" bumps createSignal. Open the create modal on the dashboard.
+  // Deferred so the two state updates do not cascade synchronously in the effect.
+  useEffect(() => {
+    if (createSignal <= 0) return
+    queueMicrotask(() => {
+      setView('dashboard')
+      setShowCreateModal(true)
+    })
+  }, [createSignal])
 
   useEffect(() => {
     if (!project || !signedIn) return
@@ -1119,14 +1137,12 @@ export function StudioWorkspace({
     }
   }
 
-  function togglePackPicker() {
-    setShowPackPicker((prev) => {
-      const next = !prev
-      if (next) {
-        requestAnimationFrame(() => mainRef.current?.querySelector('.studio-pack-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-      }
-      return next
-    })
+  function createNamedProject(name: string) {
+    const empty = createEmptyProject({ id: requestId(), name, createdAt: eventTimestamp() })
+    setShowCreateModal(false)
+    // Opening it sets the current project, which the persistence effects then
+    // save locally and, when signed in, to the cloud.
+    openProject(empty)
   }
 
   function openProject(next: StudioProject) {
@@ -1160,117 +1176,66 @@ export function StudioWorkspace({
   }
 
   if (view === 'dashboard') {
-    const activeProjects = projects.filter((item) => !item.archivedAt)
+    const activeProjects = sortProjects(projects.filter((item) => !item.archivedAt))
     const archivedProjects = projects.filter((item) => item.archivedAt)
-    const featured = activeProjects[0]
-    const remaining = activeProjects.slice(featured ? 1 : 0)
+    const query = projectSearch.trim().toLowerCase()
+    const matches = (item: StudioProject) =>
+      !query || `${item.campaign.name} ${item.intake.businessName} ${item.intake.goal}`.toLowerCase().includes(query)
+    const pool = projectFilter === 'archived'
+      ? archivedProjects
+      : projectFilter === 'active'
+        ? activeProjects
+        : [...activeProjects, ...archivedProjects]
+    const visible = pool.filter(matches)
+    const canGhost = projectFilter !== 'archived' && !query
+    const presets: Array<{ icon: string; label: string; prompt: string }> = [
+      { icon: '🚀', label: 'Startup launch', prompt: 'Help me build a complete startup launch package including business model, brand brief, and marketing plan for: ' },
+      { icon: '📈', label: 'Growth & marketing', prompt: 'Create a digital marketing and growth campaign for: ' },
+      { icon: '🎨', label: 'Brand identity', prompt: 'Define the brand identity, positioning, voice, and visual direction for: ' },
+      { icon: '📄', label: 'Proposal', prompt: 'Draft an executive summary and financial proposal for: ' },
+    ]
     return (
       <main className="studio-main" ref={mainRef}>
-        <div className="studio-dashboard">
-          <header className="studio-dashboard-head">
-            <div>
-              <span className="studio-kicker">Projects</span>
-              <h1>Turn a goal into<br />finished work.</h1>
-              <p>Describe what you want to achieve. AI360 brings in the right specialists and keeps the brief, decisions and deliverables together, in one place.</p>
-            </div>
-            <div className="studio-dashboard-actions">
-              <span className={`studio-save-state ${saveState}`}>
+        {showCreateModal ? <CreateProjectModal onCreate={createNamedProject} onClose={() => setShowCreateModal(false)} /> : null}
+        <div className="studio-library">
+          <header className="library-head">
+            <div className="library-title">
+              <h1>Projects</h1>
+              {activeProjects.length ? <span>{activeProjects.length} active</span> : null}
+              <span className={`library-save ${saveState}`}>
                 <i />
                 {signedIn
-                  ? saveState === 'saving' ? 'Saving securely' : saveState === 'saved' ? 'Saved securely' : saveState === 'unavailable' ? 'Saved on this device' : 'Cloud ready'
-                  : 'Saved on this device'}
+                  ? saveState === 'saving' ? 'Saving' : saveState === 'unavailable' ? 'On this device' : 'Saved'
+                  : 'On this device'}
               </span>
+            </div>
+            <div className="library-actions">
+              <label className="library-search">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+                <input
+                  value={projectSearch}
+                  onChange={(event) => setProjectSearch(event.target.value)}
+                  placeholder="Search projects"
+                  aria-label="Search projects"
+                />
+              </label>
+              <button className="new-project-primary-btn" onClick={() => setShowCreateModal(true)}>New project <span>+</span></button>
             </div>
           </header>
 
-          <section className="studio-composer-box" aria-labelledby="project-composer-title">
-            <form onSubmit={(event) => { event.preventDefault(); if (briefInput.trim()) { setView('kickoff'); void continueBrief() } }}>
-              <div className="composer-card">
-                <div className="composer-header">
-                  <span className="composer-badge">Describe your goal</span>
-                  <span className="composer-hint">Shift + Enter for new lines</span>
-                </div>
-                <textarea
-                  className="composer-textarea"
-                  rows={3}
-                  value={briefInput}
-                  onChange={(event) => setBriefInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault()
-                      if (briefInput.trim()) {
-                        setView('kickoff')
-                        void continueBrief()
-                      }
-                    }
-                  }}
-                  placeholder="Describe what you want to build, launch, or improve in your own words... (e.g. Help me launch a catering business for tech offices in Accra)"
-                  aria-label="Describe your project goal"
-                />
-                <div className="composer-footer">
-                  <div className="composer-tools">
-                    <span className="tool-pill"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg> Natural Language Briefing</span>
-                    <span className="tool-pill"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Multi-Specialist Agents</span>
-                  </div>
-                  <button type="submit" className="composer-submit-btn" disabled={!briefInput.trim()}>
-                    <span>Start project</span>
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-                  </button>
-                </div>
-              </div>
-            </form>
-          </section>
-
-          <p className="preset-lead">Or start from a template</p>
-          <div className="project-preset-grid">
-            <button
-              type="button"
-              className="preset-card"
-              onClick={() => { setBriefInput('Help me build a complete startup launch package including business model, brand brief, and marketing plan for: '); setView('kickoff'); void continueBrief() }}
-            >
-              <div className="preset-icon">🚀</div>
-              <div className="preset-info">
-                <b>Startup Launch Pack</b>
-                <small>Business model, brand strategy & GTM plan</small>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className="preset-card"
-              onClick={() => { setBriefInput('Create a digital marketing and growth campaign for: '); setView('kickoff'); void continueBrief() }}
-            >
-              <div className="preset-icon">📈</div>
-              <div className="preset-info">
-                <b>Growth & Marketing</b>
-                <small>Messaging, social ads & landing page copy</small>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className="preset-card"
-              onClick={() => { setBriefInput('Define the brand identity, positioning, voice, and visual direction for: '); setView('kickoff'); void continueBrief() }}
-            >
-              <div className="preset-icon">🎨</div>
-              <div className="preset-info">
-                <b>Brand Identity</b>
-                <small>Brand positioning, tone of voice & taglines</small>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className="preset-card"
-              onClick={() => { setBriefInput('Draft an executive summary and financial proposal for: '); setView('kickoff'); void continueBrief() }}
-            >
-              <div className="preset-icon">📄</div>
-              <div className="preset-info">
-                <b>Executive Strategy</b>
-                <small>Investor proposal & unit economics breakdown</small>
-              </div>
-            </button>
-          </div>
+          <nav className="library-tabs" aria-label="Filter projects">
+            {(['all', 'active', 'archived'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={projectFilter === tab ? 'on' : ''}
+                onClick={() => setProjectFilter(tab)}
+              >
+                {tab === 'all' ? 'All' : tab === 'active' ? 'Active' : 'Archived'}
+                {tab === 'archived' && archivedProjects.length ? ` (${archivedProjects.length})` : ''}
+              </button>
+            ))}
+          </nav>
 
           {error ? <div className="studio-error dashboard-error">{error}</div> : null}
 
@@ -1288,51 +1253,87 @@ export function StudioWorkspace({
             </section>
           ) : null}
 
-          <section className="studio-project-library studio-project-library-primary">
-            <div className="studio-section-head">
-              <span><b>Your projects</b><small>Each keeps its brief, decisions and deliverables together.</small></span>
-              {activeProjects.length ? <span>{activeProjects.length} active</span> : null}
+          {visible.length ? (
+            <div className="library-grid">
+              {visible.map((item) => (
+                <ProjectCard
+                  key={item.id}
+                  project={item}
+                  archived={Boolean(item.archivedAt)}
+                  onOpen={() => (item.archivedAt ? changeProjectLifecycle(item, 'restore') : openProject(item))}
+                />
+              ))}
+              {canGhost ? (
+                <button type="button" className="project-card ghost" onClick={() => setShowCreateModal(true)}>
+                  <span className="ghost-plus">+</span>
+                  <b>New project</b>
+                  <small>Name it, then add files, a brief and chats</small>
+                </button>
+              ) : null}
             </div>
-            {featured || remaining.length ? (
-              <div className="studio-project-grid">
-                {featured ? <ProjectCard project={featured} onOpen={() => openProject(featured)} key={featured.id} /> : null}
-                {remaining.map((item) => <ProjectCard project={item} onOpen={() => openProject(item)} key={item.id} />)}
-              </div>
-            ) : (
-              <div className="studio-projects-empty">
-                <span className="empty-icon">📁</span>
-                <div>
-                  <b>No projects yet</b>
-                  <small>Describe a goal above, or start from a template, and your first project appears here.</small>
+          ) : (
+            <div className="library-empty">
+              <span className="empty-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2z" /></svg>
+              </span>
+              <h2>{query ? 'No projects match' : projectFilter === 'archived' ? 'No archived projects' : 'Start your first project'}</h2>
+              <p>{query
+                ? 'Try a different search, or start something new.'
+                : projectFilter === 'archived'
+                  ? 'Projects you archive will rest here, never lost.'
+                  : 'A project keeps your files, brief and chats in one place. Name one to begin.'}</p>
+              {projectFilter !== 'archived' ? (
+                <button className="new-project-primary-btn" onClick={() => setShowCreateModal(true)}>New project <span>+</span></button>
+              ) : null}
+            </div>
+          )}
+
+          {/* The fast path is preserved, but demoted: describe a goal and AI360
+              builds a full pack in one shot, for people who want that. */}
+          <div className="library-quickstart">
+            <button type="button" className="quickstart-toggle" onClick={() => setShowQuickStart((value) => !value)} aria-expanded={showQuickStart}>
+              <span>Quick start<em>Describe a goal and AI360 builds a full pack</em></span>
+              <i aria-hidden="true">{showQuickStart ? '↑' : '↓'}</i>
+            </button>
+            {showQuickStart ? (
+              <form
+                className="quickstart-form"
+                onSubmit={(event) => { event.preventDefault(); if (briefInput.trim()) { setView('kickoff'); void continueBrief() } }}
+              >
+                <textarea
+                  className="composer-textarea"
+                  rows={2}
+                  value={briefInput}
+                  onChange={(event) => setBriefInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault()
+                      if (briefInput.trim()) { setView('kickoff'); void continueBrief() }
+                    }
+                  }}
+                  placeholder="e.g. Help me launch a catering business for tech offices in Accra"
+                  aria-label="Describe your goal"
+                />
+                <div className="quickstart-foot">
+                  <div className="quickstart-presets">
+                    {presets.map((preset) => (
+                      <button
+                        type="button"
+                        key={preset.label}
+                        onClick={() => { setBriefInput(preset.prompt); setView('kickoff'); void continueBrief() }}
+                      >
+                        <span aria-hidden="true">{preset.icon}</span>{preset.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="submit" className="composer-submit-btn" disabled={!briefInput.trim()}>
+                    <span>Build</span>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>
+                  </button>
                 </div>
-              </div>
-            )}
-          </section>
-
-          {showPackPicker ? (
-            <section className="studio-project-library studio-pack-picker">
-              <div className="studio-section-head">
-                <span><b>Choose the outcome you need</b><small>Each route uses only the specialists and credits needed for that job.</small></span>
-                <button className="pack-picker-close" onClick={() => setShowPackPicker(false)}>Close</button>
-              </div>
-              <PackPicker onChoose={beginProject} />
-            </section>
-          ) : null}
-
-          <button type="button" className="studio-example-toggle" onClick={togglePackPicker}>
-            {showPackPicker ? 'Hide example outcomes ↑' : 'Need inspiration? Browse example outcomes ↓'}
-          </button>
-
-          {archivedProjects.length ? (
-            <details className="studio-archive">
-              <summary><span><b>Archived projects</b><small>Out of the way, never lost.</small></span><span>{archivedProjects.length} <i>+</i></span></summary>
-              <div className="studio-project-grid">
-                {archivedProjects.map((item) => (
-                  <ProjectCard project={item} onOpen={() => changeProjectLifecycle(item, 'restore')} archived key={item.id} />
-                ))}
-              </div>
-            </details>
-          ) : null}
+              </form>
+            ) : null}
+          </div>
         </div>
       </main>
     )
@@ -1477,6 +1478,8 @@ export function StudioWorkspace({
           <div><span>{project.pack ? 'Build status' : 'Primary action'}</span><b>{project.run ? `${project.run.producedSections} deliverables · ${project.run.review?.passed ? 'quality checked' : project.run.status}` : project.campaign.callToAction}</b></div>
           </div>
         </section>
+
+        <ProjectKnowledge projectId={project.id} signedIn={signedIn} />
 
         <section className="project-stage-section" id="project-stage-build" data-project-stage="build">
           <div className="project-stage-heading">
@@ -1825,66 +1828,53 @@ function projectCompletion(project: StudioProject) {
   }
 }
 
-function ProjectPulse({ project }: { project: StudioProject }) {
-  const completion = projectCompletion(project)
-  const milestones = project.run
-    ? [
-        ...project.run.specialists.slice(0, 3).map((specialist) => ({
-          label: specialist.label,
-          complete: specialist.status === 'complete',
-          active: specialist.status !== 'complete',
-        })),
-        { label: 'Review', complete: completion.percent === 100, active: completion.percent < 100 },
-      ]
-    : [
-        { label: 'Brief', complete: true },
-        { label: 'Brand', complete: true },
-        { label: 'Campaign', complete: true },
-        { label: 'Assets', complete: completion.percent === 100, active: completion.percent < 100 },
-      ]
-  return (
-    <div className="project-pulse">
-      <div className="pulse-score">
-        <span>{completion.percent}%</span>
-        <small>{completion.approved} of {completion.total} approved</small>
-      </div>
-      <div className="pulse-track" aria-label={`${completion.percent}% of assets approved`}>
-        {milestones.map((milestone, index) => (
-          <span className={`${milestone.complete ? 'complete' : ''}${milestone.active ? ' active' : ''}`} key={milestone.label}>
-            <i>{milestone.complete ? '✓' : String(index + 1).padStart(2, '0')}</i>
-            <b>{milestone.label}</b>
-          </span>
-        ))}
-      </div>
-    </div>
-  )
+const CARD_ACCENTS = ['clay', 'green', 'violet', 'gold'] as const
+
+/** A stable per-project accent, so a project keeps the same identity every time. */
+function projectAccent(seed: string) {
+  let hash = 0
+  for (let index = 0; index < seed.length; index += 1) hash = (hash * 31 + seed.charCodeAt(index)) >>> 0
+  return CARD_ACCENTS[hash % CARD_ACCENTS.length]
+}
+
+function relativeTime(timestamp: number) {
+  const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000))
+  if (seconds < 60) return 'just now'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 function ProjectCard({ project, onOpen, archived = false }: { project: StudioProject; onOpen: () => void; archived?: boolean }) {
   const completion = projectCompletion(project)
+  const accent = projectAccent(project.id)
+  const total = completion.total
+  const status = archived ? 'archived' : total === 0 ? 'draft' : completion.percent === 100 ? 'ready' : 'progress'
+  const statusLabel = archived ? 'Archived' : status === 'ready' ? 'Ready' : status === 'draft' ? 'Draft' : 'In progress'
+  const subtitle = project.pack?.name || project.intake.industry || project.intake.location || 'Project'
+  const description = project.campaign.objective || project.intake.goal
+    || 'A new project. Add files, a brief and chats to bring it to life.'
+  const mark = (project.intake.businessName || project.campaign.name || 'Pr').slice(0, 2).toUpperCase()
   return (
-    <button className={`studio-project-card${archived ? ' archived' : ''}`} onClick={onOpen}>
-      <span className="project-card-top"><i>{project.intake.businessName.slice(0, 2).toUpperCase()}</i><em>{archived ? 'Archived' : completion.percent === 100 ? 'Complete' : 'In progress'}</em></span>
-      <span className="project-card-copy"><b>{project.campaign.name}</b><small>{project.intake.businessName}</small></span>
-      <span className="project-card-progress"><i style={{ width: `${completion.percent}%` }} /></span>
-      <span className="project-card-foot"><small>{completion.approved} of {completion.total} approved</small><em>{archived ? 'Restore ↥' : `${new Date(project.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ↗`}</em></span>
+    <button className={`project-card${archived ? ' archived' : ''}`} onClick={onOpen}>
+      <span className="project-card-head">
+        <i className={`project-mark accent-${accent}`}>{mark}</i>
+        <span className="project-card-name"><b>{project.campaign.name}</b><small>{subtitle}</small></span>
+        <em className={`project-pill p-${status}`}>{statusLabel}</em>
+      </span>
+      <span className="project-card-desc">{description}</span>
+      <span className="project-card-meta">
+        <i className="meta-chip">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M20 6 9 17l-5-5"/></svg>
+          {total} deliverable{total === 1 ? '' : 's'}
+        </i>
+        <em className="meta-when">{archived ? 'Restore ↥' : relativeTime(project.updatedAt)}</em>
+      </span>
     </button>
-  )
-}
-
-function PackPicker({ onChoose }: { onChoose: (packId: PackId) => void }) {
-  return (
-    <div className="studio-quick-grid studio-pack-grid">
-      {PACKS.map((pack) => (
-        <button onClick={() => onChoose(pack.id)} key={pack.id}>
-          <span>{pack.mark}</span>
-          <b>{pack.name}</b>
-          <small>{pack.outcome}</small>
-          <em>{packCredits(pack)} credits · {pack.deliverables.length} deliverables</em>
-          <i aria-hidden="true">→</i>
-        </button>
-      ))}
-    </div>
   )
 }
 

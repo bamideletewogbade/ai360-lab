@@ -50,6 +50,9 @@ export type PackRunInput = {
   pack: Pack
   intake: Intake
   language: LanguageCode
+  /** The project's knowledge base, if any, so every specialist works from the
+   *  same uploaded brand notes, price lists and briefs rather than guessing. */
+  knowledge?: string
   apiKey: string
   siteUrl: string
   siteName: string
@@ -151,6 +154,7 @@ export async function runPack(input: PackRunInput): Promise<PackRunResult> {
     return false
   }
 
+  const knowledge = (input.knowledge ?? '').trim()
   const brief = [
     `Business: ${input.intake.businessName || 'not given'}`,
     `Industry: ${input.intake.industry || 'not given'}`,
@@ -160,7 +164,10 @@ export async function runPack(input: PackRunInput): Promise<PackRunResult> {
     `Where: ${input.intake.location || 'not given'}`,
     `Channels they use: ${(input.intake.channels ?? []).join(', ') || 'not given'}`,
     `Notes: ${input.intake.notes || 'none'}`,
-  ].join('\n')
+    // The project's own materials are ground truth. They override any assumption
+    // a specialist might otherwise make about the business.
+    knowledge ? `\nProject knowledge base (treat as authoritative about this business):\n${knowledge}` : '',
+  ].filter(Boolean).join('\n')
 
   /** One specialist. Tools only where the brief genuinely needs the network. */
   async function callSpecialist(id: SpecialistId, priorWork: string, correctionIssues: string[] = []) {

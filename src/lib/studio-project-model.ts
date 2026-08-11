@@ -183,6 +183,29 @@ export function createPackProject(input: {
   }
 }
 
+/**
+ * An empty, named project container.
+ *
+ * The frontier model creates a project first and fills it with files, chats and
+ * a brief over time, rather than generating a finished pack in one shot. This is
+ * the primitive that makes that possible: a project that exists with just a name,
+ * ready to hold knowledge and, soon, its own conversations.
+ */
+export function createEmptyProject(input: { id: string; name: string; createdAt: number }): StudioProject {
+  const name = input.name.trim().slice(0, 255) || 'Untitled project'
+  return {
+    id: input.id,
+    createdAt: input.createdAt,
+    updatedAt: input.createdAt,
+    schemaVersion: 2,
+    intake: { businessName: name, industry: '', offer: '', audience: '', goal: '', location: '', channels: [], notes: '' },
+    brand: { summary: '', audience: '', personality: [], voice: '', colors: [], tagline: '', valueProposition: '' },
+    campaign: { name, objective: '', bigIdea: '', callToAction: '', channels: [], successMeasures: [] },
+    assets: [],
+    sources: [],
+  }
+}
+
 export function initialProjectSpecialists(pack: Pack): ProjectSpecialist[] {
   return packSpecialists(pack).map((id) => ({
     id,

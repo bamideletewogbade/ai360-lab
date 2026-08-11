@@ -5,6 +5,7 @@ import { openCreditGate } from '@/lib/billing/credit-gate'
 import { DEFAULT_LANGUAGE, isLanguageCode, type LanguageCode } from '@/lib/languages'
 import { findPack, isPackId, packCredits } from '@/lib/studio/packs'
 import { packBudgetUsd, runPack, type Intake, type PackEvent } from '@/lib/studio/coordinator'
+import { getProjectKnowledge } from '@/lib/studio/project-files'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
     return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })
   }
 
-  let body: { packId?: unknown; intake?: Intake; language?: unknown }
+  let body: { packId?: unknown; intake?: Intake; language?: unknown; projectId?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -73,6 +74,18 @@ export async function POST(request: Request) {
   const language: LanguageCode = isLanguageCode(body.language) ? body.language : DEFAULT_LANGUAGE
   const key = process.env.OPENROUTER_API_KEY
   const encoder = new TextEncoder()
+
+  // If this pack runs inside an existing project, its uploaded knowledge grounds
+  // every specialist. Best-effort: a knowledge lookup must never block the run.
+  const projectId = typeof body.projectId === 'string' ? body.projectId.slice(0, 64) : null
+  let knowledge = ''
+  if (projectId && requester.context) {
+    try {
+      knowledge = await getProjectKnowledge(requester.context, projectId)
+    } catch (error) {
+      log.warn('studio.pack.knowledge_unavailable', errorDetails(error))
+    }
+  }
 
   log.info('studio.pack.accepted', {
     packId: pack.id,
@@ -136,6 +149,7 @@ export async function POST(request: Request) {
           pack,
           intake,
           language,
+          knowledge,
           apiKey: key,
           siteUrl: process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
           siteName: process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',

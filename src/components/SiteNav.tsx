@@ -23,23 +23,33 @@ export function SiteNav({ current = 'home' }: { current?: SiteNavCurrent }) {
         <Image src="/logo-black.png" width={180} height={44} alt="AI360" priority />
         <span>LAB</span>
       </Link>
-      <div className="landing-links">
-        {PUBLIC_NAV_LINKS.map((link) => (
-          link.external
-            ? <a href={link.href} key={link.href}>{link.label}</a>
-            : (
-              <Link
-                href={link.href}
-                key={link.href}
-                aria-current={link.current && link.current === current ? 'page' : undefined}
-              >
-                {link.label}
-              </Link>
-            )
-        ))}
-      </div>
+      {/* Top-of-funnel links are for prospects. A signed-in person has already
+          arrived, so they get a workspace-focused nav instead of the pitch. */}
+      {AUTH_ENABLED
+        ? <Show when="signed-out"><MarketingLinks current={current} /></Show>
+        : <MarketingLinks current={current} />}
       <SiteNavActions />
     </nav>
+  )
+}
+
+function MarketingLinks({ current }: { current: SiteNavCurrent }) {
+  return (
+    <div className="landing-links">
+      {PUBLIC_NAV_LINKS.map((link) => (
+        link.external
+          ? <a href={link.href} key={link.href}>{link.label}</a>
+          : (
+            <Link
+              href={link.href}
+              key={link.href}
+              aria-current={link.current && link.current === current ? 'page' : undefined}
+            >
+              {link.label}
+            </Link>
+          )
+      ))}
+    </div>
   )
 }
 
