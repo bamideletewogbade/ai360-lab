@@ -1,11 +1,15 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { OrganizationSwitcher, Show, UserButton } from '@clerk/nextjs'
+import { BillingSettingsModal } from '@/components/BillingSettingsModal'
 
 const TEAM_WORKSPACES_ENABLED = process.env.NEXT_PUBLIC_AI360_TEAM_WORKSPACES === 'true'
 
 export function AccountControls({ enabled }: { enabled: boolean }) {
+  const [billingOpen, setBillingOpen] = useState(false)
+
   if (!enabled) return (
     <Link href="/sign-in" className="guest-badge" title="Sign in to save your work across devices">
       <span className="guest-status" /> Guest <b>Save work</b>
@@ -25,6 +29,27 @@ export function AccountControls({ enabled }: { enabled: boolean }) {
             appearance={{ elements: { organizationSwitcherTrigger: { minHeight: 32 } } }}
           />
         ) : null}
+        <button
+          type="button"
+          className="billing-trigger-btn"
+          onClick={() => setBillingOpen(true)}
+          title="View active plan & billing history"
+          style={{
+            background: 'var(--white, #fff)',
+            border: '1px solid var(--line, #e2ded4)',
+            borderRadius: '999px',
+            padding: '4px 12px',
+            fontSize: '12px',
+            fontWeight: 750,
+            cursor: 'pointer',
+            color: 'var(--black, #101112)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+        >
+          Billing
+        </button>
         <UserButton
           appearance={{
             options: { shimmer: true },
@@ -32,6 +57,7 @@ export function AccountControls({ enabled }: { enabled: boolean }) {
           }}
           showName={false}
         />
+        <BillingSettingsModal isOpen={billingOpen} onClose={() => setBillingOpen(false)} />
       </Show>
     </div>
   )

@@ -179,6 +179,52 @@ export async function readPaymentAttempt(context: WorkspaceAuthContext, id: stri
   return row ? attemptFromRow(row) : null
 }
 
+export type WorkspaceSubscription = {
+  id: string
+  planSlug: string
+  status: string
+  cadence: string
+  currentPeriodStart: string
+  currentPeriodEnd: string
+  cancelAtPeriodEnd: boolean
+}
+
+export async function readWorkspaceSubscription(context: WorkspaceAuthContext): Promise<WorkspaceSubscription | null> {
+  if (!isPostgresConfigured()) return null
+  const [row] = await getPostgres()<{
+    id: string
+    plan_slug: string
+    status: string
+    cadence: string
+    current_period_start: Date
+    current_period_end: Date
+    cancel_at_period_end: boolean
+  }[]>`
+    select id, plan_slug, status, cadence, current_period_start, current_period_end, cancel_at_period_end
+      from public.lab_subscriptions
+     where workspace_key = ${context.workspace.key} and status = 'active'`
+  if (!row) return null
+  return {
+    id: row.id,
+    planSlug: row.plan_slug,
+    status: row.status,
+    cadence: row.cadence,
+    currentPeriodStart: row.current_period_start.toISOString(),
+    currentPeriodEnd: row.current_period_end.toISOString(),
+    cancelAtPeriodEnd: row.cancel_at_period_end,
+  }
+}
+
+export async function listWorkspacePaymentAttempts(context: WorkspaceAuthContext, limit = 15): Promise<PaymentAttempt[]> {
+  if (!isPostgresConfigured()) return []
+  const rows = await getPostgres()<AttemptRow[]>`
+    select * from public.lab_payment_attempts
+     where workspace_key = ${context.workspace.key} and owner_id = ${context.userId}
+     order by created_at desc
+     limit ${limit}`
+  return rows.map(attemptFromRow)
+}
+
 /**
  * Claims a pending payment for one provider query. The timestamp update makes
  * browser polling safe across multiple application instances without holding

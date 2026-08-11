@@ -29,3 +29,10 @@ test('checkout normalizes Ghana phone numbers before they reach the provider', (
   assert.equal(international.phone, '233240000000')
   assert.equal(checkoutRequestSchema.safeParse({ plan: 'everyday', phone: '123' }).success, false)
 })
+
+test('payment repository exposes workspace subscription and payment history helpers', async () => {
+  const repository = await import('../src/lib/payments/payment-repository.ts')
+  assert.equal(typeof repository.readWorkspaceSubscription, 'function')
+  assert.equal(typeof repository.listWorkspacePaymentAttempts, 'function')
+})
+
