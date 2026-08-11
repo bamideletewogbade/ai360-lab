@@ -1,6 +1,6 @@
 # AI360 Lab production readiness
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-11
 
 This document is the release truth for AI360 Lab. A feature is only marked
 ready when its code, configuration, external service and failure path have been
@@ -46,6 +46,40 @@ external media and payment providers.
 - The pricing page now says checkout is closed while billing is disabled,
   instead of presenting the planned Mobile Money/card flow as already live.
 
+## Audit snapshot: 2026-08-11
+
+Scope: this pass re-ran the local build and test gates and read the identity and
+credit source paths directly. It did not re-run the live-database or external
+provider checks, so those results stand from the 2026-08-10 snapshot above.
+
+- `npm test`: 194/194 pass. The suite has grown since the 2026-08-10 snapshot
+  (169), including workspace-isolation, voice and credit cases.
+- `npm run lint` and `npm run build`: pass on Next.js 16.3.0.
+- `npm run prod:check`: READY. The required production environment is now present
+  locally — OpenRouter key, a credential-free HTTPS `NEXT_PUBLIC_APP_URL`, all
+  three Clerk keys (publishable, secret and webhook signing), `DATABASE_URL` and
+  explicitly set feature flags. Billing, the browser pilot and the external error
+  webhook are intentionally disabled and reported as warnings, not errors. This
+  supersedes the 2026-08-10 note that Clerk and the canonical URL were absent
+  locally; the keys' presence still does not constitute live verification.
+- Not re-run this pass: `npm audit --omit=dev`, `db:postgres:verify`,
+  `credits:verify`, `data:verify` and the live domain/video-catalogue checks.
+  Treat their last-known-good results as unchanged, not re-confirmed.
+- The credit interface is no longer missing. `src/components/CreditBalance.tsx`
+  reads `/api/credits` and shows the available balance, the amount reserved while
+  a run is in progress, the plan and the per-task cost guide, with a link to
+  plans. It is wired into the signed-in app shell.
+- Source review of the identity and credit path found no required code changes.
+  Sign-in and sign-up delegate to Clerk with a guest fallback when keys are
+  absent; session state uses `UserButton`/`Show`; workspace and tenancy isolation
+  validate every identity value before it becomes a database scope and are
+  unit-tested. The credit ledger enforces double-entry writes, an atomic
+  `available_credits >= required` balance guard, a 15-minute reservation TTL that
+  is reclaimed on the next touch, settlement capped at the reserved amount with
+  failures charging nothing, and a lazy monthly allowance that needs no
+  scheduler. Live signed-in, webhook-sync and tenant-isolation verification
+  remain open under Gate 1.
+
 ## Capability matrix
 
 | Capability | Code | External configuration | Verification | Release status |
@@ -61,7 +95,7 @@ external media and payment providers.
 | Video generation | Implemented with quote/status/download flow | Compatible OpenRouter video model | Production generation and retention test pending | Unverified externally |
 | Voice recording and transcription | Implemented | Browser microphone and STT model | Physical mobile-browser test pending | Private pilot |
 | PDF and Word export | Implemented | None | Automated build passes; document QA suite pending | Pilot-ready |
-| Clerk sign-in and sign-up UI | Implemented | Clerk dev/prod keys, domain and strategies | Blocked because keys are absent locally | Blocked |
+| Clerk sign-in and sign-up UI | Implemented | Clerk dev/prod keys, domain and strategies | Keys now present locally; end-to-end sign-in/sign-out/session-restore test pending | Conditional |
 | Google and email/password sign-in | Supported by Clerk UI | Enable both in Clerk; production Google OAuth credentials | End-to-end auth test pending | Blocked |
 | Last-used sign-in hint | Supported natively by Clerk | Enable for the existing Clerk instance | Visual test pending | Blocked |
 | Personal and organization tenancy | Implemented in application contracts | Clerk Organizations settings and keys | Cross-tenant integration tests pending | Private pilot |
@@ -73,7 +107,7 @@ external media and payment providers.
 | Credit engine | Landed-cost conversion, per-feature reserve/floor/ceiling, settlement and plan economics implemented and unit tested | None | Verified | Ready |
 | Credit ledger and reservations | Reserve, settle, release, expiry and grant on Supabase Postgres; wired into chat, agent, image and video | `DATABASE_URL` | `npm run credits:verify` passes 11/11 against the live database, including ledger reconciliation | Pilot-ready |
 | Monthly allowance grants | Lazy renewal on first touch of a new period; unused allowance expires, purchased credits survive | None, no scheduler required | Covered by `npm run credits:verify` including a rollover case | Pilot-ready |
-| Credit interface | `/api/credits` returns balance, holds and cost table | None | No screen displays a balance | Missing |
+| Credit interface | `/api/credits` returns balance, holds and cost table; `CreditBalance.tsx` displays balance, in-progress reservations, plan and cost guide in the signed-in shell | None | Component wired in; live signed-in visual check pending | Pilot-ready |
 | Subscriptions and credits | Catalog and ledger schema prepared | Database, payment provider and policies | No live entitlement activation | In progress |
 | ExpressPay hosted checkout | Provider-isolated adapter, durable attempts, return/notification routes, server-side query verification and idempotent activation implemented | Merchant sandbox key, public HTTPS callback URL and migrations `0006`/`0007` | 113 unit/contract tests and production build pass; real sandbox payment pending | Blocked intentionally |
 | Logs and request IDs | Structured redacted logs implemented | Host log retention | External alerting absent | Pilot-ready |
