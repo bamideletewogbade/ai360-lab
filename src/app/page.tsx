@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
-import { auth } from '@clerk/nextjs/server'
 import { LabLanding } from '@/components/LabLanding'
-import { isAuthConfigured } from '@/lib/auth'
+import { getOptionalAuthContext, isAuthConfigured } from '@/lib/auth'
 import { publicPageMetadata } from '@/lib/seo'
 
 // The signed-in redirect below reads the request's session, so this page must
@@ -27,8 +26,8 @@ export const metadata = publicPageMetadata({
  */
 export default async function LandingPage() {
   if (isAuthConfigured()) {
-    const { userId } = await auth()
-    if (userId) redirect('/app')
+    const context = await getOptionalAuthContext()
+    if (context) redirect('/app')
   }
   return <LabLanding />
 }

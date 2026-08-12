@@ -1,4 +1,4 @@
-﻿.overlay {
+.overlay {
   position: fixed;
   inset: 0;
   z-index: 990;
@@ -300,6 +300,25 @@
   background: var(--warm-white);
 }
 
+.doneButton {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--line-dark);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--black);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.doneButton:hover {
+  border-color: var(--black);
+  background: var(--black);
+  color: var(--white);
+}
+
 .upgradeLink {
   display: inline-flex;
   align-items: center;
@@ -322,7 +341,17 @@
 @keyframes slideUp { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
 @media (max-width: 600px) {
+  .overlay { align-items: flex-end; padding: 0; }
   .layout { flex-direction: column; }
-  .nav { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); flex-direction: row; overflow-x: auto; }
-  .modal { height: auto; max-height: calc(100vh - 32px); }
+  .nav { width: 100%; flex: 0 0 auto; padding: 9px; border-right: 0; border-bottom: 1px solid var(--line); flex-direction: row; overflow-x: auto; }
+  .tabButton { flex: 0 0 auto; padding: 9px 11px; font-size: 12px; }
+  .modal { width: 100%; height: min(680px, 92dvh); max-height: 92dvh; padding-bottom: env(safe-area-inset-bottom); border-right: 0; border-bottom: 0; border-left: 0; border-radius: 20px 20px 0 0; }
+  .header { padding: 15px 17px; }
+  .header h2 { font-size: 17px; }
+  .content { padding: 18px 16px; }
+  .footer { padding: 11px 16px; }
+  .upgradeLink { font-size: 11px; }
+  .closeButton, .doneButton, .tabButton { min-height: 44px; }
+  .closeButton { width: 44px; height: 44px; }
+  .select { min-height: 44px; font-size: 16px; }
 }

@@ -3,6 +3,7 @@ import type { TransactionSql } from 'postgres'
 import { BILLING_CATALOG_VERSION, findBillingPlan, type BillingPlan } from '@/lib/billing/catalog'
 import { currentBillingPeriod } from '@/lib/billing/credits'
 import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
+import { scopedIdempotencyKey } from '@/lib/idempotency'
 import type { PaymentMethod, VerifiedPayment } from '@/lib/payments/contracts'
 import type { WorkspaceAuthContext } from '@/lib/workspace'
 
@@ -109,33 +110,50 @@ export async function createPaymentAttempt(input: {
   const sql = getPostgres()
   const id = `pay_${crypto.randomUUID().replaceAll('-', '')}`
   const amountMinor = input.plan.monthlyPriceGhs * 100
+  const legacyKey = input.idempotencyKey.slice(0, 160)
+  const paymentKey = scopedIdempotencyKey('payment', input.context.workspace.key, legacyKey)
 
   return sql.begin(async (tx) => {
     await ensureBillingIdentity(tx, input.context)
+    // Reuse both new scoped keys and legacy rows owned by this workspace.
+    const [existing] = await tx<AttemptRow[]>`
+      select * from public.lab_payment_attempts
+       where workspace_key = ${input.context.workspace.key}
+         and idempotency_key in (${paymentKey}, ${legacyKey})
+       order by created_at desc limit 1`
+    if (existing) {
+      if (
+        existing.plan_slug !== input.plan.slug ||
+        Number(existing.amount_minor) !== amountMinor ||
+        existing.payment_method !== input.paymentMethod
+      ) throw new Error('PAYMENT_IDEMPOTENCY_MISMATCH')
+      return { attempt: attemptFromRow(existing), reused: true }
+    }
+
     const inserted = await tx<AttemptRow[]>`
       insert into public.lab_payment_attempts
         (id, workspace_key, owner_id, provider, idempotency_key, plan_slug,
          cadence, payment_method, amount_minor, currency, status, metadata)
       values
         (${id}, ${input.context.workspace.key}, ${input.context.userId}, 'expresspay',
-         ${input.idempotencyKey.slice(0, 160)}, ${input.plan.slug}, 'monthly',
+         ${paymentKey}, ${input.plan.slug}, 'monthly',
          ${input.paymentMethod}, ${amountMinor}, 'GHS', 'created',
          ${tx.json({ catalogVersion: BILLING_CATALOG_VERSION })})
       on conflict (idempotency_key) do nothing
       returning *`
     if (inserted[0]) return { attempt: attemptFromRow(inserted[0]), reused: false }
 
-    const [existing] = await tx<AttemptRow[]>`
+    const [concurrent] = await tx<AttemptRow[]>`
       select * from public.lab_payment_attempts
-       where idempotency_key = ${input.idempotencyKey.slice(0, 160)}
+       where idempotency_key = ${paymentKey}
          and workspace_key = ${input.context.workspace.key}`
-    if (!existing) throw new Error('PAYMENT_IDEMPOTENCY_CONFLICT')
+    if (!concurrent) throw new Error('PAYMENT_IDEMPOTENCY_CONFLICT')
     if (
-      existing.plan_slug !== input.plan.slug ||
-      Number(existing.amount_minor) !== amountMinor ||
-      existing.payment_method !== input.paymentMethod
+      concurrent.plan_slug !== input.plan.slug ||
+      Number(concurrent.amount_minor) !== amountMinor ||
+      concurrent.payment_method !== input.paymentMethod
     ) throw new Error('PAYMENT_IDEMPOTENCY_MISMATCH')
-    return { attempt: attemptFromRow(existing), reused: true }
+    return { attempt: attemptFromRow(concurrent), reused: true }
   }) as Promise<{ attempt: PaymentAttempt; reused: boolean }>
 }
 
@@ -396,7 +414,8 @@ export async function applyVerifiedPayment(payment: VerifiedPayment): Promise<Ap
       await tx`
         update public.lab_credit_accounts
            set available_credits = greatest(available_credits - ${oldAllowance}, 0),
-               allowance_credits = 0, version = version + 1, updated_at = now()
+               allowance_credits = 0, allowance_grant_id = null,
+               version = version + 1, updated_at = now()
          where workspace_key = ${attempt.workspace_key}`
       await tx`
         insert into public.lab_credit_ledger
@@ -413,7 +432,8 @@ export async function applyVerifiedPayment(payment: VerifiedPayment): Promise<Ap
       update public.lab_credit_accounts
          set available_credits = available_credits + ${plan.includedCredits},
              allowance_credits = ${plan.includedCredits}, allowance_period = ${currentBillingPeriod()},
-             allowance_plan = ${plan.slug}, version = version + 1, updated_at = now()
+             allowance_plan = ${plan.slug}, allowance_grant_id = ${`payment-grant:${attempt.id}`},
+             version = version + 1, updated_at = now()
        where workspace_key = ${attempt.workspace_key}`
     await tx`
       insert into public.lab_credit_ledger

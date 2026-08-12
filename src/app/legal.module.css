@@ -16,7 +16,10 @@
 .article a { color: #5e416f; }
 .note { padding: 13px 14px; border: 1px solid #d8d1df; border-radius: 11px; background: #f1edf3; }
 @media (max-width: 520px) {
-  .page { padding-top: 22px; }
+  .page { padding: max(22px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(54px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
   .article { padding-top: 34px; }
   .top { padding-bottom: 18px; }
+  .brand span { display: none; }
+  .back { min-height: 44px; display: inline-flex; align-items: center; }
+  .article p, .article li { font-size: 15px; overflow-wrap: anywhere; }
 }

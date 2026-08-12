@@ -13,7 +13,21 @@ export type WorkspaceAuthContext = {
   workspace: WorkspaceIdentity
 }
 
+export type WorkspaceSessionClaims = {
+  userId?: string | null
+  isAuthenticated?: boolean
+  sessionStatus?: 'active' | 'pending' | null
+}
+
 const CLERK_ID = /^[A-Za-z0-9_-]{1,64}$/
+
+/** Pending Clerk sessions have not completed their required security tasks. */
+export function sessionCanAccessWorkspace(session: WorkspaceSessionClaims) {
+  return session.isAuthenticated === true
+    && session.sessionStatus === 'active'
+    && typeof session.userId === 'string'
+    && CLERK_ID.test(session.userId)
+}
 
 function validSubjectId(value: string, label: string) {
   if (!CLERK_ID.test(value)) throw new Error(`Invalid ${label}`)

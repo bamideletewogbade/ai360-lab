@@ -34,7 +34,10 @@ export type Requester = {
 }
 
 export async function resolveRequester(request: Request): Promise<Requester> {
-  const context = await getOptionalAuthContext().catch(() => null)
+  // An unavailable identity provider must not silently turn an authenticated
+  // paid request into anonymous, unmetered work. A genuine signed-out session
+  // still resolves cleanly to null and keeps the guest path available.
+  const context = await getOptionalAuthContext()
   if (context) {
     return {
       key: `ws:${context.workspace.key}`,

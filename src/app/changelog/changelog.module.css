@@ -109,9 +109,17 @@
 
 @media (max-width: 720px) {
   .hero, .timeline, .note { width: min(calc(100% - 32px), 1240px); }
-  .hero { padding-top: 72px; }
+  .hero { padding-top: max(72px, env(safe-area-inset-top)); }
   .release { grid-template-columns: 1fr; gap: 28px; }
   .releaseMeta { flex-direction: row; align-items: center; justify-content: space-between; }
   .releaseBody li { padding-right: 2px; }
   .note { border-radius: 16px; }
+}
+
+@media (max-width: 420px) {
+  .hero, .timeline, .note { width: min(calc(100% - 24px), 1240px); }
+  .releaseMeta { align-items: flex-start; flex-direction: column; }
+  .releaseBody h2 { font-size: clamp(30px, 10vw, 42px); }
+  .releaseBody > p { font-size: 15px; }
+  .note { padding: 28px 20px; }
 }

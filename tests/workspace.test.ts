@@ -6,8 +6,32 @@ import {
   organizationWorkspace,
   personalWorkspace,
   resolveWorkspaceIdentity,
+  sessionCanAccessWorkspace,
   scopedStorageKey,
 } from '../src/lib/workspace.ts'
+
+test('only a fully active Clerk session can enter a workspace', () => {
+  assert.equal(sessionCanAccessWorkspace({
+    userId: 'user_alpha',
+    isAuthenticated: true,
+    sessionStatus: 'active',
+  }), true)
+  assert.equal(sessionCanAccessWorkspace({
+    userId: 'user_alpha',
+    isAuthenticated: true,
+    sessionStatus: 'pending',
+  }), false)
+  assert.equal(sessionCanAccessWorkspace({
+    userId: 'user_alpha',
+    isAuthenticated: false,
+    sessionStatus: null,
+  }), false)
+  assert.equal(sessionCanAccessWorkspace({
+    userId: 'user:spoofed',
+    isAuthenticated: true,
+    sessionStatus: 'active',
+  }), false)
+})
 
 test('a signed-in user defaults to a personal workspace', () => {
   const context = createWorkspaceAuthContext({ userId: 'user_alpha' })

@@ -64,7 +64,7 @@ export function creditGateFailureResponse(
  * that can retry safely send `Idempotency-Key`; without one the request ID is
  * used, which still prevents double settlement within a single attempt.
  */
-function idempotencyKey(request: Request, requestId: string, feature: CreditFeature) {
+function rawIdempotencyKey(request: Request, requestId: string, feature: CreditFeature) {
   const supplied = request.headers.get('idempotency-key')?.trim()
   return `${feature}:${supplied && supplied.length <= 120 ? supplied : requestId}`
 }
@@ -81,11 +81,13 @@ export async function openCreditGate(input: {
   if (!context) return { gate: OPEN_GATE }
 
   const estimate = estimateCredits(input.feature, { quotedUsd: input.quotedUsd })
+  const legacyKey = rawIdempotencyKey(input.request, input.requestId, input.feature)
   const reservation = await reserveCredits({
     context,
     estimate,
     requestId: input.requestId,
-    idempotencyKey: idempotencyKey(input.request, input.requestId, input.feature),
+    idempotencyKey: legacyKey,
+    legacyIdempotencyKey: legacyKey,
   })
 
   if (!reservation.ok) {

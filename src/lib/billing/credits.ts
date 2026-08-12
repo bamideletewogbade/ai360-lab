@@ -116,6 +116,13 @@ export function isCreditFeature(value: unknown): value is CreditFeature {
   return typeof value === 'string' && value in FEATURE_WEIGHTS
 }
 
+/** Async work keeps its hold long enough to finish in a later polling request. */
+export function reservationTtlSeconds(feature: CreditFeature) {
+  if (feature === 'video') return 2 * 60 * 60
+  if (feature === 'agent') return 45 * 60
+  return 15 * 60
+}
+
 /**
  * Chat is charged by what the request actually asks for, so a plain question
  * stays at one credit and a research or document request does not.
@@ -201,6 +208,46 @@ export function settleCredits(input: {
     released: Math.max(0, estimate.reserve - charged),
     measuredUsd: measured,
     cappedByCeiling: beforeCap > estimate.reserve,
+  }
+}
+
+export type CreditReleaseAllocation = {
+  released: number
+  allowanceReleased: number
+  purchasedReleased: number
+  availableReturned: number
+  allowanceReturned: number
+  expired: number
+}
+
+/**
+ * Put an unused hold back into the same credit bucket it came from.
+ *
+ * Allowance is consumed before purchased credit. Therefore only the allowance
+ * left after the charge is refundable. If its exact grant has since been
+ * replaced or expired, that portion disappears instead of becoming permanent.
+ */
+export function allocateCreditRelease(input: {
+  held: number
+  charged: number
+  allowanceDrawn: number
+  restoreAllowance: boolean
+}): CreditReleaseAllocation {
+  const held = Math.max(0, Math.floor(input.held))
+  const charged = Math.min(held, Math.max(0, Math.floor(input.charged)))
+  const allowanceDrawn = Math.min(held, Math.max(0, Math.floor(input.allowanceDrawn)))
+  const released = held - charged
+  const allowanceReleased = Math.min(released, Math.max(allowanceDrawn - charged, 0))
+  const purchasedReleased = released - allowanceReleased
+  const allowanceReturned = input.restoreAllowance ? allowanceReleased : 0
+  const expired = allowanceReleased - allowanceReturned
+  return {
+    released,
+    allowanceReleased,
+    purchasedReleased,
+    availableReturned: purchasedReleased + allowanceReturned,
+    allowanceReturned,
+    expired,
   }
 }
 

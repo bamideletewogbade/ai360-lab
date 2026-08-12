@@ -141,7 +141,7 @@
 }
 
 @media (max-width: 540px) {
-  .shell { padding-right: 18px; padding-left: 18px; }
+  .shell { padding-right: max(18px, env(safe-area-inset-right)); padding-bottom: max(34px, env(safe-area-inset-bottom)); padding-left: max(18px, env(safe-area-inset-left)); }
   .lead { gap: 36px; }
   .logo { margin-bottom: 42px; }
   .intro h2 { font-size: clamp(2.7rem, 14.5vw, 4.5rem); }

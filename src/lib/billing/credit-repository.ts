@@ -1,8 +1,16 @@
 import type { TransactionSql } from 'postgres'
 import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import type { WorkspaceAuthContext } from '@/lib/workspace'
-import { currentBillingPeriod, type CreditEstimate, type CreditFeature, settleCredits } from '@/lib/billing/credits'
+import {
+  allocateCreditRelease,
+  currentBillingPeriod,
+  reservationTtlSeconds,
+  type CreditEstimate,
+  type CreditFeature,
+  settleCredits,
+} from '@/lib/billing/credits'
 import { findBillingPlan } from '@/lib/billing/catalog'
+import { scopedIdempotencyKey } from '@/lib/idempotency'
 
 /**
  * Durable side of the credit engine, on Supabase Postgres.
@@ -16,8 +24,6 @@ import { findBillingPlan } from '@/lib/billing/catalog'
  * otherwise be stranded forever, so a held reservation past `expires_at` is
  * reclaimed on the next touch of that workspace.
  */
-
-const RESERVATION_TTL_SECONDS = 15 * 60
 
 export type CreditBalance = {
   available: number
@@ -35,7 +41,7 @@ export type ReservationResult =
   | { ok: false; reason: 'already_reserved'; reservationId: string }
 
 export type SettlementResult =
-  | { ok: true; charged: number; released: number; balance: CreditBalance }
+  | { ok: true; charged: number; released: number; expired: number; balance: CreditBalance }
   | { ok: false; reason: 'unknown_reservation' | 'not_held' | 'database_not_configured' }
 
 export function isCreditLedgerConfigured() {
@@ -122,7 +128,7 @@ async function ensureAllowance(sql: TransactionSql, context: WorkspaceAuthContex
   if (alreadyGranted) {
     await sql`
       update public.lab_credit_accounts
-         set allowance_period = ${period}, updated_at = now()
+         set allowance_period = ${period}, allowance_grant_id = ${grantKey}, updated_at = now()
        where workspace_key = ${workspaceKey}`
     return
   }
@@ -136,6 +142,7 @@ async function ensureAllowance(sql: TransactionSql, context: WorkspaceAuthContex
            allowance_credits = ${plan.credits},
            allowance_period = ${period},
            allowance_plan = ${plan.slug},
+           allowance_grant_id = ${grantKey},
            version = version + 1,
            updated_at = now()
      where workspace_key = ${workspaceKey}`
@@ -166,28 +173,50 @@ async function ensureAllowance(sql: TransactionSql, context: WorkspaceAuthContex
 
 /** Reclaims expired holds so a crashed task cannot strand someone's credits. */
 async function expireStaleReservations(sql: TransactionSql, workspaceKey: string) {
-  const stale = await sql<{ id: string; credits: string }[]>`
+  const stale = await sql<{
+    id: string
+    credits: string
+    allowance_drawn: string
+    allowance_grant_id: string | null
+  }[]>`
     update public.lab_credit_reservations
        set status = 'expired', updated_at = now()
      where workspace_key = ${workspaceKey} and status = 'held' and expires_at < now()
-    returning id, credits`
+    returning id, credits, allowance_drawn, allowance_grant_id`
 
   for (const row of stale) {
     const credits = toNumber(row.credits)
+    const [account] = await sql<{ allowance_grant_id: string | null }[]>`
+      select allowance_grant_id from public.lab_credit_accounts
+       where workspace_key = ${workspaceKey} for update`
+    const allocation = allocateCreditRelease({
+      held: credits,
+      charged: 0,
+      allowanceDrawn: toNumber(row.allowance_drawn),
+      restoreAllowance: row.allowance_grant_id !== null
+        && row.allowance_grant_id === account?.allowance_grant_id,
+    })
     await sql`
       update public.lab_credit_accounts
-         set available_credits = available_credits + ${credits},
+         set available_credits = available_credits + ${allocation.availableReturned},
              reserved_credits = greatest(reserved_credits - ${credits}, 0),
+             allowance_credits = allowance_credits + ${allocation.allowanceReturned},
              version = version + 1,
              updated_at = now()
        where workspace_key = ${workspaceKey}`
     await writeLedger(sql, {
       workspaceKey,
       entryType: 'release',
-      creditsDelta: credits,
+      creditsDelta: allocation.availableReturned,
       sourceType: 'reservation_expiry',
       sourceId: row.id,
       idempotencyKey: `expire:${row.id}`,
+      metadata: {
+        heldCredits: credits,
+        returnedCredits: allocation.availableReturned,
+        allowanceReturned: allocation.allowanceReturned,
+        expiredCredits: allocation.expired,
+      },
     })
   }
 }
@@ -235,18 +264,26 @@ export async function reserveCredits(input: {
   estimate: CreditEstimate
   requestId: string
   idempotencyKey: string
+  /** Temporary lookup path for reservations made before scoped keys shipped. */
+  legacyIdempotencyKey?: string
 }): Promise<ReservationResult> {
   if (!isPostgresConfigured()) return { ok: false, reason: 'database_not_configured' }
   const sql = getPostgres()
   const workspaceKey = input.context.workspace.key
   const required = input.estimate.reserve
+  const rawKey = input.idempotencyKey.slice(0, 160)
+  const reservationKey = scopedIdempotencyKey('credit', workspaceKey, rawKey)
 
   return sql.begin(async (tx) => {
     await ensureWorkspace(tx, input.context)
 
+    const legacyKey = input.legacyIdempotencyKey?.slice(0, 160) ?? rawKey
     const [existing] = await tx<{ id: string }[]>`
       select id from public.lab_credit_reservations
-       where idempotency_key = ${input.idempotencyKey.slice(0, 160)}`
+       where workspace_key = ${workspaceKey}
+         and (idempotency_key = ${reservationKey}
+              or (${legacyKey}::text is not null and idempotency_key = ${legacyKey}))
+       order by created_at desc limit 1`
     if (existing) {
       return { ok: false as const, reason: 'already_reserved' as const, reservationId: existing.id }
     }
@@ -258,11 +295,13 @@ export async function reserveCredits(input: {
       available_credits: string
       reserved_credits: string
       allowance_credits: string
+      allowance_grant_id: string | null
       allowance_plan: string | null
       allowance_period: string | null
       version: string
     }[]>`
-      select available_credits, reserved_credits, allowance_credits, allowance_plan, allowance_period, version
+      select available_credits, reserved_credits, allowance_credits, allowance_grant_id,
+             allowance_plan, allowance_period, version
         from public.lab_credit_accounts where workspace_key = ${workspaceKey} for update`
     const available = toNumber(account?.available_credits)
     const reserved = toNumber(account?.reserved_credits)
@@ -281,14 +320,17 @@ export async function reserveCredits(input: {
 
     // Spend the expiring allowance before permanent purchased credits.
     const allowanceDrawn = Math.min(required, allowance)
+    const allowanceGrantId = allowanceDrawn > 0 ? account?.allowance_grant_id ?? null : null
+    const ttlSeconds = reservationTtlSeconds(input.estimate.feature)
 
     const reservationId = `res_${input.requestId.slice(0, 40)}_${toNumber(account?.version)}`.slice(0, 64)
     await tx`
       insert into public.lab_credit_reservations
-        (id, workspace_key, owner_id, request_id, feature, credits, allowance_drawn, idempotency_key, expires_at)
+        (id, workspace_key, owner_id, request_id, feature, credits, allowance_drawn,
+         allowance_grant_id, idempotency_key, expires_at)
       values (${reservationId}, ${workspaceKey}, ${input.context.userId}, ${input.requestId.slice(0, 64)},
-              ${input.estimate.feature}, ${required}, ${allowanceDrawn}, ${input.idempotencyKey.slice(0, 160)},
-              now() + make_interval(secs => ${RESERVATION_TTL_SECONDS}))`
+              ${input.estimate.feature}, ${required}, ${allowanceDrawn}, ${allowanceGrantId},
+              ${reservationKey}, now() + make_interval(secs => ${ttlSeconds}))`
 
     const moved = await tx`
       update public.lab_credit_accounts
@@ -308,11 +350,13 @@ export async function reserveCredits(input: {
       creditsDelta: -required,
       sourceType: 'reservation',
       sourceId: reservationId,
-      idempotencyKey: `reserve:${input.idempotencyKey}`,
+      idempotencyKey: `reserve:${reservationKey}`,
       metadata: {
         feature: input.estimate.feature,
         quotedUsd: input.estimate.quotedUsd,
         allowanceDrawn,
+        allowanceGrantId,
+        expiresInSeconds: ttlSeconds,
       },
     })
 
@@ -353,10 +397,9 @@ export async function settleReservation(input: {
       credits: string
       status: string
       allowance_drawn: string
-      created_period: string
+      allowance_grant_id: string | null
     }[]>`
-      select id, credits, status, allowance_drawn,
-             to_char(created_at at time zone 'UTC', 'YYYY-MM') as created_period
+      select id, credits, status, allowance_drawn, allowance_grant_id
         from public.lab_credit_reservations
        where id = ${input.reservationId} and workspace_key = ${workspaceKey} for update`
     if (!reservation) return { ok: false as const, reason: 'unknown_reservation' as const }
@@ -369,17 +412,18 @@ export async function settleReservation(input: {
       outcome: input.outcome,
     })
 
-    // Refunds go back to the bucket they came from. If the allowance period
-    // rolled over while the task was running, the allowance portion is gone,
-    // so returning it as permanent credit would quietly convert expiring
-    // credits into purchased ones.
-    const [current] = await tx<{ allowance_period: string | null }[]>`
-      select allowance_period from public.lab_credit_accounts
+    // Refunds go back to the exact grant they came from. A plan can be
+    // replaced within a calendar month, so comparing periods is insufficient.
+    const [current] = await tx<{ allowance_grant_id: string | null }[]>`
+      select allowance_grant_id from public.lab_credit_accounts
        where workspace_key = ${workspaceKey} for update`
-    const samePeriod = current?.allowance_period === reservation.created_period
-    const allowanceReturned = samePeriod
-      ? Math.min(settlement.released, toNumber(reservation.allowance_drawn))
-      : 0
+    const allocation = allocateCreditRelease({
+      held,
+      charged: settlement.charged,
+      allowanceDrawn: toNumber(reservation.allowance_drawn),
+      restoreAllowance: reservation.allowance_grant_id !== null
+        && reservation.allowance_grant_id === current?.allowance_grant_id,
+    })
 
     await tx`
       update public.lab_credit_reservations
@@ -389,8 +433,8 @@ export async function settleReservation(input: {
     await tx`
       update public.lab_credit_accounts
          set reserved_credits = greatest(reserved_credits - ${held}, 0),
-             available_credits = available_credits + ${settlement.released},
-             allowance_credits = allowance_credits + ${allowanceReturned},
+             available_credits = available_credits + ${allocation.availableReturned},
+             allowance_credits = allowance_credits + ${allocation.allowanceReturned},
              version = version + 1,
              updated_at = now()
        where workspace_key = ${workspaceKey}`
@@ -401,7 +445,7 @@ export async function settleReservation(input: {
     await writeLedger(tx, {
       workspaceKey,
       entryType: 'settlement',
-      creditsDelta: settlement.released,
+      creditsDelta: allocation.availableReturned,
       sourceType: 'reservation_settlement',
       sourceId: input.reservationId,
       idempotencyKey: `settle:${input.reservationId}`,
@@ -412,7 +456,10 @@ export async function settleReservation(input: {
         chargedCredits: settlement.charged,
         measuredUsd: settlement.measuredUsd,
         cappedByCeiling: settlement.cappedByCeiling,
-        allowanceReturned,
+        releasedCredits: allocation.released,
+        returnedCredits: allocation.availableReturned,
+        allowanceReturned: allocation.allowanceReturned,
+        expiredCredits: allocation.expired,
       },
     })
 
@@ -428,7 +475,8 @@ export async function settleReservation(input: {
     return {
       ok: true as const,
       charged: settlement.charged,
-      released: settlement.released,
+      released: allocation.availableReturned,
+      expired: allocation.expired,
       balance: {
         available: toNumber(account?.available_credits),
         reserved: toNumber(account?.reserved_credits),
@@ -454,13 +502,17 @@ export async function grantCredits(input: {
   }
   const sql = getPostgres()
   const credits = Math.floor(input.credits)
-  const key = `grant:${input.idempotencyKey}`.slice(0, 160)
+  const legacyKey = `grant:${input.idempotencyKey}`.slice(0, 160)
+  const key = scopedIdempotencyKey('grant', input.context.workspace.key, input.idempotencyKey)
 
   return sql.begin(async (tx) => {
     await ensureWorkspace(tx, input.context)
 
     const [existing] = await tx<{ id: string }[]>`
-      select id from public.lab_credit_ledger where idempotency_key = ${key}`
+      select id from public.lab_credit_ledger
+       where workspace_key = ${input.context.workspace.key}
+         and idempotency_key in (${key}, ${legacyKey})
+       limit 1`
     if (existing) return { granted: false as const, reason: 'already_granted' as const }
 
     await tx`

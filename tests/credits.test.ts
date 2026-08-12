@@ -3,6 +3,7 @@ import test from 'node:test'
 import { BILLING_PLANS, CREDIT_GUIDE } from '../src/lib/billing/catalog.ts'
 import {
   AI_COST_TARGET_RATIO,
+  allocateCreditRelease,
   CREDIT_VALUE_GHS,
   chatFeature,
   creditsForUsd,
@@ -10,9 +11,11 @@ import {
   FEATURE_WEIGHTS,
   landedCostGhs,
   planEconomics,
+  reservationTtlSeconds,
   settleCredits,
   usdBudgetForCredits,
 } from '../src/lib/billing/credits.ts'
+import { scopedIdempotencyKey } from '../src/lib/idempotency.ts'
 import { creditGateFailureResponse } from '../src/lib/billing/credit-gate.ts'
 
 test('landed cost includes the platform fee and the exchange buffer, not just the raw provider charge', () => {
@@ -52,6 +55,55 @@ test('failed work charges nothing and returns the whole reservation', () => {
   const settlement = settleCredits({ estimate, measuredUsd: 0.04, outcome: 'failure' })
   assert.equal(settlement.charged, 0)
   assert.equal(settlement.released, estimate.reserve)
+})
+
+test('unused credits return to their original allowance and purchased buckets', () => {
+  const allocation = allocateCreditRelease({
+    held: 5,
+    charged: 1,
+    allowanceDrawn: 3,
+    restoreAllowance: true,
+  })
+  assert.deepEqual(allocation, {
+    released: 4,
+    allowanceReleased: 2,
+    purchasedReleased: 2,
+    availableReturned: 4,
+    allowanceReturned: 2,
+    expired: 0,
+  })
+
+  const mostlyCharged = allocateCreditRelease({
+    held: 5,
+    charged: 4,
+    allowanceDrawn: 3,
+    restoreAllowance: true,
+  })
+  assert.equal(mostlyCharged.allowanceReturned, 0)
+  assert.equal(mostlyCharged.purchasedReleased, 1)
+})
+
+test('an expired allowance is never converted into permanent purchased credit', () => {
+  const allocation = allocateCreditRelease({
+    held: 5,
+    charged: 0,
+    allowanceDrawn: 3,
+    restoreAllowance: false,
+  })
+  assert.equal(allocation.availableReturned, 2)
+  assert.equal(allocation.expired, 3)
+})
+
+test('async reservations live long enough for polling-based work to finish', () => {
+  assert.equal(reservationTtlSeconds('video'), 7_200)
+  assert.equal(reservationTtlSeconds('agent'), 2_700)
+  assert.equal(reservationTtlSeconds('chat'), 900)
+})
+
+test('idempotency keys are stable inside a workspace and isolated across workspaces', () => {
+  const first = scopedIdempotencyKey('credit', 'user:alpha', 'image:retry-1')
+  assert.equal(first, scopedIdempotencyKey('credit', 'user:alpha', 'image:retry-1'))
+  assert.notEqual(first, scopedIdempotencyKey('credit', 'user:beta', 'image:retry-1'))
 })
 
 test('successful work charges measured cost and releases the unused hold', () => {

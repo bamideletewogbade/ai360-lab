@@ -131,6 +131,14 @@
   .campaignProofImage { min-height: min(620px, 125vw); }
 }
 @media (max-width: 480px) {
+  .hero, .section, .cta { padding-right: max(18px, env(safe-area-inset-right)); padding-left: max(18px, env(safe-area-inset-left)); }
+  .hero h1 { font-size: clamp(40px, 13vw, 56px); }
+  .lead, .sectionHead p, .audienceIntro, .limit p, .cta p { font-size: 15px; }
+  .tabs { flex-wrap: nowrap; margin-right: -18px; margin-left: -18px; padding: 0 18px 4px; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 0 0 auto; }
+  .ctaRow, .primary, .secondary { width: 100%; }
+  .primary, .secondary { justify-content: center; }
   .workflowDemo { padding: 14px; border-radius: 19px; }
   .workflowPrompt, .workflowDecision { padding: 18px; }
   .workflowSystemHead { gap: 8px; padding: 12px; }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { ThemeControl } from '@/components/ThemeControl'
 import styles from './SettingsModal.module.css'
@@ -61,6 +62,26 @@ export function SettingsModal({
   const [data, setData] = useState<SubscriptionData | null>(null)
   const [loading, setLoading] = useState(false)
   const [preferredLang, setPreferredLang] = useState('en')
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    queueMicrotask(() => {
+      if (active) setMounted(true)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -102,13 +123,13 @@ export function SettingsModal({
     localStorage.setItem('ai360_preferred_lang', lang)
   }
 
-  if (!isOpen) return null
+  if (!isOpen || !mounted) return null
 
   const sub = data?.subscription
   const attempts = data?.attempts ?? []
   const signedIn = data?.signedIn ?? false
 
-  return (
+  return createPortal(
     <div className={styles.overlay} onClick={onClose} aria-modal="true" role="dialog">
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
@@ -284,12 +305,13 @@ export function SettingsModal({
           ) : (
             <span />
           )}
-          <button type="button" className={styles.closeButton} onClick={onClose}>
+          <button type="button" className={styles.doneButton} onClick={onClose}>
             Done
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

@@ -105,11 +105,14 @@
 }
 
 @media (max-width: 520px) {
+  .brand { margin-top: max(20px, env(safe-area-inset-top)); margin-right: max(18px, env(safe-area-inset-right)); margin-left: max(18px, env(safe-area-inset-left)); }
   .brand img { width: 126px; }
   .story { padding-top: 58px; }
   .story h1 { font-size: clamp(2.9rem, 14vw, 4.4rem); }
-  .panel { padding-inline: 18px; }
+  .panel { padding-right: max(18px, env(safe-area-inset-right)); padding-bottom: max(70px, env(safe-area-inset-bottom)); padding-left: max(18px, env(safe-area-inset-left)); }
+  .panel input, .panel select, .panel textarea { font-size: 16px; }
   .journey { gap: 6px; font-size: 0.6rem; }
+  .setupNotice { min-height: 260px; padding: 28px 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
