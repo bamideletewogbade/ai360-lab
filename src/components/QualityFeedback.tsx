@@ -18,7 +18,7 @@ type FeedbackContext = {
 
 type Props = {
   context: FeedbackContext
-  variant?: 'response' | 'global'
+  variant?: 'response' | 'global' | 'menu'
 }
 
 type Receipt = { id: string; token: string; message: string }
@@ -161,9 +161,15 @@ export function QualityFeedback({ context, variant = 'response' }: Props) {
           </svg>
           <span>Feedback</span>
         </button>
+      ) : variant === 'menu' ? (
+        // Rendered as one row inside the consolidated Help & feedback menu, so
+        // it carries no "Help" of its own to avoid the duplicate-label problem.
+        <button type="button" className="side-help" role="menuitem" onClick={beginProductFeedback}>
+          <span>Share an idea or report a problem</span><small>Feature ideas, bugs and quality</small>
+        </button>
       ) : (
         <button type="button" className={styles.globalButton} onClick={beginProductFeedback}>
-          <span>Help and feedback</span><small>Share an idea or report a problem</small>
+          <span>Send feedback</span><small>Share an idea or report a problem</small>
         </button>
       )}
 

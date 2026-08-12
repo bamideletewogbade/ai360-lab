@@ -16,6 +16,8 @@ import { AccountControls } from '@/components/AccountControls'
 import { CreditBalance } from '@/components/CreditBalance'
 import { WorkspaceBoot } from '@/components/WorkspaceBoot'
 import { QualityFeedback } from '@/components/QualityFeedback'
+import { SidebarHelpMenu } from '@/components/SidebarHelpMenu'
+import { SettingsModal } from '@/components/SettingsModal'
 import { ConversationMinimap, type ConversationPrompt } from '@/components/ConversationMinimap'
 import { PromptComposer } from '@/components/PromptComposer'
 import { ResponseActions } from '@/components/ResponseActions'
@@ -375,6 +377,8 @@ function LabWorkspace({
   // after closing still fires.
   const [createProjectSignal, setCreateProjectSignal] = useState(0)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<'general' | 'billing' | 'account'>('general')
   const [showReturnToLatest, setShowReturnToLatest] = useState(false)
   const [copiedPromptId, setCopiedPromptId] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -1647,8 +1651,17 @@ function LabWorkspace({
           )}
         </nav>
         <div className="side-support">
-          <button type="button" className="side-help" onClick={() => { setHelpOpen(true); setSidebarOpen(false) }}><span>Help</span><small>Learn the workspace</small></button>
-          <QualityFeedback variant="global" context={{ sourceSurface: experience === 'chat' ? 'quick' : experience === 'agent' ? 'research' : 'studio', conversationId: active.id, conversationText: messages.slice(-6).map((message) => `${message.role === 'user' ? 'Customer' : 'AI360'}: ${message.content}`).join('\n\n') }} />
+          <button
+            type="button"
+            className="side-help"
+            onClick={() => { setSettingsTab('general'); setSettingsOpen(true); setSidebarOpen(false) }}
+          >
+            <span>Settings</span><small>Workspace, billing and account</small>
+          </button>
+          <SidebarHelpMenu
+            onOpenGuide={() => { setHelpOpen(true); setSidebarOpen(false) }}
+            feedbackContext={{ sourceSurface: experience === 'chat' ? 'quick' : experience === 'agent' ? 'research' : 'studio', conversationId: active.id, conversationText: messages.slice(-6).map((message) => `${message.role === 'user' ? 'Customer' : 'AI360'}: ${message.content}`).join('\n\n') }}
+          />
         </div>
       </aside>
       {sidebarOpen && <button className="scrim" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />}
@@ -1937,6 +1950,7 @@ function LabWorkspace({
           </section>
         </div>
       )}
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} initialTab={settingsTab} />
       {actionDraft && (
         <div className="approval-backdrop" role="presentation">
           <section className="approval-dialog" role="dialog" aria-modal="true" aria-labelledby="approval-title">

@@ -8,7 +8,45 @@
      one honest way to give the whole workspace room to breathe. Tune here.
      1 = 100%, 1.1 = a comfortable 110%. */
   --app-zoom: 1.1;
+  color-scheme: light;
 }
+
+/* Dark theme.
+   Most of the app draws its colour from the semantic variables above, so the
+   theme is expressed by remapping them rather than rewriting every rule. The
+   sidebar is intentionally dark in both themes and keeps its own values. Raised
+   surfaces get progressively lighter than the page: paper (page) < warm-white
+   (subtle) < white (cards, inputs, menus). */
+:root[data-theme='dark'] {
+  --black: #ecebe7; --charcoal: #d4d3cf; --grey: #9b9d9f; --soft-grey: #74777a;
+  --warm-white: #1b1d20; --paper: #141518; --white: #212327; --line: #2c2e32;
+  --line-dark: #3b3e42; --green: #6fa588; --violet: #a98fc0; --clay: #cc8a63;
+  color-scheme: dark;
+}
+
+/* Core surfaces whose light background is hardcoded (not drawn from a variable)
+   and whose text already comes from a variable, so flipping the background is
+   enough for both to read correctly in dark. Additive and dark-only, so the
+   light theme is untouched. Studio's warm-accent surfaces are themed separately. */
+:root[data-theme='dark'] .onboarding-card { background: var(--warm-white); border-color: var(--line); }
+:root[data-theme='dark'] .onboarding-choices button,
+:root[data-theme='dark'] .onboarding-choices button:hover,
+:root[data-theme='dark'] .workspace-guide,
+:root[data-theme='dark'] .workspace-guide header button,
+:root[data-theme='dark'] .workspace-guide-options button,
+:root[data-theme='dark'] .sidebar-open-button:hover,
+:root[data-theme='dark'] .action-kind,
+:root[data-theme='dark'] .approval-dialog,
+:root[data-theme='dark'] .approval-head,
+:root[data-theme='dark'] .approval-body input,
+:root[data-theme='dark'] .approval-body textarea,
+:root[data-theme='dark'] .approval-body select,
+:root[data-theme='dark'] .approval-foot,
+:root[data-theme='dark'] .approval-cancel,
+:root[data-theme='dark'] .message-failure-actions button {
+  background: var(--white);
+}
+:root[data-theme='dark'] .message-failure { background: var(--warm-white); border-color: var(--line-dark); }
 * { box-sizing: border-box; }
 html { scrollbar-gutter: stable; }
 body { margin: 0; background: var(--paper); color: var(--black); font-family: var(--font-body); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
@@ -399,10 +437,24 @@ button { color: inherit; }
 .side-foot b { font-size: 11px; }
 .side-foot span { color: #85898c; font-size: 10px; }
 .side-support { margin-top: 8px; padding-top: 8px; border-top: 1px solid #2c2e30; }
-.side-help { display: grid; width: 100%; gap: 1px; padding: 8px 9px; border: 0; border-radius: 8px; background: transparent; color: #f7f6f2; cursor: pointer; text-align: left; }
+.side-help { display: grid; width: 100%; gap: 1px; padding: 8px 9px; border: 0; border-radius: 8px; background: transparent; color: #f7f6f2; cursor: pointer; text-align: left; text-decoration: none; }
 .side-help:hover { background: #202224; }
 .side-help span { font-size: 11px; font-weight: 750; }
 .side-help small { color: #9ea1a3; font-size: 8px; }
+
+/* Consolidated "Help & feedback" launcher and its upward menu. One affordance
+   replaces the former duplicate "Help" and "Help and feedback" entries. */
+.help-menu-wrap { position: relative; }
+.help-menu-launch[aria-expanded="true"] { background: #202224; }
+.help-popover { position: absolute; z-index: 40; bottom: calc(100% + 8px); left: 0; right: 0; display: grid; gap: 2px; padding: 6px; border: 1px solid #2c2e30; border-radius: 12px; background: #1b1d1f; box-shadow: 0 -14px 42px rgba(0,0,0,.42); animation: menu-in .16s var(--ease, cubic-bezier(.22,.61,.36,1)) both; }
+.help-menu-divider { height: 1px; margin: 4px 6px; background: #2c2e30; }
+
+/* Light / System / Dark segmented control. Drawn from variables so it themes itself. */
+.theme-control { display: inline-grid; grid-auto-flow: column; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--warm-white); }
+.theme-option { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border: 0; border-radius: 9px; background: transparent; color: var(--grey); cursor: pointer; font-size: 12px; font-weight: 650; transition: background .16s ease, color .16s ease; }
+.theme-option:hover { color: var(--black); }
+.theme-option.active { background: var(--white); color: var(--black); box-shadow: 0 1px 3px rgba(16,17,18,.1); }
+.theme-option svg { flex: none; }
 .scrim { display: none; }
 
 /* Help stays inside the workspace. The longer public guide remains optional. */

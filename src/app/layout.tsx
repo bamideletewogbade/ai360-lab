@@ -5,6 +5,7 @@ import './landing.css'
 import { AuthProvider } from '@/components/AuthProvider'
 import { SiteStructuredData } from '@/components/SiteStructuredData'
 import { BRAND } from '@/lib/brand'
+import { THEME_INIT_SCRIPT } from '@/lib/theme'
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta', display: 'swap' })
 const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-dm', display: 'swap' })
@@ -64,7 +65,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${jakarta.variable} ${dmSans.variable}`}>
+    <html lang="en" className={`${jakarta.variable} ${dmSans.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Sets the theme on <html> before first paint so the app never flashes
+            the wrong colours on load. Runs from the persisted choice, falling
+            back to the operating-system preference. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       {/* Browser writing assistants such as Grammarly add data attributes to
           body before React starts. The server cannot predict those attributes,
           so accept that one shallow boundary without suppressing warnings in

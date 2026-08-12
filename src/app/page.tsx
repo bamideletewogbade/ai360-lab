@@ -4,6 +4,12 @@ import { LabLanding } from '@/components/LabLanding'
 import { isAuthConfigured } from '@/lib/auth'
 import { publicPageMetadata } from '@/lib/seo'
 
+// The signed-in redirect below reads the request's session, so this page must
+// be evaluated per request. Without this it can be statically prerendered with
+// no user, caching the marketing landing and serving it to signed-in people
+// too — which is exactly the "why am I not in my workspace" problem.
+export const dynamic = 'force-dynamic'
+
 export const metadata = publicPageMetadata({
   path: '',
   title: 'AI360 Lab | AI research, planning and creative tools',
