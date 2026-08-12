@@ -59,6 +59,7 @@
 .landing-links a:hover { color: var(--ai-black); }
 .landing-links a:hover::after { transform: scaleX(1); transform-origin: left; }
 .landing-account-actions { display: flex; align-items: center; gap: 12px; }
+.landing-account-signed-in { margin-left: auto; }
 .landing-sign-in { font-size: 0.85rem; font-weight: 750; }
 .landing-sign-in { color: var(--institutional-grey) !important; }
 .landing-sign-in:hover { color: var(--ai-black) !important; }

@@ -3,6 +3,7 @@ import test from 'node:test'
 import { productionReadinessChecks, selectedDatabaseProvider } from '../src/lib/runtime-config.ts'
 
 const managedKeys = [
+  'NODE_ENV',
   'OPENROUTER_API_KEY',
   'NEXT_PUBLIC_APP_URL',
   'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
@@ -16,13 +17,13 @@ const managedKeys = [
 function withEnvironment(values: Partial<Record<(typeof managedKeys)[number], string>>, run: () => void) {
   const previous = Object.fromEntries(managedKeys.map((key) => [key, process.env[key]]))
   for (const key of managedKeys) delete process.env[key]
-  Object.assign(process.env, values)
+  for (const [key, value] of Object.entries(values)) Reflect.set(process.env, key, value)
   try {
     run()
   } finally {
     for (const key of managedKeys) {
       const value = previous[key]
-      if (typeof value === 'string') process.env[key] = value
+      if (typeof value === 'string') Reflect.set(process.env, key, value)
       else delete process.env[key]
     }
   }
@@ -33,6 +34,28 @@ test('partial Clerk configuration is reported as invalid', () => {
     const clerk = productionReadinessChecks().find((check) => check.key === 'clerk')
     assert.equal(clerk?.status, 'invalid')
     assert.equal(clerk?.required, true)
+  })
+})
+
+test('development Clerk keys are rejected in production', () => {
+  withEnvironment({
+    NODE_ENV: 'production',
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_example',
+    CLERK_SECRET_KEY: 'sk_test_example',
+  }, () => {
+    const clerk = productionReadinessChecks().find((check) => check.key === 'clerk')
+    assert.equal(clerk?.status, 'invalid')
+    assert.match(clerk?.message ?? '', /live keys/)
+  })
+})
+
+test('matching Clerk live keys satisfy the production auth check', () => {
+  withEnvironment({
+    NODE_ENV: 'production',
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_live_example',
+    CLERK_SECRET_KEY: 'sk_live_example',
+  }, () => {
+    assert.equal(productionReadinessChecks().find((check) => check.key === 'clerk')?.status, 'ready')
   })
 })
 

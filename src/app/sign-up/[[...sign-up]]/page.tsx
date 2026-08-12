@@ -3,7 +3,7 @@ import { AuthPage } from '@/components/AuthPage'
 
 export const metadata: Metadata = {
   title: 'Create account',
-  description: 'Create an AI360 account and keep your work across devices.',
+  description: 'Create an AI360 account and keep your work connected.',
   robots: { index: false, follow: false },
 }
 

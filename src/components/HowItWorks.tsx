@@ -42,7 +42,7 @@ const STEPS = [
     detail: [
       'Export to Word or PDF, formatted',
       'Download generated images and video',
-      'Sign in and your projects follow you between devices',
+      'Sign in and keep every project with your account',
     ],
   },
 ]
@@ -86,12 +86,12 @@ export function HowItWorks() {
             <small>Costly work is quoted and approved before it starts, and refunded if it fails.</small>
           </div>
           <div className={styles.heroStat}>
-            <b>Your keys are never in your browser</b>
-            <small>Every model call happens on our server. Nothing sensitive is exposed to the page.</small>
+            <b>Your access stays protected</b>
+            <small>Sensitive credentials remain secured while AI360 handles the work.</small>
           </div>
           <div className={styles.heroStat}>
             <b>Try it without an account</b>
-            <small>Guest work stays in your own browser. Create an account when you want it saved.</small>
+            <small>Start as a guest, then create an account whenever you want to keep your work.</small>
           </div>
         </div>
       </header>

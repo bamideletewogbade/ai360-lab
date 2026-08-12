@@ -16,7 +16,7 @@ const TEAM_WORKSPACES_ENABLED = process.env.NEXT_PUBLIC_AI360_TEAM_WORKSPACES ==
  */
 export function AccountControls({ enabled }: { enabled: boolean }) {
   if (!enabled) return (
-    <Link href="/sign-in" className="guest-badge" title="Sign in to save your work across devices">
+    <Link href="/sign-in" className="guest-badge" title="Sign in to keep your work with your account">
       <span className="guest-status" /> Guest <b>Save work</b>
     </Link>
   )

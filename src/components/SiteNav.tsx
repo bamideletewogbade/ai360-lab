@@ -57,14 +57,16 @@ function SiteNavActions() {
   if (!AUTH_ENABLED) return <div className="landing-account-actions"><SignedOutActions /></div>
 
   return (
-    <div className="landing-account-actions">
-      <Show when="signed-in" fallback={<SignedOutActions />}>
+    <Show
+      when="signed-in"
+      fallback={<div className="landing-account-actions"><SignedOutActions /></div>}
+    >
+      <div className="landing-account-actions landing-account-signed-in">
         <span className="landing-user" aria-label="Your AI360 account">
           <UserButton appearance={{ elements: { avatarBox: { width: 34, height: 34 } } }} showName={false} />
         </span>
-        <Link href="/app" className="landing-open">Open workspace <span aria-hidden="true">↗</span></Link>
-      </Show>
-    </div>
+      </div>
+    </Show>
   )
 }
 

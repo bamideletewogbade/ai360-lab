@@ -276,6 +276,7 @@ export function StudioWorkspace({
   const [buildSectionsCount, setBuildSectionsCount] = useState(0)
   const [buildReviewNote, setBuildReviewNote] = useState('')
   const [briefInput, setBriefInput] = useState('')
+  const [projectGoalInput, setProjectGoalInput] = useState('')
   const [briefTurns, setBriefTurns] = useState<StudioBriefTurn[]>([])
   const [briefBusy, setBriefBusy] = useState(false)
   const [activeProjectStage, setActiveProjectStage] = useState<ProjectStage>('review')
@@ -542,6 +543,7 @@ export function StudioWorkspace({
   const progress = project?.assets.length ? Math.round((approvedCount / project.assets.length) * 100) : 0
   const activeAsset = project?.assets.find((asset) => asset.id === expandedId)
   const approvedAssets = project?.assets.filter((asset) => asset.status === 'approved') ?? []
+  const nextReviewAsset = project?.assets.find((asset) => asset.status !== 'approved')
 
   const readiness = useMemo(() => {
     const effectiveName = intake.businessName || intake.offer || intake.goal
@@ -650,8 +652,9 @@ export function StudioWorkspace({
 
       setBuildComplete(true)
       const completedAt = eventTimestamp()
-      const next = createPackProject({
-        id: requestId(),
+      const container = projects.find((item) => item.id === draftId)
+      const generated = createPackProject({
+        id: container?.id || requestId(),
         intake,
         pack: selectedPack,
         sections: result.sections,
@@ -661,6 +664,11 @@ export function StudioWorkspace({
         completedAt,
         evaluations: outcome.review?.evaluations,
       })
+      const next = container ? {
+        ...generated,
+        createdAt: container.createdAt,
+        campaign: { ...generated.campaign, name: container.campaign.name },
+      } : generated
       await new Promise((resolve) => window.setTimeout(resolve, 500))
       clearDraft()
       setProject(next)
@@ -1008,7 +1016,7 @@ export function StudioWorkspace({
       else window.open(`https://wa.me/?text=${encodeURIComponent(`${shareData.title}\n\n${shareData.text}`)}`, '_blank', 'noopener,noreferrer')
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
-      setError('Sharing could not be opened on this device. Copy the asset instead.')
+      setError('Sharing could not be opened. Copy the asset instead.')
     }
   }
 
@@ -1102,9 +1110,10 @@ export function StudioWorkspace({
     requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
   }
 
-  async function continueBrief() {
-    const message = briefInput.trim()
+  async function continueBrief(messageOverride?: string, intakeOverride?: Intake) {
+    const message = (messageOverride ?? briefInput).trim()
     if (!message || briefBusy) return
+    const workingIntake = intakeOverride ?? intake
     const userTurn: StudioBriefTurn = { id: requestId(), role: 'user', content: message }
     setBriefTurns((current) => [...current, userTurn])
     setBriefInput('')
@@ -1114,7 +1123,7 @@ export function StudioWorkspace({
       const response = await fetch('/api/studio/brief', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId() },
-        body: JSON.stringify({ message, intake }),
+        body: JSON.stringify({ message, intake: workingIntake }),
       })
       const data = await response.json().catch(() => ({})) as {
         error?: string
@@ -1149,12 +1158,33 @@ export function StudioWorkspace({
     setProject(next)
     setView('project')
     setExpandedId(next.assets[0]?.id || '')
+    setProjectGoalInput('')
     setActiveProjectStage(currentProjectStage({
       approved: next.assets.filter((asset) => asset.status === 'approved').length,
       total: next.assets.length,
     }))
     setError('')
     requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
+  }
+
+  function startProjectWork(goal: string) {
+    if (!project || !goal.trim() || briefBusy) return
+    const startingProject = project
+    const startingIntake: Intake = {
+      ...EMPTY_INTAKE,
+      businessName: startingProject.campaign.name,
+      goal: goal.trim(),
+    }
+    setDraftId(startingProject.id)
+    setIntake(startingIntake)
+    setSelectedPackId('launch')
+    setProject(null)
+    setView('kickoff')
+    setBriefInput('')
+    setBriefTurns([])
+    setError('')
+    requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
+    void continueBrief(goal, startingIntake)
   }
 
   function goToProjectStage(stage: ProjectStage) {
@@ -1202,12 +1232,12 @@ export function StudioWorkspace({
             <div className="library-title">
               <h1>Projects</h1>
               {activeProjects.length ? <span>{activeProjects.length} active</span> : null}
-              <span className={`library-save ${saveState}`}>
-                <i />
-                {signedIn
-                  ? saveState === 'saving' ? 'Saving' : saveState === 'unavailable' ? 'On this device' : 'Saved'
-                  : 'On this device'}
-              </span>
+              {signedIn ? (
+                <span className={`library-save ${saveState}`}>
+                  <i />
+                  {saveState === 'saving' ? 'Saving' : saveState === 'unavailable' ? 'Saving paused' : 'Saved'}
+                </span>
+              ) : null}
             </div>
             <div className="library-actions">
               <label className="library-search">
@@ -1244,7 +1274,7 @@ export function StudioWorkspace({
               <span className="import-mark">↥</span>
               <span>
                 <b>Bring your guest work into this account</b>
-                <small>{guestProjects.length} project{guestProjects.length === 1 ? '' : 's'} from this device can be copied into your secure workspace.</small>
+                <small>{guestProjects.length} guest project{guestProjects.length === 1 ? ' is' : 's are'} ready to add to your account.</small>
               </span>
               <span className="import-actions">
                 <button onClick={dismissGuestImport}>Not now</button>
@@ -1435,21 +1465,132 @@ export function StudioWorkspace({
     )
   }
 
+  if (!project.assets.length && !project.run) {
+    const startingPoints = [
+      { label: 'Plan and launch', prompt: 'Help me plan and launch ' },
+      { label: 'Write something', prompt: 'Help me write and finish ' },
+      { label: 'Research a decision', prompt: 'Research the options and help me decide about ' },
+      { label: 'Build a campaign', prompt: 'Create a practical campaign for ' },
+    ]
+    return (
+      <main className="studio-main" ref={mainRef}>
+        <div className="project-workspace empty-workspace">
+          <section className="project-start-hero">
+            <div className="project-start-copy">
+              <div className="project-inline-heading">
+                <span className="workspace-eyebrow"><i /> {project.campaign.name} · New workspace</span>
+              </div>
+              <h1>What do you want<br />to get done?</h1>
+              <p>
+                Start with the outcome, even if the idea is rough. AI360 will clarify what matters,
+                build the work, and stay with you until it is ready to use.
+              </p>
+              <form onSubmit={(event) => { event.preventDefault(); startProjectWork(projectGoalInput) }}>
+                <label htmlFor="project-goal">Describe the work</label>
+                <textarea
+                  id="project-goal"
+                  rows={4}
+                  value={projectGoalInput}
+                  onChange={(event) => setProjectGoalInput(event.target.value)}
+                  placeholder="For example: Help me turn my catering idea into a plan, price the offer, and prepare what I need to find my first customers."
+                  autoFocus
+                />
+                <div className="project-start-submit">
+                  <span>It does not need to be a perfect brief.</span>
+                  <button type="submit" disabled={!projectGoalInput.trim() || briefBusy}>
+                    Start the work <span aria-hidden="true">→</span>
+                  </button>
+                </div>
+              </form>
+              <div className="project-starting-points" aria-label="Starting points">
+                {startingPoints.map((item) => (
+                  <button type="button" key={item.label} onClick={() => setProjectGoalInput(item.prompt)}>
+                    <span aria-hidden="true">+</span>{item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <aside className="project-promise-card" aria-label="How AI360 completes the work">
+              <div className="promise-orbit" aria-hidden="true"><span>A</span><i /><i /></div>
+              <span className="workspace-eyebrow">How this workspace works</span>
+              <h2>From an idea to work you can actually use.</h2>
+              <ol>
+                <li><span>01</span><div><b>Understand</b><small>We ask only for details that change the result.</small></div></li>
+                <li><span>02</span><div><b>Build</b><small>The right specialists produce one connected body of work.</small></div></li>
+                <li><span>03</span><div><b>Finish</b><small>You review, improve, approve and export each outcome.</small></div></li>
+              </ol>
+              <p><span aria-hidden="true">✓</span> Nothing is published without your approval.</p>
+            </aside>
+          </section>
+
+          <section className="project-context-dock" id="project-context">
+            <div>
+              <span className="workspace-eyebrow">Project context</span>
+              <h2>Give the work a head start.</h2>
+              <p>Add notes, price lists, research or existing drafts now—or come back to this later.</p>
+            </div>
+            <ProjectKnowledge projectId={project.id} signedIn={signedIn} />
+          </section>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="studio-main" ref={mainRef}>
-      <div className="studio-project">
-        <header className="project-head">
-          <div>
-            <span className="studio-kicker">{project.pack?.name || 'Marketing launch pack'}</span>
+      <div className="studio-project project-workspace active-workspace">
+        <section className="active-project-hero">
+          <div className="active-project-intro">
+            <div className="project-inline-heading active-inline-heading">
+              <span className="workspace-eyebrow"><i /> {project.pack?.name || 'Project workspace'}</span>
+              <span className="inline-project-actions">
+                <button type="button" onClick={() => beginProject()}>New project</button>
+              </span>
+            </div>
             <h1>{project.campaign.name}</h1>
-            <p>{project.intake.businessName} · Updated {new Date(project.updatedAt).toLocaleDateString()}</p>
+            <p>{project.campaign.objective || project.campaign.bigIdea || 'Your work, context and finished outcomes live together here.'}</p>
+            <div className="active-project-meta">
+              <span>Updated {new Date(project.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              <span>{project.assets.length} outcome{project.assets.length === 1 ? '' : 's'}</span>
+              <span>{project.sources?.length || 0} research source{project.sources?.length === 1 ? '' : 's'}</span>
+              <span>{saveState === 'saving' ? 'Saving changes' : saveState === 'unavailable' ? 'Saving paused' : 'Up to date'}</span>
+            </div>
           </div>
-          <div className="project-head-actions">
-            <button onClick={openDashboard}>All projects</button>
-            <button onClick={() => changeProjectLifecycle(project, 'archive')}>Archive</button>
-            <button className="project-new" onClick={() => beginProject()}>New project</button>
+
+          <div className="project-next-action">
+            <div>
+              <span className="workspace-eyebrow">Best next step</span>
+              <h2>{nextReviewAsset ? `Review ${nextReviewAsset.title}` : 'Your work is ready to take with you'}</h2>
+              <p>{nextReviewAsset
+                ? `${project.assets.length - approvedCount} ${project.assets.length - approvedCount === 1 ? 'outcome needs' : 'outcomes need'} your decision. Open the next one, improve anything that is off, then approve it.`
+                : 'Everything is approved. Download individual files or export the complete project.'}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (nextReviewAsset) {
+                  setExpandedId(nextReviewAsset.id)
+                  goToProjectStage('review')
+                } else {
+                  goToProjectStage('deliverables')
+                }
+              }}
+            >
+              {nextReviewAsset ? 'Continue the work' : 'Open deliverables'} <span aria-hidden="true">→</span>
+            </button>
           </div>
-        </header>
+
+          <div className="project-completion-card">
+            <div className="completion-dial" style={{ '--progress': `${progress * 3.6}deg` } as CSSProperties}>
+              <span><b>{progress}%</b><small>complete</small></span>
+            </div>
+            <div>
+              <b>{approvedCount} of {project.assets.length} ready</b>
+              <small>{approvedCount === project.assets.length ? 'Every outcome is approved.' : 'Approval marks work as ready to use.'}</small>
+            </div>
+          </div>
+        </section>
 
         <ProjectStageNavigator
           phase="project"

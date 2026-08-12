@@ -81,7 +81,7 @@ export function LandingHero() {
             </button>
           ))}
         </div>
-        <p className="landing-guest-note"><i /> Start free, no card. <Link href="/sign-up">Create an account</Link> when you want your work on every device.</p>
+        <p className="landing-guest-note"><i /> Start free, no card. <Link href="/sign-up">Create an account</Link> when you want to keep your work.</p>
       </div>
 
       <HeroVision />

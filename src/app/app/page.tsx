@@ -22,7 +22,7 @@ import { ConversationMinimap, type ConversationPrompt } from '@/components/Conve
 import { PromptComposer } from '@/components/PromptComposer'
 import { ResponseActions } from '@/components/ResponseActions'
 import { WorkspaceOnboarding } from '@/components/WorkspaceOnboarding'
-import { useAuth } from '@clerk/nextjs'
+import { useWorkspaceIdentity } from '@/components/WorkspaceIdentityProvider'
 import { scopedStorageKey } from '@/lib/workspace'
 import { routeIntentDeterministically, type IntentRoute } from '@/lib/intent-router'
 import {
@@ -311,20 +311,13 @@ const SIDEBAR_GROUPS: Array<{
 const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
 
 export default function LabPage() {
-  return AUTH_ENABLED ? <AuthenticatedLab /> : <LabWorkspace authLoaded signedIn={false} workspaceScope="guest" />
-}
-
-function AuthenticatedLab() {
-  const { isLoaded, isSignedIn, userId, orgId } = useAuth()
-  const workspaceScope = isSignedIn && userId
-    ? orgId ? `org:${orgId}` : `user:${userId}`
-    : 'guest'
+  const identity = useWorkspaceIdentity()
   return (
     <LabWorkspace
-      authLoaded={isLoaded}
-      signedIn={Boolean(isSignedIn)}
-      workspaceScope={workspaceScope}
-      memberId={isSignedIn && userId ? userId : ''}
+      authLoaded
+      signedIn={Boolean(identity)}
+      workspaceScope={identity?.workspaceScope ?? 'guest'}
+      memberId={identity?.userId ?? ''}
     />
   )
 }
@@ -434,10 +427,8 @@ function LabWorkspace({
 
   useEffect(() => {
     if (!authLoaded) return
-    let mounted = true
     loadedWorkspaceRef.current = ''
-    queueMicrotask(() => {
-      if (!mounted) return
+    const timer = window.setTimeout(() => {
       try {
         const saved = JSON.parse(localStorage.getItem(workspaceStorageKey) || '[]') as Conversation[]
         const next = saved.length ? saved : [freshConversation()]
@@ -452,10 +443,8 @@ function LabWorkspace({
       }
       loadedWorkspaceRef.current = workspaceScope
       setHydrated(true)
-    })
-    return () => {
-      mounted = false
-    }
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [authLoaded, sidebarPreferenceKey, workspaceActiveKey, workspaceScope, workspaceStorageKey])
 
   useEffect(() => {
@@ -1056,7 +1045,7 @@ function LabWorkspace({
           link.click()
           result = 'Email draft opened, not sent'
         } else {
-          result = 'Task saved locally'
+          result = 'Task saved'
         }
       }
       markActionComplete(actionDraft.messageId, actionDraft.id, result, actionDraft.payload)
@@ -1967,7 +1956,7 @@ function LabWorkspace({
                     ? 'This opens a draft in your email app. AI360 will not send it.'
                     : actionDraft.kind === 'calendar'
                       ? 'This downloads a calendar invite for you to review and import.'
-                      : 'This saves the task only inside this browser conversation.'}
+                      : 'This saves the task with this conversation.'}
                 </span>
               </div>
               {actionDraft.kind === 'email' && (

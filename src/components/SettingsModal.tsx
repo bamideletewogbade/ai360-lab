@@ -176,7 +176,7 @@ export function SettingsModal({
                 <div>
                   <h3 className={styles.sectionTitle}>Workspace Behavior</h3>
                   <p className={styles.guestNotice}>
-                    AI360 automatically estimates credit usage before running intensive tasks and saves project drafts locally on your device.
+                    AI360 estimates credit usage before intensive tasks and keeps project drafts ready while you work.
                   </p>
                 </div>
               </>
@@ -256,10 +256,10 @@ export function SettingsModal({
                   <h3 className={styles.sectionTitle}>Identity & Security</h3>
                   <div className={styles.guestNotice}>
                     {signedIn ? (
-                      'Your workspace is protected by Clerk identity synchronization and Supabase Postgres row-level security.'
+                      'Your account protects your workspace and keeps your work connected.'
                     ) : (
                       <>
-                        You are in Guest mode. <Link href="/sign-in">Sign in</Link> or <Link href="/sign-up">Create an account</Link> to sync projects across devices.
+                        You are in Guest mode. <Link href="/sign-in">Sign in</Link> or <Link href="/sign-up">Create an account</Link> to keep your projects.
                       </>
                     )}
                   </div>

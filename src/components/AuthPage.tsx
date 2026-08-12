@@ -16,7 +16,7 @@ const CONTENT: Record<AuthMode, {
   'sign-in': {
     eyebrow: 'Welcome back',
     title: 'Pick up where you left off.',
-    copy: 'Return to your conversations, projects and finished work from any device.',
+    copy: 'Return to your conversations, projects and finished work.',
     alternate: 'New to AI360 Lab?',
     alternateHref: '/sign-up',
     alternateAction: 'Create a free account',

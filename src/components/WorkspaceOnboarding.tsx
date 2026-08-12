@@ -79,7 +79,7 @@ export function WorkspaceOnboarding({
           <i aria-hidden="true">→</i>
         </button>
 
-        <p className="onboarding-note"><span>●</span> Start as a guest. Your work stays on this device until you sign in.</p>
+        <p className="onboarding-note"><span>●</span> Start as a guest. Sign in anytime to keep your work with your account.</p>
       </section>
     </div>
   )

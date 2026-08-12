@@ -117,7 +117,7 @@ export function ProjectKnowledge({ projectId, signedIn }: { projectId: string; s
           )}
         </>
       ) : (
-        <p className="knowledge-empty">Sign in to add files to this project. Your knowledge base stays with the project across every device.</p>
+        <p className="knowledge-empty">Sign in to add files and keep the knowledge base with this project.</p>
       )}
     </section>
   )

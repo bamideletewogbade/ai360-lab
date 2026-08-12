@@ -88,7 +88,7 @@ function actionSuggestions(messages: Msg[], result: string) {
       id: crypto.randomUUID(),
       kind: 'task',
       title: 'Save the next action',
-      description: 'Turn the outcome into a local task stored with this conversation.',
+      description: 'Turn the outcome into a task attached to this conversation.',
       status: 'proposed',
       payload: {
         title: topic,

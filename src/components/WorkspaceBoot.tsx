@@ -5,7 +5,7 @@ export function WorkspaceBoot({ authLoaded, signedIn }: { authLoaded: boolean; s
     ? 'Checking your secure session'
     : signedIn
       ? 'Restoring your workspace'
-      : 'Opening a private guest workspace'
+      : 'Opening your workspace'
 
   return (
     <main className="session-bridge" role="status" aria-live="polite">
