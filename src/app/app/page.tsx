@@ -317,17 +317,26 @@ function AuthenticatedLab() {
   const workspaceScope = isSignedIn && userId
     ? orgId ? `org:${orgId}` : `user:${userId}`
     : 'guest'
-  return <LabWorkspace authLoaded={isLoaded} signedIn={Boolean(isSignedIn)} workspaceScope={workspaceScope} />
+  return (
+    <LabWorkspace
+      authLoaded={isLoaded}
+      signedIn={Boolean(isSignedIn)}
+      workspaceScope={workspaceScope}
+      memberId={isSignedIn && userId ? userId : ''}
+    />
+  )
 }
 
 function LabWorkspace({
   authLoaded,
   signedIn,
   workspaceScope,
+  memberId = '',
 }: {
   authLoaded: boolean
   signedIn: boolean
   workspaceScope: string
+  memberId?: string
 }) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState('')
@@ -381,9 +390,14 @@ function LabWorkspace({
   const workspaceStorageKey = scopedStorageKey(STORAGE_KEY, workspaceScope)
   const workspaceActiveKey = scopedStorageKey(ACTIVE_KEY, workspaceScope)
   const sidebarPreferenceKey = scopedStorageKey(SIDEBAR_KEY, workspaceScope)
-  // Personalization is remembered per identity, so each signed-in person — and
-  // the guest — keeps their own first-run record on a shared device.
-  const workspaceProfileKey = scopedStorageKey(PROFILE_KEY, workspaceScope)
+  // Personalization is remembered per member, so each signed-in person — and
+  // the guest — keeps their own first-run record on a shared device. Inside an
+  // organization the member id is appended so members do not share (and cannot
+  // leak) one org-wide record; this mirrors the server's (workspace, owner) key.
+  const onboardingScope = signedIn && memberId
+    ? workspaceScope.startsWith('org:') ? `${workspaceScope}:${memberId}` : workspaceScope
+    : 'guest'
+  const workspaceProfileKey = scopedStorageKey(PROFILE_KEY, onboardingScope)
 
   const active = conversations.find((conversation) => conversation.id === activeId) ?? conversations[0]
   const messages = useMemo(() => active?.messages ?? [], [active])

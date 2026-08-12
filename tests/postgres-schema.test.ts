@@ -4,6 +4,7 @@ import test from 'node:test'
 
 const runtimeMigrationUrl = new URL('../database/postgres/0002_runtime_foundation.sql', import.meta.url)
 const onboardingMigrationUrl = new URL('../database/postgres/0013_workspace_onboarding.sql', import.meta.url)
+const onboardingMemberMigrationUrl = new URL('../database/postgres/0014_onboarding_per_member.sql', import.meta.url)
 
 test('the Supabase runtime foundation persists every durable agent boundary', async () => {
   const migration = await readFile(runtimeMigrationUrl, 'utf8')
@@ -47,6 +48,12 @@ test('workspace onboarding is workspace-scoped, guarded and not writable by the 
   // Read-only to the authenticated browser role; writes go through the service path.
   assert.match(migration, /revoke all on public\.lab_workspace_onboarding\s+from anon, authenticated/)
   assert.doesNotMatch(migration, /grant (?:insert|update|delete|all)[^;]+lab_workspace_onboarding/i)
+})
+
+test('onboarding is keyed per member so an org never shares one record', async () => {
+  const migration = await readFile(onboardingMemberMigrationUrl, 'utf8')
+  assert.match(migration, /drop constraint lab_workspace_onboarding_pkey/)
+  assert.match(migration, /primary key \(workspace_key, owner_id\)/)
 })
 
 test('task dependencies cannot cross agent runs', async () => {
