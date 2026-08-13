@@ -1,4 +1,4 @@
-import Image from 'next/image'
+﻿import Image from 'next/image'
 import Link from 'next/link'
 import styles from './SiteFooter.module.css'
 
@@ -23,28 +23,28 @@ export function SiteFooter() {
         <div className={styles.lead}>
           <div className={styles.intro}>
             <Image className={styles.logo} src="/logo-white.png" width={176} height={44} alt="AI360" />
-            <p className={styles.eyebrow}>AI360 Lab × Accra Innovation Centre</p>
+            <p className={styles.eyebrow}>AI360 Ã— Accra Innovation Centre</p>
             <h2>Built in Accra.<br />Ready for real work.</h2>
             <p className={styles.summary}>
-              Bring the goal. The Lab helps you research, decide and make the work while you stay in control.
+              Bring the goal. AI360 helps you research, decide and make the work while you stay in control.
             </p>
             <div className={styles.actions}>
-              <Link className={styles.primaryAction} href="/app">Start with a goal <span aria-hidden="true">↗</span></Link>
+              <Link className={styles.primaryAction} href="/app">Start with a goal <span aria-hidden="true">â†—</span></Link>
               <a className={styles.secondaryAction} href="https://accrainnovationcenter.com/" target="_blank" rel="noreferrer">
-                Visit AIC <span aria-hidden="true">↗</span>
+                Visit AIC <span aria-hidden="true">â†—</span>
               </a>
             </div>
           </div>
 
           <address className={styles.addressCard}>
-            <span className={styles.cardNumber}>05° 39′ N · ACCRA</span>
+            <span className={styles.cardNumber}>05Â° 39â€² N Â· ACCRA</span>
             <span className={styles.cardLabel}>Our home</span>
             <strong>AIC House</strong>
             <span>Kofi Anum Tesa Street</span>
             <span>Adjirigano, East Legon</span>
             <span>Accra, Ghana</span>
             <a href={directionsUrl} target="_blank" rel="noreferrer">
-              GPS GD-253-5017 <span aria-hidden="true">↗</span>
+              GPS GD-253-5017 <span aria-hidden="true">â†—</span>
             </a>
           </address>
         </div>
@@ -58,7 +58,7 @@ export function SiteFooter() {
           <div className={styles.linkGroup}>
             <h3>AI360</h3>
             <a href="https://aithreesixty.tech" target="_blank" rel="noreferrer">About AI360</a>
-            <Link href="/app">Open the Lab</Link>
+            <Link href="/app">Open AI360</Link>
             <Link href="/changelog">Changelog</Link>
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
@@ -80,7 +80,7 @@ export function SiteFooter() {
         </div>
 
         <div className={styles.bottom}>
-          <p>© {new Date().getFullYear()} AI360 · Accra Innovation Centre</p>
+          <p>Â© {new Date().getFullYear()} AI360 Â· Accra Innovation Centre</p>
           <p>Intelligence that moves with you.</p>
         </div>
       </div>

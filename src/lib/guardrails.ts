@@ -1,4 +1,4 @@
-import { getOptionalAuthContext, isAuthConfigured } from '@/lib/auth'
+﻿import { getOptionalAuthContext, isAuthConfigured } from '@/lib/auth'
 import type { WorkspaceAuthContext } from '@/lib/workspace'
 
 type Bucket = { count: number; resetAt: number }
@@ -124,7 +124,7 @@ export function rateLimit(
  * Expensive work must belong to someone.
  *
  * Returns null when the request may proceed. When identity is not configured at
- * all the Lab stays open, so the product still runs and demos without Clerk.
+ * all AI360 stays open, so the product still runs and demos without Clerk.
  */
 export function requireIdentifiedRequester(scope: RateScope, requester: Requester) {
   if (!EXPENSIVE_SCOPES.has(scope)) return null

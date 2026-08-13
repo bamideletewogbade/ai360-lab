@@ -1,7 +1,7 @@
-import { QualityConsole } from '@/components/QualityConsole'
+﻿import { QualityConsole } from '@/components/QualityConsole'
 
 export const metadata = {
-  title: 'Quality Desk | AI360 Lab',
+  title: 'Quality Desk | AI360',
   robots: { index: false, follow: false },
 }
 

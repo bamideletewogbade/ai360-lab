@@ -1,9 +1,9 @@
-# AI360 Lab
+﻿# AI360
 
-> AI360 Lab is a practical AI workspace built from Accra by AI360 with the Accra Innovation Centre. It helps people research current information, understand difficult topics, make decisions, prepare proposals, plan work, and create coordinated campaign assets.
+> AI360 is a practical AI workspace built from Accra by AI360 with the Accra Innovation Centre. It helps people research current information, understand difficult topics, make decisions, prepare proposals, plan work, and create coordinated campaign assets.
 
 Canonical name: AI360
-Product name: AI360 Lab
+Product name: AI360
 Creative workspace: AI360 Studio
 Primary market: Ghana and Africa
 Website: https://lab.aithreesixty.tech
@@ -21,7 +21,7 @@ Organization: https://aithreesixty.tech
 
 ## Product facts
 
-- AI360 Lab supports quick answers, sourced web research, document and media analysis, structured workflows, exports, campaign planning, image generation and video generation.
+- AI360 supports quick answers, sourced web research, document and media analysis, structured workflows, exports, campaign planning, image generation and video generation.
 - People review plans, estimated credits and important actions before work proceeds.
 - The service does not silently publish content, send messages or run paid media production.
 - A free monthly allowance is available. Current plan details are published on the pricing page.

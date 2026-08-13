@@ -1,6 +1,6 @@
-# AI360 Lab
+﻿# AI360
 
-AI360 Lab turns an ordinary-language goal into research, a decision, a document
+AI360 turns an ordinary-language goal into research, a decision, a document
 or a coordinated creative outcome. It is built by AI360 with the Accra
 Innovation Centre.
 

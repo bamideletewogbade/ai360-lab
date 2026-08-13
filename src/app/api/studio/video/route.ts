@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+﻿import { createHmac, timingSafeEqual } from 'node:crypto'
 import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
@@ -159,7 +159,7 @@ async function providerHeaders() {
     Authorization: `Bearer ${providerKey()}`,
     'Content-Type': 'application/json',
     'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-    'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',
+    'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
   }
 }
 

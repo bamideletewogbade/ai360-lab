@@ -28,6 +28,8 @@ type ExpressPayQueryResponse = {
 
 const TOKEN_PATTERN = /^[A-Za-z0-9._-]{1,1024}$/
 const ORDER_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+const TRANSACTION_PATTERN = /^[A-Za-z0-9._-]{1,128}$/
+const MAX_PROVIDER_RESPONSE_BYTES = 64 * 1024
 
 export function isExpressPayToken(value: string) {
   return TOKEN_PATTERN.test(value)
@@ -68,7 +70,7 @@ function endpoint(environment: ExpressPayEnvironment, path: string) {
 function credentials() {
   const merchantId = process.env.EXPRESSPAY_MERCHANT_ID?.trim()
   const apiKey = process.env.EXPRESSPAY_API_KEY?.trim()
-  if (!merchantId || !apiKey) {
+  if (!merchantId || !apiKey || merchantId.length > 256 || apiKey.length > 256) {
     throw new ExpressPayError('not_configured', 'ExpressPay credentials are not configured.')
   }
   return { merchantId, apiKey }
@@ -82,7 +84,11 @@ export function parseGhsMinor(value: unknown) {
   const text = typeof value === 'number' ? value.toFixed(2) : cleanText(value, 64)
   const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(text)
   if (!match) throw new ExpressPayError('bad_response', 'ExpressPay returned an invalid amount.')
-  return Number(match[1]) * 100 + Number((match[2] || '').padEnd(2, '0'))
+  const minor = Number(match[1]) * 100 + Number((match[2] || '').padEnd(2, '0'))
+  if (!Number.isSafeInteger(minor)) {
+    throw new ExpressPayError('bad_response', 'ExpressPay returned an invalid amount.')
+  }
+  return minor
 }
 
 async function postForm<T>(url: string, body: URLSearchParams, fetcher: typeof fetch): Promise<T> {
@@ -102,7 +108,11 @@ async function postForm<T>(url: string, body: URLSearchParams, fetcher: typeof f
     throw new ExpressPayError('unavailable', `ExpressPay returned HTTP ${response.status}.`)
   }
   try {
-    return await response.json() as T
+    const payload = await response.text()
+    if (new TextEncoder().encode(payload).byteLength > MAX_PROVIDER_RESPONSE_BYTES) {
+      throw new Error('response_too_large')
+    }
+    return JSON.parse(payload) as T
   } catch {
     throw new ExpressPayError('bad_response', 'ExpressPay returned an unreadable response.')
   }
@@ -124,6 +134,16 @@ export function createExpressPayProvider(fetcher: typeof fetch = fetch): Payment
       const { merchantId, apiKey } = credentials()
       if (!ORDER_PATTERN.test(input.idempotencyKey)) {
         throw new ExpressPayError('invalid_request', 'The payment order ID is invalid.')
+      }
+      if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0) {
+        throw new ExpressPayError('invalid_request', 'The checkout amount is invalid.')
+      }
+      for (const callback of [input.returnUrl, input.webhookUrl]) {
+        try {
+          if (new URL(callback).protocol !== 'https:') throw new Error('not_https')
+        } catch {
+          throw new ExpressPayError('invalid_request', 'ExpressPay callbacks must use HTTPS.')
+        }
       }
 
       const body = new URLSearchParams({
@@ -191,15 +211,19 @@ export function createExpressPayProvider(fetcher: typeof fetch = fetch): Payment
             : 'failed'
       const orderId = cleanText(result['order-id'], 64)
       const token = cleanText(result.token, 1024)
+      const providerTransactionId = cleanText(result['transaction-id'] ?? result.transaction_id, 128)
       const currency = cleanText(result.currency, 3)
       if (!ORDER_PATTERN.test(orderId) || token !== providerReference || currency !== 'GHS') {
         throw new ExpressPayError('bad_response', 'ExpressPay returned mismatched payment details.')
+      }
+      if (providerResult === 1 && !TRANSACTION_PATTERN.test(providerTransactionId)) {
+        throw new ExpressPayError('bad_response', 'ExpressPay approved a payment without a valid transaction ID.')
       }
 
       return {
         provider: 'expresspay',
         providerReference,
-        providerTransactionId: cleanText(result['transaction-id'] ?? result.transaction_id, 64) || null,
+        providerTransactionId: providerTransactionId || null,
         orderId,
         status,
         statusText: cleanText(result['result-text'], 256) || 'Unknown',

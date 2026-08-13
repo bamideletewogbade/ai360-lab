@@ -1,4 +1,4 @@
-import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrails'
+﻿import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrails'
 import { requestLogger } from '@/lib/observability'
 
 export const runtime = 'nodejs'
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
     const calendar = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//AI360//AI360 Lab//EN',
+      'PRODID:-//AI360//AI360//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
       'BEGIN:VEVENT',

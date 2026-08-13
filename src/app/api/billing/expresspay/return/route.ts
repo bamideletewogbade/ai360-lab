@@ -1,7 +1,8 @@
 import { NextResponse, after } from 'next/server'
 import { errorDetails, requestLogger } from '@/lib/observability'
+import { rateLimit } from '@/lib/guardrails'
 import { createExpressPayProvider, isExpressPayOrderId, isExpressPayToken } from '@/lib/payments/expresspay'
-import { applyVerifiedPayment } from '@/lib/payments/payment-repository'
+import { applyVerifiedPayment, isKnownPaymentReference } from '@/lib/payments/payment-repository'
 import { sendPaymentReceipt } from '@/lib/payments/receipts'
 
 export const runtime = 'nodejs'
@@ -16,6 +17,8 @@ function statusUrl(request: Request, orderId: string, check?: string) {
 
 export async function GET(request: Request) {
   const log = requestLogger(request, '/api/billing/expresspay/return')
+  const limited = rateLimit(request, 'payment_callback', { minute: 30, daily: 500 })
+  if (limited) return limited
   const params = new URL(request.url).searchParams
   const orderId = params.get('order-id') || ''
   const token = params.get('token') || ''
@@ -25,6 +28,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (!await isKnownPaymentReference(orderId, token)) {
+      log.finish(303, { outcome: 'unknown_return', orderId })
+      return NextResponse.redirect(statusUrl(request, '', 'invalid'), 303)
+    }
     const verified = await createExpressPayProvider().queryPayment(token)
     if (verified.orderId !== orderId) throw new Error('PAYMENT_RETURN_ORDER_MISMATCH')
     const result = await applyVerifiedPayment(verified)

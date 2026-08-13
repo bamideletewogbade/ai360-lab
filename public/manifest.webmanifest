@@ -1,6 +1,6 @@
-{
-  "name": "AI360 Lab",
-  "short_name": "AI360 Lab",
+﻿{
+  "name": "AI360",
+  "short_name": "AI360",
   "description": "Research, plan, create and complete useful work with AI360.",
   "start_url": "/app",
   "display": "standalone",

@@ -1,4 +1,4 @@
-import { isChatMode, routeFor, type ChatMode } from '@/lib/models'
+﻿import { isChatMode, routeFor, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
@@ -250,7 +250,7 @@ export async function POST(request: Request) {
           context: requester.context,
           apiKey: key,
           siteUrl: process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-          siteName: process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',
+          siteName: process.env.OPENROUTER_SITE_NAME || 'AI360',
           emit: (event) => send(event as unknown as Record<string, unknown>),
           log,
         })

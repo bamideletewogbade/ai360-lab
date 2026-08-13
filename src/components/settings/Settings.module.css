@@ -1,0 +1,237 @@
+/* Settings surface.
+   Mobile-first: a single column that fills the screen, with the nav as a
+   horizontally scrollable row. From 860px it becomes a two-column page with a
+   sticky rail. Every colour is a token so both themes come for free. */
+
+.shell {
+  min-height: 100dvh;
+  background: var(--paper);
+  color: var(--black);
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px clamp(16px, 4vw, 32px);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid var(--line-dark);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--black);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color .16s ease, transform .16s ease;
+}
+
+.back:hover { border-color: var(--black); transform: translateY(-1px); }
+.back svg { flex: none; }
+
+.headerTitle {
+  margin: 0;
+  font-family: var(--font-heading, inherit);
+  font-size: 17px;
+  font-weight: 850;
+  letter-spacing: -.02em;
+}
+
+.layout {
+  display: grid;
+  gap: clamp(18px, 3vw, 34px);
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: clamp(18px, 4vw, 34px) clamp(16px, 4vw, 32px) 64px;
+}
+
+.nav {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar { display: none; }
+
+.navItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--white);
+  color: var(--grey);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color .16s ease, color .16s ease, background .16s ease;
+}
+
+.navItem:hover { color: var(--black); border-color: var(--line-dark); }
+.navItem svg { flex: none; }
+.navItemActive { background: var(--black); border-color: var(--black); color: var(--paper); }
+.navItemActive:hover { color: var(--paper); }
+.navDetail { display: none; }
+
+.content { display: grid; gap: clamp(18px, 3vw, 28px); align-content: start; min-width: 0; }
+
+.card {
+  display: grid;
+  gap: 14px;
+  padding: clamp(16px, 3vw, 22px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+}
+
+.cardHead { display: grid; gap: 3px; }
+.cardHead h2 { margin: 0; font-family: var(--font-heading, inherit); font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
+.cardHead p { margin: 0; color: var(--grey); font-size: 12.5px; line-height: 1.5; }
+
+.fieldGroup { display: grid; gap: 7px; }
+.fieldGroup > label { font-size: 13px; font-weight: 750; }
+
+.select {
+  width: 100%;
+  max-width: 340px;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line-dark);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--black);
+  font: inherit;
+  font-size: 14px;
+  outline: 0;
+  cursor: pointer;
+}
+
+.select:focus-visible { border-color: var(--black); }
+
+.notice {
+  padding: 13px 15px;
+  border-radius: 11px;
+  background: var(--warm-white);
+  color: var(--grey);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.notice a { color: var(--black); font-weight: 750; }
+
+/* Credits */
+.balanceRow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.balanceValue { font-family: var(--font-heading, inherit); font-size: 34px; font-weight: 850; letter-spacing: -.04em; line-height: 1; }
+.balanceUnit { color: var(--grey); font-size: 13px; font-weight: 700; }
+.balanceHold { margin: 0; color: var(--grey); font-size: 12.5px; }
+
+.guide { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.guide li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.guide li:first-child { border-top: 0; }
+.guide li span { color: var(--grey); min-width: 0; }
+.guide li b { flex: none; font-variant-numeric: tabular-nums; }
+
+.planHeader { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; }
+.planBadge {
+  display: inline-flex;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--black);
+  color: var(--paper);
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.statusActive { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; background: #e6f4ea; color: #137333; font-size: 12px; font-weight: 750; }
+.statusDot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.planGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; }
+.planMetric { display: grid; gap: 3px; }
+.planMetric span { color: var(--grey); font-size: 11.5px; }
+.planMetric strong { font-size: 16px; font-weight: 800; }
+
+.historyList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.historyItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  font-size: 13px;
+}
+.historyInfo { display: grid; gap: 3px; min-width: 0; }
+.historyPlan { font-weight: 750; }
+.historyMeta { color: var(--grey); font-size: 11.5px; overflow-wrap: anywhere; }
+.historyStatus { flex: none; padding: 4px 9px; border-radius: 7px; font-size: 11px; font-weight: 750; text-transform: capitalize; }
+.statusApproved { background: #e6f4ea; color: #137333; }
+.statusPending { background: #fef7e0; color: #b06000; }
+.statusFailed { background: #fce8e6; color: #c5221f; }
+.statusDefault { background: var(--warm-white); color: var(--grey); }
+
+.empty {
+  padding: 22px;
+  border: 1px dashed var(--line-dark);
+  border-radius: 12px;
+  color: var(--grey);
+  font-size: 13px;
+  text-align: center;
+}
+
+.primaryLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 17px;
+  border-radius: 11px;
+  background: var(--black);
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+  transition: transform .16s ease;
+}
+.primaryLink:hover { transform: translateY(-1px); }
+
+/* Clerk's embedded profile keeps its own chrome; let it fill the card. */
+.profileMount { display: grid; min-width: 0; }
+.profileMount > * { width: 100%; }
+
+@media (min-width: 860px) {
+  .layout { grid-template-columns: 232px minmax(0, 1fr); align-items: start; }
+  .nav { position: sticky; top: 86px; flex-direction: column; overflow: visible; gap: 4px; }
+  .navItem { justify-content: flex-start; min-height: 52px; padding: 0 14px; }
+  .navLabel { display: grid; gap: 1px; text-align: left; }
+  .navDetail { display: block; color: var(--soft-grey); font-size: 10.5px; font-weight: 600; }
+  .navItemActive .navDetail { color: var(--soft-grey); }
+}

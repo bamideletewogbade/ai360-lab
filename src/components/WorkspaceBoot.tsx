@@ -1,4 +1,4 @@
-import Image from 'next/image'
+import { BrandMark } from '@/components/BrandMark'
 
 export function WorkspaceBoot({ authLoaded, signedIn }: { authLoaded: boolean; signedIn: boolean }) {
   const status = !authLoaded
@@ -10,12 +10,11 @@ export function WorkspaceBoot({ authLoaded, signedIn }: { authLoaded: boolean; s
   return (
     <main className="session-bridge" role="status" aria-live="polite">
       <div className="session-brand">
-        <Image src="/logo-black.png" width={154} height={38} alt="AI360" priority />
-        <span>LAB</span>
+        <BrandMark width={154} height={38} priority />
       </div>
       <div className="session-orbit" aria-hidden="true">
         <i /><i /><i />
-        <span><Image src="/icon-mark-black.png" width={43} height={50} alt="" priority /></span>
+        <span><BrandMark kind="icon" width={43} height={50} alt="" priority /></span>
       </div>
       <p>{status}</p>
       <div className="session-progress" aria-hidden="true"><span /></div>

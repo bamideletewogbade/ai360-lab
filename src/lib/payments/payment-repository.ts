@@ -272,6 +272,16 @@ export async function recordPaymentNotification(input: {
   providerReference: string
 }) {
   if (!isPostgresConfigured()) return { accepted: false, duplicate: false }
+  const [known] = await getPostgres()<{
+    id: string
+  }[]>`
+    select id from public.lab_payment_attempts
+     where id = ${input.orderId}
+       and provider = 'expresspay'
+       and provider_reference = ${input.providerReference}
+     limit 1`
+  if (!known) return { accepted: false, duplicate: false }
+
   const eventId = createHash('sha256')
     .update(`expresspay:${input.orderId}:${input.providerReference}`)
     .digest('hex')
@@ -284,6 +294,20 @@ export async function recordPaymentNotification(input: {
     values ('expresspay', ${eventId}, 'payment.status', ${payloadHash})
     on conflict (provider, event_id) do nothing`
   return { accepted: true, duplicate: result.count === 0 }
+}
+
+/** Public redirects are untrusted; only query ExpressPay for a token we issued. */
+export async function isKnownPaymentReference(orderId: string, providerReference: string) {
+  if (!isPostgresConfigured()) return false
+  const [known] = await getPostgres()<{
+    id: string
+  }[]>`
+    select id from public.lab_payment_attempts
+     where id = ${orderId}
+       and provider = 'expresspay'
+       and provider_reference = ${providerReference}
+     limit 1`
+  return Boolean(known)
 }
 
 /**

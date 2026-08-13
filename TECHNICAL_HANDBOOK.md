@@ -1,8 +1,8 @@
-# AI360 Lab technical handbook
+﻿# AI360 technical handbook
 
 For unfinished brief recovery, shared intent routing, African connectivity constraints and the durable coordinator rollout, read [RECOVERABLE_EXECUTION_ARCHITECTURE.md](./RECOVERABLE_EXECUTION_ARCHITECTURE.md).
 
-For the layer-by-layer path from a person’s words to a checked result, read [CONTEXT_ENGINEERING.md](./CONTEXT_ENGINEERING.md).
+For the layer-by-layer path from a personâ€™s words to a checked result, read [CONTEXT_ENGINEERING.md](./CONTEXT_ENGINEERING.md).
 
 Last reviewed: 2026-08-08
 
@@ -13,7 +13,7 @@ shipped work.
 
 ## 1. Product and release truth
 
-AI360 Lab is a practical AI workspace for people and teams who need to research
+AI360 is a practical AI workspace for people and teams who need to research
 current information, understand difficult material, make a decision, prepare a
 document or produce coordinated campaign assets. AI360 Studio is the creative
 production mode inside the Lab.
@@ -23,7 +23,7 @@ Use these names consistently:
 | Meaning | Canonical name |
 | --- | --- |
 | Organization and brand | AI360 |
-| Product | AI360 Lab |
+| Product | AI360 |
 | Creative workspace | AI360 Studio |
 
 The current release state is **private pilot candidate**. Public pages and guest

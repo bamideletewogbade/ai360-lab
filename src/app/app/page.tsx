@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -17,7 +17,6 @@ import { CreditBalance } from '@/components/CreditBalance'
 import { WorkspaceBoot } from '@/components/WorkspaceBoot'
 import { QualityFeedback } from '@/components/QualityFeedback'
 import { SidebarHelpMenu } from '@/components/SidebarHelpMenu'
-import { SettingsModal } from '@/components/SettingsModal'
 import { ConversationMinimap, type ConversationPrompt } from '@/components/ConversationMinimap'
 import { PromptComposer } from '@/components/PromptComposer'
 import { ResponseActions } from '@/components/ResponseActions'
@@ -108,7 +107,6 @@ type Conversation = {
 const STORAGE_KEY = 'ai360-lab-conversations-v2'
 const ACTIVE_KEY = 'ai360-lab-active-v2'
 const SIDEBAR_KEY = 'ai360-lab-sidebar-collapsed-v1'
-const ONBOARDING_KEY = 'ai360-lab-onboarding-v1'
 const PROFILE_KEY = 'ai360-lab-profile-v1'
 const MAX_FILE_BYTES = 4 * 1024 * 1024
 const MAX_VIDEO_BYTES = 8 * 1024 * 1024
@@ -118,14 +116,14 @@ function promptPreview(message: Msg) {
     .replace(/[`*_#>~\[\]]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-  if (plainText) return plainText.length > 92 ? `${plainText.slice(0, 89).trimEnd()}…` : plainText
+  if (plainText) return plainText.length > 92 ? `${plainText.slice(0, 89).trimEnd()}â€¦` : plainText
   if (message.attachments?.length) return `Prompt with ${message.attachments[0].name}`
   return 'Prompt'
 }
 
 const AGENT_TASKS = [
   { icon: 'RS', label: 'Research and report', prompt: 'Research this topic using reliable current sources and create a concise report with practical recommendations: ' },
-  { icon: '⇄', label: 'Compare documents', prompt: 'Compare the attached documents, identify the important differences, and recommend the best next steps.' },
+  { icon: 'â‡„', label: 'Compare documents', prompt: 'Compare the attached documents, identify the important differences, and recommend the best next steps.' },
   { icon: 'Aa', label: 'Create a proposal', prompt: 'Research what is needed and create a practical, professional proposal for: ' },
   { icon: 'AP', label: 'Build an action plan', prompt: 'Turn this outcome into a researched, step-by-step action plan with priorities, risks and next actions: ' },
 ]
@@ -191,7 +189,7 @@ function freshConversation(experience: Experience = 'chat'): Conversation {
 function titleFrom(text: string) {
   const clean = text.replace(/\s+/g, ' ').trim()
   if (/^(hi|hello|hey|yo|good (morning|afternoon|evening))[!. ]*$/i.test(clean)) return 'Quick chat'
-  return clean.length > 38 ? `${clean.slice(0, 38)}…` : clean || 'New conversation'
+  return clean.length > 38 ? `${clean.slice(0, 38)}â€¦` : clean || 'New conversation'
 }
 
 function displayConversationTitle(title: string) {
@@ -370,8 +368,6 @@ function LabWorkspace({
   // after closing still fires.
   const [createProjectSignal, setCreateProjectSignal] = useState(0)
   const [helpOpen, setHelpOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settingsTab, setSettingsTab] = useState<'general' | 'billing' | 'account'>('general')
   const [showReturnToLatest, setShowReturnToLatest] = useState(false)
   const [copiedPromptId, setCopiedPromptId] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -387,8 +383,8 @@ function LabWorkspace({
   const workspaceStorageKey = scopedStorageKey(STORAGE_KEY, workspaceScope)
   const workspaceActiveKey = scopedStorageKey(ACTIVE_KEY, workspaceScope)
   const sidebarPreferenceKey = scopedStorageKey(SIDEBAR_KEY, workspaceScope)
-  // Personalization is remembered per member, so each signed-in person — and
-  // the guest — keeps their own first-run record on a shared device. Inside an
+  // Personalization is remembered per member, so each signed-in person â€” and
+  // the guest â€” keeps their own first-run record on a shared device. Inside an
   // organization the member id is appended so members do not share (and cannot
   // leak) one org-wide record; this mirrors the server's (workspace, owner) key.
   const onboardingScope = signedIn && memberId
@@ -499,8 +495,8 @@ function LabWorkspace({
 
   // Personalization that follows a person across devices. When signed in, the
   // durable store decides: a saved answer is applied (and cached locally); an
-  // empty store is filled from any local choice — including one adopted from a
-  // guest session — so the answer given once on any device is theirs on the
+  // empty store is filled from any local choice â€” including one adopted from a
+  // guest session â€” so the answer given once on any device is theirs on the
   // next; and only a truly new identity is offered the intake.
   useEffect(() => {
     if (!hydrated || !authLoaded || !signedIn) return
@@ -621,12 +617,9 @@ function LabWorkspace({
       } else {
         selectExperience(nextExperience)
       }
-      localStorage.setItem(ONBOARDING_KEY, 'complete')
       window.history.replaceState(null, '', '/app')
       return
     }
-
-    localStorage.setItem(ONBOARDING_KEY, 'complete')
   // This handoff should run once after local workspace hydration.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated])
@@ -1133,7 +1126,7 @@ function LabWorkspace({
   /**
    * Reattaches to any run left unfinished, including after the tab was closed.
    *
-   * A conversation carries its runs with it, so reopening the Lab is enough to
+   * A conversation carries its runs with it, so reopening AI360 is enough to
    * find work that was still going when the connection died.
    */
   useEffect(() => {
@@ -1590,7 +1583,7 @@ function LabWorkspace({
           </svg>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats..." />
           {search ? (
-            <button type="button" className="clear-search-btn" onClick={() => setSearch('')} aria-label="Clear search">✕</button>
+            <button type="button" className="clear-search-btn" onClick={() => setSearch('')} aria-label="Clear search">âœ•</button>
           ) : null}
         </label>
 
@@ -1640,13 +1633,9 @@ function LabWorkspace({
           )}
         </nav>
         <div className="side-support">
-          <button
-            type="button"
-            className="side-help"
-            onClick={() => { setSettingsTab('general'); setSettingsOpen(true); setSidebarOpen(false) }}
-          >
-            <span>Settings</span><small>Workspace, billing and account</small>
-          </button>
+          <Link href="/settings" className="side-help" onClick={() => setSidebarOpen(false)}>
+            <span>Settings</span><small>Appearance, credits and account</small>
+          </Link>
           <SidebarHelpMenu
             onOpenGuide={() => { setHelpOpen(true); setSidebarOpen(false) }}
             feedbackContext={{ sourceSurface: experience === 'chat' ? 'quick' : experience === 'agent' ? 'research' : 'studio', conversationId: active.id, conversationText: messages.slice(-6).map((message) => `${message.role === 'user' ? 'Customer' : 'AI360'}: ${message.content}`).join('\n\n') }}
@@ -1661,9 +1650,10 @@ function LabWorkspace({
             <button ref={sidebarOpenButtonRef} className="icon-button sidebar-open-button" onClick={openWorkspaceSidebar} aria-label="Open sidebar" aria-controls="workspace-sidebar" title="Open sidebar">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2.5" /><path d="M9 4v16M11.5 9l3 3-3 3" /></svg>
             </button>
-            <Link className="lab-brand" href="/" aria-label="AI360 Lab home">
-              <img src="/icon-mark-black.png" alt="" />
-              <span><b>AI360</b> LAB</span>
+            <Link className="lab-brand" href="/" aria-label="AI360 home">
+              <img src="/icon-mark-black.png" alt="" className="brand-mark-light" />
+              <img src="/icon-white.png" alt="" className="brand-mark-dark" />
+              <span><b>AI360</b></span>
             </Link>
           </div>
           <div className="workspace-title"><b>{experience === 'studio' ? 'Projects' : 'Chats'}</b><small>{experience === 'studio' ? 'Build and improve lasting work' : experience === 'agent' ? 'Research is on' : 'Ask, write and research'}</small></div>
@@ -1726,11 +1716,16 @@ function LabWorkspace({
                   key={message.id}
                 >
                   <div className="avatar">
-                    {message.role === 'assistant' ? <img src="/icon-mark-black.png" alt="" /> : <span>You</span>}
+                    {message.role === 'assistant' ? (
+                      <>
+                        <img src="/icon-mark-black.png" alt="" className="brand-mark-light" />
+                        <img src="/icon-white.png" alt="" className="brand-mark-dark" />
+                      </>
+                    ) : <span>You</span>}
                   </div>
                   <div className="message-body">
                     <span className="who">
-                      {message.role === 'user' ? 'You' : message.agent ? 'AI360 Agent' : 'AI360 Lab'}
+                      {message.role === 'user' ? 'You' : message.agent ? 'AI360 Agent' : 'AI360'}
                     </span>
                     {message.attachments?.map((file) => (
                       <div className="message-file" key={file.name}>
@@ -1757,7 +1752,7 @@ function LabWorkspace({
                         </ol>
                         <div className="agent-plan-actions">
                           <button type="button" className="agent-plan-approve" disabled={busy} onClick={() => active && approvePlan(active.id, message)}>
-                            Run this plan <span aria-hidden="true">↗</span>
+                            Run this plan <span aria-hidden="true">â†—</span>
                           </button>
                           <button type="button" className="agent-plan-discard" disabled={busy} onClick={() => active && discardPlan(active.id, message.id)}>
                             Discard
@@ -1775,18 +1770,18 @@ function LabWorkspace({
                               : message.agentSteps.find((step) => step.status === 'active')?.label || 'Working...'}</b>
                             <small>{message.agentDone ? 'Open activity' : 'Live activity'}</small>
                           </span>
-                          <span className="agent-run-chevron" aria-hidden="true">⌄</span>
+                          <span className="agent-run-chevron" aria-hidden="true">âŒ„</span>
                         </summary>
                         <div className="agent-steps">
                           {message.agentSteps.map((step, stepIndex) => (
                             <div className={`agent-step ${step.status}`} key={step.id}>
-                              <span>{step.status === 'complete' ? '✓' : step.status === 'failed' ? '×' : String(stepIndex + 1).padStart(2, '0')}</span>
+                              <span>{step.status === 'complete' ? 'âœ“' : step.status === 'failed' ? 'Ã—' : String(stepIndex + 1).padStart(2, '0')}</span>
                               <span>{step.label}</span>
                             </div>
                           ))}
                           {message.agentActivity?.map((activity) => (
                             <div className="agent-step activity" key={`${activity.type}:${activity.createdAt}`}>
-                              <span aria-hidden="true">·</span>
+                              <span aria-hidden="true">Â·</span>
                               <span>{activity.summary}</span>
                             </div>
                           ))}
@@ -1803,7 +1798,7 @@ function LabWorkspace({
                         <div className="message-failure-actions">
                           {message.failure.retryable && index === messages.length - 1 ? (
                             <button type="button" className="failure-retry" onClick={() => regenerate(index)} disabled={busy}>
-                              {busy ? 'Running…' : 'Run again'}
+                              {busy ? 'Runningâ€¦' : 'Run again'}
                             </button>
                           ) : null}
                           <button type="button" onClick={() => void copyFailedPrompt(index)}>
@@ -1832,7 +1827,7 @@ function LabWorkspace({
                             <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>
                               <span>{String(sourceIndex + 1).padStart(2, '0')}</span>
                               <span>{source.title}</span>
-                              <span>↗</span>
+                              <span>â†—</span>
                             </a>
                           ))}
                         </div>
@@ -1841,7 +1836,7 @@ function LabWorkspace({
                     {message.actions?.length ? (
                       <section className="action-center" aria-label="Suggested actions">
                         <div className="action-center-head">
-                          <span>✓</span>
+                          <span>âœ“</span>
                           <span><b>Approval center</b><small>Nothing runs until you review and approve it.</small></span>
                         </div>
                         <div className="action-list">
@@ -1852,7 +1847,7 @@ function LabWorkspace({
                               onClick={() => action.status === 'proposed' && reviewAction(message.id, action)}
                               disabled={action.status === 'completed'}
                             >
-                              <span className="action-kind">{action.kind === 'email' ? 'Aa' : action.kind === 'calendar' ? '□' : '✓'}</span>
+                              <span className="action-kind">{action.kind === 'email' ? 'Aa' : action.kind === 'calendar' ? 'â–¡' : 'âœ“'}</span>
                               <span><b>{action.title}</b><small>{action.result || action.description}</small></span>
                               <span className="action-state">{action.status === 'completed' ? 'Done' : 'Review'}</span>
                             </button>
@@ -1927,7 +1922,7 @@ function LabWorkspace({
           <section className="workspace-guide" role="dialog" aria-modal="true" aria-labelledby="workspace-guide-title">
             <header>
               <div><span>AI360 help</span><h2 id="workspace-guide-title">Start with what you need.</h2></div>
-              <button type="button" onClick={() => setHelpOpen(false)} aria-label="Close help">×</button>
+              <button type="button" onClick={() => setHelpOpen(false)} aria-label="Close help">Ã—</button>
             </header>
             <p>You do not need to choose a model or learn prompt formulas. Describe the outcome in ordinary words and AI360 chooses the lightest useful path.</p>
             <div className="workspace-guide-options">
@@ -1939,14 +1934,13 @@ function LabWorkspace({
           </section>
         </div>
       )}
-      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} initialTab={settingsTab} />
       {actionDraft && (
         <div className="approval-backdrop" role="presentation">
           <section className="approval-dialog" role="dialog" aria-modal="true" aria-labelledby="approval-title">
             <div className="approval-head">
-              <span className="approval-mark">✓</span>
+              <span className="approval-mark">âœ“</span>
               <span><b id="approval-title">Review before approval</b><small>{actionDraft.title}</small></span>
-              <button onClick={() => setActionDraft(null)} aria-label="Close approval dialog">×</button>
+              <button onClick={() => setActionDraft(null)} aria-label="Close approval dialog">Ã—</button>
             </div>
             <div className="approval-body">
               <div className="approval-notice">
@@ -1987,7 +1981,7 @@ function LabWorkspace({
             <div className="approval-foot">
               <button className="approval-cancel" onClick={() => setActionDraft(null)} disabled={actionBusy}>Cancel</button>
               <button className="approval-confirm" onClick={approveAction} disabled={actionBusy}>
-                {actionBusy ? 'Preparing…' : actionDraft.kind === 'email' ? 'Approve and open draft' : actionDraft.kind === 'calendar' ? 'Approve and create invite' : 'Approve and save task'}
+                {actionBusy ? 'Preparingâ€¦' : actionDraft.kind === 'email' ? 'Approve and open draft' : actionDraft.kind === 'calendar' ? 'Approve and create invite' : 'Approve and save task'}
               </button>
             </div>
           </section>

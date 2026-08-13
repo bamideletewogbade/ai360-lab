@@ -1,4 +1,4 @@
-import { config } from 'dotenv'
+﻿import { config } from 'dotenv'
 import { pathToFileURL } from 'node:url'
 
 config({ path: '.env.local', quiet: true })
@@ -102,7 +102,7 @@ export function evaluateProductionEnvironment(env = process.env) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { deployment, errors, warnings } = evaluateProductionEnvironment()
-  console.log(`AI360 Lab ${deployment} preflight`)
+  console.log(`AI360 ${deployment} preflight`)
   for (const warning of warnings) console.log(`WARN  ${warning}`)
   for (const error of errors) console.error(`ERROR ${error}`)
   console.log(errors.length ? `BLOCKED (${errors.length} issue${errors.length === 1 ? '' : 's'})` : 'READY')

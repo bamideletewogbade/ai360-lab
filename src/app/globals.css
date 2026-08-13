@@ -520,6 +520,16 @@ button { color: inherit; }
 .help-popover { position: absolute; z-index: 40; bottom: calc(100% + 8px); left: 0; right: 0; display: grid; gap: 2px; padding: 6px; border: 1px solid #2c2e30; border-radius: 12px; background: #1b1d1f; box-shadow: 0 -14px 42px rgba(0,0,0,.42); animation: menu-in .16s var(--ease, cubic-bezier(.22,.61,.36,1)) both; }
 .help-menu-divider { height: 1px; margin: 4px 6px; background: #2c2e30; }
 
+/* The brand mark ships as two monochrome files; reveal the one that reads
+   against the active theme. Both are in the DOM so the swap needs no script.
+   The swap is opt-in per themed container rather than global, because the same
+   mark also appears on pricing, legal and auth, whose stylesheets are still
+   light-only — a global rule would put a white mark on a white page there. Add
+   a container here as its stylesheet is tokenised. */
+.brand-mark-dark { display: none; }
+:root[data-theme='dark'] :is(.landing-shell, .lab-shell, .session-bridge, .onboarding-card) .brand-mark-light { display: none; }
+:root[data-theme='dark'] :is(.landing-shell, .lab-shell, .session-bridge, .onboarding-card) .brand-mark-dark { display: inline-block; }
+
 /* Light / System / Dark segmented control. Drawn from variables so it themes itself. */
 .theme-control { display: inline-grid; grid-auto-flow: column; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--warm-white); }
 .theme-option { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border: 0; border-radius: 9px; background: transparent; color: var(--grey); cursor: pointer; font-size: 12px; font-weight: 650; transition: background .16s ease, color .16s ease; }

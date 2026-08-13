@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+﻿import { createHash } from 'node:crypto'
 import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrails'
 import { providerPreferences, routeFor } from '@/lib/models'
 import { routeIntentDeterministically, type IntentRoute } from '@/lib/intent-router'
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-          'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',
+          'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
         },
         body: JSON.stringify({
           model, models,

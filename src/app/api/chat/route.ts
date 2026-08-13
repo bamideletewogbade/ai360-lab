@@ -1,4 +1,4 @@
-import type { NextRequest } from 'next/server'
+﻿import type { NextRequest } from 'next/server'
 import { isChatMode, providerPreferences, REASONING_BUDGET, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models'
 import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
@@ -57,7 +57,7 @@ async function mockStream(send: (event: ChatStreamEvent) => void, messages: Msg[
     ? ` I can also see your attached ${last.attachments.map((file) => file.name).join(', ')}.`
     : ''
   const reply =
-    `You are using AI360 Lab in preview mode.${fileNote} ` +
+    `You are using AI360 in preview mode.${fileNote} ` +
     `Add an OpenRouter key to switch on live answers and streaming. ` +
     `For now, the full workspace experience, including history, files, voice and model selection, is ready to explore.`
 
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
             Authorization: `Bearer ${key}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-            'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',
+            'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
           },
           body: JSON.stringify({
             model,

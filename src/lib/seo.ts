@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+﻿import type { Metadata } from 'next'
 import { BRAND } from '@/lib/brand'
 
 type PublicPageMetadata = {
@@ -25,7 +25,7 @@ export function publicPageMetadata({ path, title, description, keywords = [], ab
       description,
       siteName: BRAND.productName,
       locale: 'en_GH',
-      images: [{ url: '/og.png', width: 1706, height: 907, alt: 'AI360 Lab, practical intelligence built from Accra' }],
+      images: [{ url: '/og.png', width: 1706, height: 907, alt: 'AI360, practical intelligence built from Accra' }],
     },
     twitter: {
       card: 'summary_large_image',

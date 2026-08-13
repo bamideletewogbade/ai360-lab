@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation'
+﻿import { redirect } from 'next/navigation'
 import { LabLanding } from '@/components/LabLanding'
 import { getOptionalAuthContext, isAuthConfigured } from '@/lib/auth'
 import { publicPageMetadata } from '@/lib/seo'
@@ -6,13 +6,13 @@ import { publicPageMetadata } from '@/lib/seo'
 // The signed-in redirect below reads the request's session, so this page must
 // be evaluated per request. Without this it can be statically prerendered with
 // no user, caching the marketing landing and serving it to signed-in people
-// too — which is exactly the "why am I not in my workspace" problem.
+// too â€” which is exactly the "why am I not in my workspace" problem.
 export const dynamic = 'force-dynamic'
 
 export const metadata = publicPageMetadata({
   path: '',
-  title: 'AI360 Lab | AI research, planning and creative tools',
-  description: 'Research current information, understand difficult topics, prepare proposals and create campaigns with AI360 Lab, a practical AI workspace built from Accra.',
+  title: 'AI360 | AI research, planning and creative tools',
+  description: 'Research current information, understand difficult topics, prepare proposals and create campaigns with AI360, a practical AI workspace built from Accra.',
   keywords: ['AI360', 'AI assistant Ghana', 'AI research tools Africa', 'AI campaign generator', 'AI proposal writer'],
   absoluteTitle: true,
 })

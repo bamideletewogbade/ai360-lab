@@ -113,8 +113,10 @@ export function CreditBalance({ signedIn, busy }: { signedIn: boolean; busy: boo
               ))}
             </ul>
           ) : null}
-          <Link href="/pricing" className="credit-plans-link" onClick={() => setOpen(false)}>
-            View plans and top up <span aria-hidden="true">→</span>
+          {/* The full picture — balance, costs, plan and payments — lives on one
+              page now, so the popover stays a glance and hands off to it. */}
+          <Link href="/settings/billing" className="credit-plans-link" onClick={() => setOpen(false)}>
+            Credits and billing <span aria-hidden="true">→</span>
           </Link>
         </div>
       ) : null}

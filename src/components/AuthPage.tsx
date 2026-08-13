@@ -1,6 +1,6 @@
-import Image from 'next/image'
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { SignIn, SignUp } from '@clerk/nextjs'
+import { BrandMark } from '@/components/BrandMark'
 import styles from '@/app/auth.module.css'
 
 type AuthMode = 'sign-in' | 'sign-up'
@@ -17,7 +17,7 @@ const CONTENT: Record<AuthMode, {
     eyebrow: 'Welcome back',
     title: 'Pick up where you left off.',
     copy: 'Return to your conversations, projects and finished work.',
-    alternate: 'New to AI360 Lab?',
+    alternate: 'New to AI360?',
     alternateHref: '/sign-up',
     alternateAction: 'Create a free account',
   },
@@ -74,9 +74,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
   return (
     <main className={`${styles.shell} ${mode === 'sign-in' ? styles.signIn : styles.signUp}`}>
-      <Link href="/" className={styles.brand} aria-label="AI360 Lab home">
-        <Image src="/logo-black.png" width={180} height={44} alt="AI360" priority />
-        <span>LAB</span>
+      <Link href="/" className={styles.brand} aria-label="AI360 home">
+        <BrandMark width={180} height={44} priority />
       </Link>
 
       <section className={styles.story}>
@@ -92,7 +91,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             <article><span>03</span><div><b>Make it yours</b><small>Build a workspace around what you want to learn or accomplish.</small></div></article>
           </div>
 
-          <div className={styles.audiences} aria-label="Ways people use AI360 Lab">
+          <div className={styles.audiences} aria-label="Ways people use AI360">
             <span>Learn</span><span>Work</span><span>Create</span><span>Organise</span><span>Serve</span>
           </div>
 
@@ -112,7 +111,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             <span>Workspace</span>
           </div>
           <p className={styles.eyebrow}>{content.eyebrow}</p>
-          <h2>{mode === 'sign-in' ? 'Sign in to AI360 Lab' : 'Create your AI360 account'}</h2>
+          <h2>{mode === 'sign-in' ? 'Sign in to AI360' : 'Create your AI360 account'}</h2>
           <p className={styles.panelCopy}>
             {mode === 'sign-in'
               ? 'Use the same account you use across AI360.'
@@ -129,7 +128,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             ) : (
               <div className={styles.setupNotice} role="status">
                 <b>Account access is being connected</b>
-                <p>You can still explore the Lab as a guest. Sign-in will appear here once the secure account service is enabled.</p>
+                <p>You can still explore AI360 as a guest. Sign-in will appear here once the secure account service is enabled.</p>
                 <Link href="/app">Continue as a guest</Link>
               </div>
             )}

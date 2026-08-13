@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Email templates.
  *
  * Every function here is pure: it takes plain data and returns a subject and a
@@ -28,7 +28,7 @@ function firstName(name: string | null | undefined) {
 
 function ghs(amountGhs: number) {
   const value = Number.isFinite(amountGhs) ? amountGhs : 0
-  return `GH₵${value.toFixed(2)}`
+  return `GHâ‚µ${value.toFixed(2)}`
 }
 
 /**
@@ -48,7 +48,7 @@ function layout(input: { heading: string; bodyHtml: string; cta?: { label: strin
 <body style="margin:0;background:#f4f2ec;padding:24px 0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#101112;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2ded4;border-radius:16px;">
     <tr><td style="padding:28px 32px 8px;">
-      <a href="${escapeHtml(appUrl)}" style="text-decoration:none;color:#101112;font-weight:800;letter-spacing:0.02em;font-size:18px;">AI360 <span style="font-weight:600;color:#56595c;">LAB</span></a>
+      <a href="${escapeHtml(appUrl)}" style="text-decoration:none;color:#101112;font-weight:800;letter-spacing:0.02em;font-size:18px;">AI360</a>
     </td></tr>
     <tr><td style="padding:8px 32px 4px;">
       <h1 style="margin:0;font-size:21px;line-height:1.3;">${escapeHtml(input.heading)}</h1>
@@ -60,7 +60,7 @@ function layout(input: { heading: string; bodyHtml: string; cta?: { label: strin
       </table>
     </td></tr>
     <tr><td style="padding:16px 32px 28px;border-top:1px solid #efece4;font-size:12px;line-height:1.6;color:#8a8d90;">
-      ${escapeHtml(brandName)} · You are receiving this because you have an account with AI360.
+      ${escapeHtml(brandName)} Â· You are receiving this because you have an account with AI360.
     </td></tr>
   </table>
 </body>
@@ -78,17 +78,17 @@ function paragraph(text: string) {
 export function welcomeEmail(data: { name?: string | null }): RenderedEmail {
   const { appUrl } = emailSettings()
   const name = firstName(data.name)
-  const subject = 'Welcome to AI360 Lab'
+  const subject = 'Welcome to AI360'
   const html = layout({
     heading: `Welcome, ${name}.`,
     bodyHtml:
-      paragraph('Your workspace is ready. Everything you create — conversations, projects and files — now stays with you across every device.') +
+      paragraph('Your workspace is ready. Everything you create â€” conversations, projects and files â€” now stays with you across every device.') +
       paragraph('You start on the free Explorer plan with monthly credits to try research, documents and voice.'),
     cta: { label: 'Open your workspace', href: `${appUrl}/app` },
   })
   const text = `Welcome, ${name}.
 
-Your AI360 Lab workspace is ready. Your conversations, projects and files now stay with you across every device.
+Your AI360 workspace is ready. Your conversations, projects and files now stay with you across every device.
 
 You start on the free Explorer plan with monthly credits to try research, documents and voice.
 
@@ -175,7 +175,7 @@ export function allowanceRenewedEmail(data: {
   const credits = Math.max(0, Math.floor(data.credits))
   const subject = 'Your monthly AI360 credits are ready'
   const html = layout({
-    heading: 'This month’s credits are ready',
+    heading: 'This monthâ€™s credits are ready',
     bodyHtml:
       paragraph(`Hi ${name}, your ${escapeHtml(data.planName.slice(0, 60))} plan has renewed with <strong>${credits} credit${credits === 1 ? '' : 's'}</strong> for this month.`) +
       paragraph('Unused allowance from last month has expired; any credits you purchased stay with you.'),
@@ -233,7 +233,7 @@ export function qualityUrgentAlertEmail(data: {
 }): RenderedEmail {
   const { appUrl } = emailSettings()
   const severity = escapeHtml(data.severity.toUpperCase().slice(0, 8))
-  const subject = `[${data.severity.toUpperCase().slice(0, 8)}] AI360 urgent review — ${data.category.slice(0, 40)}`
+  const subject = `[${data.severity.toUpperCase().slice(0, 8)}] AI360 urgent review â€” ${data.category.slice(0, 40)}`
   const html = layout({
     heading: `Urgent review needed (${severity})`,
     bodyHtml:

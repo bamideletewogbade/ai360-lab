@@ -1,8 +1,8 @@
-import type { Metadata } from 'next'
+﻿import type { Metadata } from 'next'
 import { PaymentStatus } from '@/components/PaymentStatus'
 
 export const metadata: Metadata = {
-  title: 'Payment status | AI360 Lab',
+  title: 'Payment status | AI360',
   robots: { index: false, follow: false },
 }
 

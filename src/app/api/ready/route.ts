@@ -1,4 +1,4 @@
-import { checkPostgresConnection } from '@/lib/postgres'
+﻿import { checkPostgresConnection } from '@/lib/postgres'
 import { productionReadiness, selectedDatabaseProvider } from '@/lib/runtime-config'
 import { errorDetails, requestLogger } from '@/lib/observability'
 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
   return Response.json({
     status: ready ? 'ready' : 'not_ready',
-    service: 'AI360 Lab',
+    service: 'AI360',
     databaseProvider,
     databaseConnection,
     checks: readiness.checks,

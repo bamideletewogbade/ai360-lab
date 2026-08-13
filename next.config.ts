@@ -1,4 +1,6 @@
 import type { NextConfig } from 'next'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 const securityHeaders = [
   { key: 'X-DNS-Prefetch-Control', value: 'off' },
@@ -16,21 +18,32 @@ const freshAppShell = {
   value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0',
 }
 
+// The build wrapper persists one release ID so `next build` and `next start`
+// always agree without requiring a manual Hostinger environment change.
+const deploymentId = (() => {
+  if (process.env.NODE_ENV !== 'production') return undefined
+  try {
+    return readFileSync(resolve(process.cwd(), '.deployment-id'), 'utf8').trim() || undefined
+  } catch {
+    return process.env.NEXT_DEPLOYMENT_ID?.trim() || undefined
+  }
+})()
+
 const nextConfig: NextConfig = {
+  ...(deploymentId ? { deploymentId } : {}),
   poweredByHeader: false,
   allowedDevOrigins: ['127.0.0.1'],
   async headers() {
     return [
       {
-        // Hostinger's CDN otherwise keeps the statically generated app shell
-        // after a Git deployment, leaving learners on an older interface.
         source: '/',
         headers: [...securityHeaders, freshAppShell],
       },
+      { source: '/pricing', headers: [...securityHeaders, freshAppShell] },
       {
-        // Pricing is a commercial contract surface. Do not let the CDN serve a
-        // catalog from an earlier deployment after the source of truth changes.
-        source: '/pricing',
+        // The private workspace shell must never outlive the chunk set deployed
+        // beside it. API and hashed asset caching remain untouched.
+        source: '/app/:path*',
         headers: [...securityHeaders, freshAppShell],
       },
       { source: '/(.*)', headers: securityHeaders },

@@ -1,8 +1,8 @@
-'use client'
+﻿'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { Show, UserButton } from '@clerk/nextjs'
+import { BrandMark } from '@/components/BrandMark'
 import { PUBLIC_NAV_LINKS } from '@/lib/brand'
 
 const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
@@ -18,10 +18,9 @@ export type SiteNavCurrent = 'home' | 'what' | 'how' | 'pricing' | 'changelog' |
 
 export function SiteNav({ current = 'home' }: { current?: SiteNavCurrent }) {
   return (
-    <nav className="landing-nav" aria-label="AI360 Lab navigation">
-      <Link href="/" className="landing-logo" aria-label="AI360 Lab home">
-        <Image src="/logo-black.png" width={180} height={44} alt="AI360" priority />
-        <span>LAB</span>
+    <nav className="landing-nav" aria-label="AI360 navigation">
+      <Link href="/" className="landing-logo" aria-label="AI360 home">
+        <BrandMark width={180} height={44} priority />
       </Link>
       {/* Top-of-funnel links are for prospects. A signed-in person has already
           arrived, so they get a workspace-focused nav instead of the pitch. */}
@@ -74,7 +73,7 @@ function SignedOutActions() {
   return (
     <>
       <Link href="/sign-in" className="landing-sign-in">Sign in</Link>
-      <Link href="/app" className="landing-open">Start free <span aria-hidden="true">↗</span></Link>
+      <Link href="/app" className="landing-open">Start free <span aria-hidden="true">â†—</span></Link>
     </>
   )
 }

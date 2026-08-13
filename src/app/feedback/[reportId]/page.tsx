@@ -1,9 +1,9 @@
-import { FeedbackStatus } from '@/components/FeedbackStatus'
+﻿import { FeedbackStatus } from '@/components/FeedbackStatus'
 import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
 
 export const metadata = {
-  title: 'Quality report status | AI360 Lab',
+  title: 'Quality report status | AI360',
   robots: { index: false, follow: false },
 }
 

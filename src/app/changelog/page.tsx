@@ -1,4 +1,4 @@
-import { SiteFooter } from '@/components/SiteFooter'
+﻿import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
 import { BRAND } from '@/lib/brand'
 import { CHANGELOG_RELEASES } from '@/lib/changelog'
@@ -8,15 +8,15 @@ import styles from './changelog.module.css'
 export const metadata = publicPageMetadata({
   path: '/changelog',
   title: 'Product changelog',
-  description: 'Follow meaningful AI360 Lab product updates across the workspace, Studio, reliability, safety and public experience.',
-  keywords: ['AI360 Lab changelog', 'AI360 product updates', 'AI workspace Ghana'],
+  description: 'Follow meaningful AI360 product updates across the workspace, Studio, reliability, safety and public experience.',
+  keywords: ['AI360 changelog', 'AI360 product updates', 'AI workspace Ghana'],
 })
 
 const structuredData = {
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
-  name: 'AI360 Lab product changelog',
-  description: 'Meaningful product updates from AI360 Lab.',
+  name: 'AI360 product changelog',
+  description: 'Meaningful product updates from AI360.',
   url: `${BRAND.siteUrl}/changelog`,
   mainEntity: {
     '@type': 'ItemList',
@@ -35,7 +35,7 @@ export default function ChangelogPage() {
       <SiteNav current="changelog" />
       <header className={styles.hero}>
         <p className={styles.eyebrow}>Product changelog</p>
-        <h1>What is changing at AI360 Lab.</h1>
+        <h1>What is changing at AI360.</h1>
         <p className={styles.intro}>
           A plain record of improvements that change what people can do, how safely the system works, or how clearly the product communicates. Internal commit noise stays internal.
         </p>

@@ -1,8 +1,10 @@
 export const BRAND = {
   name: 'AI360',
-  productName: 'AI360 Lab',
+  // The product is simply AI360. It was previously "AI360 Lab"; the shorter name
+  // is the canonical one everywhere in product copy, metadata and email.
+  productName: 'AI360',
   studioName: 'AI360 Studio',
-  legacyNames: ['AI Three Sixty', 'AI 360'] as const,
+  legacyNames: ['AI Three Sixty', 'AI 360', 'AI360 Lab'] as const,
   siteUrl: 'https://lab.aithreesixty.tech',
   companyUrl: 'https://aithreesixty.tech',
   promise: 'Bring the goal. Leave with something you can use.',

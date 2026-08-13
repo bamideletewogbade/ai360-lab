@@ -1,4 +1,4 @@
-import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveRequester } from '@/lib/guardrails'
+﻿import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
 import { openCreditGate } from '@/lib/billing/credit-gate'
@@ -192,7 +192,7 @@ export async function POST(request: Request) {
           Authorization: `Bearer ${key}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-          'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',
+          'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
         },
         body: JSON.stringify({
           model,

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+﻿import type { Metadata } from 'next'
 import { Plus_Jakarta_Sans, DM_Sans } from 'next/font/google'
 import './globals.css'
 import './landing.css'
@@ -6,6 +6,7 @@ import { AuthProvider } from '@/components/AuthProvider'
 import { SiteStructuredData } from '@/components/SiteStructuredData'
 import { BRAND } from '@/lib/brand'
 import { THEME_INIT_SCRIPT } from '@/lib/theme'
+import { ASSET_RECOVERY_SCRIPT } from '@/lib/asset-recovery'
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta', display: 'swap' })
 const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-dm', display: 'swap' })
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
   creator: BRAND.name,
   publisher: BRAND.name,
   category: 'Artificial intelligence software',
-  keywords: ['AI360', 'AI360 Lab', 'AI tools Ghana', 'AI research assistant', 'AI campaign creator', 'AI for African businesses'],
+  keywords: ['AI360', 'AI tools Ghana', 'AI research assistant', 'AI campaign creator', 'AI for African businesses'],
   verification: {
     google: process.env.GOOGLE_SITE_VERIFICATION,
     other: process.env.BING_SITE_VERIFICATION
@@ -48,7 +49,7 @@ export const metadata: Metadata = {
     description: 'Bring the goal. Understand, decide, create and leave ready to move.',
     siteName: BRAND.productName,
     locale: 'en_GH',
-    images: [{ url: '/og.png', width: 1706, height: 907, alt: 'AI360 Lab, practical intelligence built from Accra' }],
+    images: [{ url: '/og.png', width: 1706, height: 907, alt: 'AI360, practical intelligence built from Accra' }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -67,6 +68,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${jakarta.variable} ${dmSans.variable}`} suppressHydrationWarning>
       <head>
+        {/* Runs before Next.js chunks so a missing deployment asset cannot
+            strand the server-rendered workspace loader indefinitely. */}
+        <script dangerouslySetInnerHTML={{ __html: ASSET_RECOVERY_SCRIPT }} />
         {/* Sets the theme on <html> before first paint so the app never flashes
             the wrong colours on load. Runs from the persisted choice, falling
             back to the operating-system preference. */}

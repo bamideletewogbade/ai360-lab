@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic'
+﻿export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   const requestId = request.headers.get('x-request-id')?.replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 80)
@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   return Response.json(
     {
       status: 'ok',
-      service: 'AI360 Lab',
+      service: 'AI360',
       environment: process.env.NODE_ENV,
       uptimeSeconds: Math.round(process.uptime()),
       requestId,

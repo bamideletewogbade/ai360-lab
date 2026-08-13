@@ -117,6 +117,46 @@ test('mismatched or malformed provider data fails closed', { concurrency: false 
   }
 })
 
+test('an approved response requires a provider transaction ID', { concurrency: false }, async () => {
+  const restore = withConfig()
+  const fetcher = (async () => Response.json({
+    result: 1,
+    'result-text': 'Approved',
+    'order-id': 'pay_1234567890abcdef',
+    token: 'safe.token_123',
+    currency: 'GHS',
+    amount: '125.00',
+  })) as typeof fetch
+  try {
+    await assert.rejects(
+      createExpressPayProvider(fetcher).queryPayment('safe.token_123'),
+      (error: unknown) => error instanceof ExpressPayError && error.code === 'bad_response',
+    )
+  } finally {
+    restore()
+  }
+})
+
+test('checkout refuses unsafe callbacks and invalid monetary values', { concurrency: false }, async () => {
+  const restore = withConfig()
+  const fetcher = (async () => {
+    throw new Error('provider must not be called')
+  }) as typeof fetch
+  try {
+    await assert.rejects(
+      createExpressPayProvider(fetcher).createCheckout({ ...providerInput(), returnUrl: 'http://example.com/return' }),
+      (error: unknown) => error instanceof ExpressPayError && error.code === 'invalid_request',
+    )
+    await assert.rejects(
+      createExpressPayProvider(fetcher).createCheckout({ ...providerInput(), amountMinor: Number.MAX_SAFE_INTEGER + 1 }),
+      (error: unknown) => error instanceof ExpressPayError && error.code === 'invalid_request',
+    )
+    assert.throws(() => parseGhsMinor('999999999999999999999'), ExpressPayError)
+  } finally {
+    restore()
+  }
+})
+
 test('payment migration and repository enforce one activation path', () => {
   const migration = readFileSync('database/postgres/0007_expresspay_foundation.sql', 'utf8')
   const repository = readFileSync('src/lib/payments/payment-repository.ts', 'utf8')
@@ -129,6 +169,8 @@ test('payment migration and repository enforce one activation path', () => {
   assert.match(repository, /claimPaymentReconciliation/)
   assert.match(repository, /last_checked_at < now\(\)/)
   assert.match(repository, /payment-grant:/)
+  assert.match(repository, /isKnownPaymentReference/)
+  assert.match(repository, /provider_reference = \$\{input\.providerReference\}/)
 })
 
 test('the adapter never sends card or wallet credentials through AI360', () => {

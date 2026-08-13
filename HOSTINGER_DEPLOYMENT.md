@@ -1,6 +1,6 @@
-# AI360 Lab on Hostinger
+﻿# AI360 on Hostinger
 
-AI360 Lab is a full Next.js application with server-side API routes. Deploy it
+AI360 is a full Next.js application with server-side API routes. Deploy it
 as a **Node.js Web App** using Hostinger's **Next.js** framework preset. Do not
 deploy it as a static website.
 
@@ -41,7 +41,7 @@ OPENROUTER_API_KEY=<newly rotated key>
 NEXT_PUBLIC_APP_URL=https://lab.aithreesixty.tech
 AI360_DEPLOYMENT_ENV=production
 OPENROUTER_SITE_URL=https://lab.aithreesixty.tech
-OPENROUTER_SITE_NAME=AI360 Lab
+OPENROUTER_SITE_NAME=AI360
 OPENROUTER_IMAGE_MODEL=openai/gpt-image-1-mini
 OPENROUTER_IMAGE_MODELS=openai/gpt-image-1-mini,google/gemini-3.1-flash-lite-image
 OPENROUTER_VIDEO_MODEL=google/veo-3.1-lite
@@ -197,12 +197,12 @@ After changing environment variables or deployment settings, use
 The homepage sends `Cache-Control: no-store` because it is the application
 shell. This prevents Hostinger CDN from keeping an older interface after a Git
 deployment. If the dashboard still shows a stale version immediately after
-deploying, use **Cache → Clear cache** once, then reload the site.
+deploying, use **Cache â†’ Clear cache** once, then reload the site.
 
 ## Troubleshooting with Runtime Logs
 
 Open the application in hPanel, then select **Runtime logs** from the sidebar.
-AI360 Lab writes one-line JSON events that are easy to search and correlate.
+AI360 writes one-line JSON events that are easy to search and correlate.
 
 Every API request has a `requestId`. When an error is shown in the interface,
 copy the reference value and search for it in Runtime logs. A typical request

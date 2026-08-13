@@ -1,4 +1,4 @@
-import { SiteNav } from '@/components/SiteNav'
+﻿import { SiteNav } from '@/components/SiteNav'
 import { SiteFooter } from '@/components/SiteFooter'
 import { publicPageMetadata } from '@/lib/seo'
 import styles from '../legal.module.css'
@@ -6,7 +6,7 @@ import styles from '../legal.module.css'
 export const metadata = publicPageMetadata({
   path: '/privacy',
   title: 'Privacy',
-  description: 'How AI360 Lab handles conversations, files, voice recordings, generated media and operational information.',
+  description: 'How AI360 handles conversations, files, voice recordings, generated media and operational information.',
 })
 
 export default function PrivacyPage() {
@@ -20,8 +20,8 @@ export default function PrivacyPage() {
           <p className={styles.updated}>Last updated August 8, 2026</p>
 
           <section>
-            <h2>What the Lab handles</h2>
-            <p>AI360 Lab processes the prompts, files and recordings you choose to provide so it can answer questions, research topics, analyze materials and prepare exports.</p>
+            <h2>What AI360 handles</h2>
+            <p>AI360 processes the prompts, files and recordings you choose to provide so it can answer questions, research topics, analyze materials and prepare exports.</p>
             <ul>
               <li>Conversation history is saved in your browser on your current device.</li>
               <li>Prompts and supported attachments are sent through our server to the configured AI provider.</li>
@@ -34,12 +34,12 @@ export default function PrivacyPage() {
 
           <section>
             <h2>Live web research</h2>
-            <p>When a question or project depends on current public information, AI360 Lab may automatically create a search query and retrieve relevant public webpages through the configured AI and search providers. Search queries can be derived from what you ask, so do not include confidential or sensitive information in requests that may require web research.</p>
+            <p>When a question or project depends on current public information, AI360 may automatically create a search query and retrieve relevant public webpages through the configured AI and search providers. Search queries can be derived from what you ask, so do not include confidential or sensitive information in requests that may require web research.</p>
           </section>
 
           <section>
             <h2>What we do not do</h2>
-            <p>We do not sell your prompts, use advertising trackers, or expose the service API key to your browser. Voice recordings are not added to a training or improvement dataset. AI360 Lab does not silently generate paid media, send messages, publish posts or change external systems.</p>
+            <p>We do not sell your prompts, use advertising trackers, or expose the service API key to your browser. Voice recordings are not added to a training or improvement dataset. AI360 does not silently generate paid media, send messages, publish posts or change external systems.</p>
           </section>
 
           <section>
@@ -60,7 +60,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2>Your choices</h2>
-            <p>You can delete individual conversations in the Lab. You can also clear this site&apos;s browser data to remove all locally saved conversation history. Avoid submitting passwords, payment credentials, private identification numbers, health records or other highly sensitive information.</p>
+            <p>You can delete individual conversations in AI360. You can also clear this site&apos;s browser data to remove all locally saved conversation history. Avoid submitting passwords, payment credentials, private identification numbers, health records or other highly sensitive information.</p>
           </section>
 
           <section>

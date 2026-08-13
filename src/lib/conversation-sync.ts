@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Conversation sync primitives.
  *
- * The Lab is local-first: the browser is the working copy and the server is the
- * durable, cross-device mirror. Rather than one side owning the whole list —
- * which lets a stale device delete another's newer work — records are merged by
+ * AI360 is local-first: the browser is the working copy and the server is the
+ * durable, cross-device mirror. Rather than one side owning the whole list â€”
+ * which lets a stale device delete another's newer work â€” records are merged by
  * id with a last-writer-wins clock (`updatedAt`). These helpers are pure so the
  * merge rules can be unit tested without a database or a browser.
  */

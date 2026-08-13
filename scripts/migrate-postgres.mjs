@@ -1,4 +1,4 @@
-import { config } from 'dotenv'
+﻿import { config } from 'dotenv'
 import { createHash } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import postgres from 'postgres'
@@ -56,7 +56,7 @@ try {
     `
     console.log(`Applied ${migrationFile}`)
   }
-  console.log('AI360 Lab Postgres schema is ready.')
+  console.log('AI360 Postgres schema is ready.')
 } finally {
   await sql.end()
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
+import { BrandMark } from '@/components/BrandMark'
 import {
   ONBOARDING_GOALS, ONBOARDING_ROLES,
   type OnboardingGoal, type OnboardingProfile, type OnboardingRole,
@@ -27,7 +27,7 @@ export function WorkspaceOnboarding({
   return (
     <div className="onboarding-backdrop" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
       <section className="onboarding-card intake-card">
-        <div className="onboarding-brand"><Image src="/icon-mark-black.png" width={27} height={31} alt="" /><span><b>AI360</b> LAB</span></div>
+        <div className="onboarding-brand"><BrandMark kind="icon" width={27} height={31} alt="" /><span><b>AI360</b></span></div>
         <button className="onboarding-skip" onClick={onSkip}>Skip for now</button>
         <p className="onboarding-kicker">Welcome to your AI workspace</p>
         <h1 id="onboarding-title">Let us shape this<br />around you</h1>

@@ -1,4 +1,4 @@
-import { SiteNav } from '@/components/SiteNav'
+﻿import { SiteNav } from '@/components/SiteNav'
 import { SiteFooter } from '@/components/SiteFooter'
 import { publicPageMetadata } from '@/lib/seo'
 import styles from '../legal.module.css'
@@ -6,7 +6,7 @@ import styles from '../legal.module.css'
 export const metadata = publicPageMetadata({
   path: '/terms',
   title: 'Terms',
-  description: 'Terms for responsible use, approvals, generated content, payments and service availability in AI360 Lab.',
+  description: 'Terms for responsible use, approvals, generated content, payments and service availability in AI360.',
 })
 
 export default function TermsPage() {
@@ -20,8 +20,8 @@ export default function TermsPage() {
           <p className={styles.updated}>Last updated August 3, 2026</p>
 
           <section>
-            <h2>Using AI360 Lab</h2>
-            <p>AI360 Lab is an experimental learning and productivity service from AI360 and the Accra Innovation Centre. You may use it for lawful personal, educational and business tasks, subject to the usage limits shown by the service.</p>
+            <h2>Using AI360</h2>
+            <p>AI360 is an experimental learning and productivity service from AI360 and the Accra Innovation Centre. You may use it for lawful personal, educational and business tasks, subject to the usage limits shown by the service.</p>
           </section>
 
           <section>
@@ -32,7 +32,7 @@ export default function TermsPage() {
 
           <section>
             <h2>Acceptable use</h2>
-            <p>Do not use the Lab to break the law, harm people, invade privacy, distribute malware, bypass security, impersonate others, or interfere with the service. Automated scraping and attempts to evade rate limits are prohibited.</p>
+            <p>Do not use AI360 to break the law, harm people, invade privacy, distribute malware, bypass security, impersonate others, or interfere with the service. Automated scraping and attempts to evade rate limits are prohibited.</p>
           </section>
 
           <section>

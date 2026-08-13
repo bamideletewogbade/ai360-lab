@@ -1,4 +1,4 @@
-import { transcriptionLanguageHint } from '@/lib/languages'
+﻿import { transcriptionLanguageHint } from '@/lib/languages'
 import type { TranscriptionProvider, TranscriptionRequest, TranscriptionResult, TranscriptionUsage } from '@/lib/voice/contracts'
 
 type ProviderResponse = { text?: unknown; language?: unknown; segments?: unknown; usage?: Record<string, unknown> }
@@ -55,7 +55,7 @@ export class OpenRouterTranscriptionProvider implements TranscriptionProvider {
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
         'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
-        'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360 Lab',
+        'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
       },
       body: form,
     })

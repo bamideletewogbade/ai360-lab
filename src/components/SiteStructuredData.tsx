@@ -49,7 +49,9 @@ export function SiteStructuredData() {
         '@id': `${BRAND.siteUrl}/#website`,
         url: BRAND.siteUrl,
         name: BRAND.productName,
-        alternateName: BRAND.legacyNames.map((name) => `${name} Lab`),
+        // Former names, so a search for what the product used to be called
+        // still resolves to it.
+        alternateName: [...BRAND.legacyNames],
         description: BRAND.signature,
         inLanguage: 'en',
         publisher: { '@id': `${BRAND.companyUrl}/#organization` },

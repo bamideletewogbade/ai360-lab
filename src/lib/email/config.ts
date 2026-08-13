@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Configuration for the transactional email plane.
  *
  * Email is provider-isolated behind `provider.ts` and disabled by default. It
@@ -32,10 +32,10 @@ export function isEmailConfigured() {
 export function emailSettings() {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://lab.aithreesixty.tech').replace(/\/+$/, '')
   return {
-    from: (process.env.EMAIL_FROM || 'AI360 Lab <lab@aithreesixty.tech>').trim(),
+    from: (process.env.EMAIL_FROM || 'AI360 <lab@aithreesixty.tech>').trim(),
     replyTo: process.env.EMAIL_REPLY_TO?.trim() || null,
     appUrl,
-    brandName: 'AI360 Lab',
+    brandName: 'AI360',
     supportUrl: `${appUrl}/feedback`,
   }
 }

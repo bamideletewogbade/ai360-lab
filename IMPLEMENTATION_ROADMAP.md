@@ -1,4 +1,4 @@
-# AI360 Lab implementation roadmap
+﻿# AI360 implementation roadmap
 
 Last updated: 2026-08-04
 
@@ -12,7 +12,7 @@ Companion references:
 
 ## Product outcome
 
-AI360 Lab should help an individual or team move from an outcome to a reviewed deliverable through a visible, controlled process:
+AI360 should help an individual or team move from an outcome to a reviewed deliverable through a visible, controlled process:
 
 `brief -> plan -> delegated work -> verification -> human approval -> production -> reusable assets`
 
@@ -20,7 +20,7 @@ AI360 Lab should help an individual or team move from an outcome to a reviewed d
 
 - [x] Reuse the existing AI360 Clerk application for `aithreesixty.tech` and `lab.aithreesixty.tech`.
 - [x] Keep personal accounts available. Organization membership must be optional.
-- [x] Treat Clerk Organizations as team or customer workspaces, not as the AI360 Lab product boundary.
+- [x] Treat Clerk Organizations as team or customer workspaces, not as the AI360 product boundary.
 - [x] Keep the existing AI360 Organization for internal staff and pilot administration.
 - [x] Start with Clerk's `org:admin` and `org:member` roles.
 - [x] Keep the agent runtime model-independent. Kimi K3 can be a coordinator option, not a permanent hard dependency.
@@ -295,7 +295,7 @@ Only after this passes should Studio persistence and the coordinator runtime be 
 | 2026-08-01 | Bounded coordinator selected | Better cost control, observability and evaluation than an immediate large swarm |
 | 2026-08-01 | First specialist team selected | Researcher, Strategist and Verifier cover evidence, decisions and quality control |
 | 2026-08-01 | Workspace ownership foundation implemented | Server-derived personal and organization keys now scope conversation persistence |
-| 2026-08-08 | Research-calibrated monthly pilot pricing adopted | GH₵0 Explorer, GH₵125 Everyday, GH₵350 Builder and GH₵1,200 assisted Team balance accessible entry with safer upper-plan economics; annual purchasing waits for proven renewal and refund operations |
+| 2026-08-08 | Research-calibrated monthly pilot pricing adopted | GHâ‚µ0 Explorer, GHâ‚µ125 Everyday, GHâ‚µ350 Builder and GHâ‚µ1,200 assisted Team balance accessible entry with safer upper-plan economics; annual purchasing waits for proven renewal and refund operations |
 | 2026-08-08 | ExpressPay hosted Merchant API selected behind an adapter | Mobile Money should lead checkout, payment credentials remain on the provider page, and AI360 retains provider-neutral billing and entitlement records |
 | 2026-08-04 | Clerk + Supabase production boundary selected | Clerk owns identity; portable Postgres, RLS and Storage provide the durable data plane |
 | 2026-08-04 | Production preflight and readiness endpoint added | Releases must expose missing dependencies instead of silently degrading |

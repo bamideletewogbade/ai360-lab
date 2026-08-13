@@ -1,0 +1,125 @@
+{
+  "info": {
+    "_postman_id": "5df67d6d-06e7-44a4-9f16-c5ae584f69ad",
+    "name": "AI360 ExpressPay Sandbox Evidence",
+    "description": "Provider-level evidence for ExpressPay hosted checkout. This collection never submits card or Mobile Money credentials and cannot complete a charge by itself.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1 - Create hosted sandbox checkout",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const suffix = Date.now() + '_' + pm.variables.replaceIn('{{$randomHexadecimal}}').replace('0x', '');",
+              "pm.environment.set('order_id', ('pay_postman_' + suffix).slice(0, 64));",
+              "pm.environment.unset('expresspay_token');",
+              "pm.environment.unset('checkout_url');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('ExpressPay responded over HTTP', () => pm.response.to.have.status(200));",
+              "let body = {};",
+              "try { body = pm.response.json(); } catch (_) {}",
+              "pm.test('ExpressPay accepted the sandbox credentials, payload and source IP', () => {",
+              "  pm.expect(body.status, body.status === 4 ? 'Status 4 means this runtime IP must be allowlisted by ExpressPay' : body.message).to.eql(1);",
+              "});",
+              "pm.test('ExpressPay echoed the exact AI360 order ID', () => pm.expect(body['order-id']).to.eql(pm.environment.get('order_id')));",
+              "pm.test('ExpressPay returned a checkout token', () => pm.expect(body.token).to.be.a('string').and.not.empty);",
+              "if (body.status === 1 && body.token) {",
+              "  pm.environment.set('expresspay_token', body.token);",
+              "  pm.environment.set('checkout_url', pm.environment.get('expresspay_origin') + '/payment?token=' + encodeURIComponent(body.token));",
+              "}",
+              "const safe = { outcome: body.status === 1 ? 'PASS' : 'BLOCKED', providerStatus: body.status, message: body.message || 'No message', orderId: body['order-id'] || pm.environment.get('order_id'), nextStep: body.status === 4 ? 'Ask ExpressPay to allowlist the staging server egress IP.' : 'Run request 2 to query the new token.' };",
+              "pm.visualizer.set('<style>body{font-family:Arial;padding:24px;color:#17202a}.pass{color:#087f23}.blocked{color:#b42318}.card{border:1px solid #ddd;border-radius:12px;padding:20px;max-width:680px}dt{font-weight:700;margin-top:12px}dd{margin:4px 0}</style><div class=\"card\"><h1>ExpressPay Sandbox Submit</h1><h2 class=\"{{className}}\">{{outcome}}</h2><dl><dt>Provider status</dt><dd>{{providerStatus}}</dd><dt>Message</dt><dd>{{message}}</dd><dt>Order</dt><dd>{{orderId}}</dd><dt>Next step</dt><dd>{{nextStep}}</dd></dl><p>No API key or checkout token is displayed in this evidence view.</p></div>', { ...safe, className: safe.outcome === 'PASS' ? 'pass' : 'blocked' });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "merchant-id", "value": "{{merchant_id}}", "type": "text" },
+            { "key": "api-key", "value": "{{api_key}}", "type": "text" },
+            { "key": "firstname", "value": "AI360", "type": "text" },
+            { "key": "lastname", "value": "Sandbox", "type": "text" },
+            { "key": "email", "value": "{{test_email}}", "type": "text" },
+            { "key": "phonenumber", "value": "{{test_phone}}", "type": "text" },
+            { "key": "username", "value": "{{test_email}}", "type": "text" },
+            { "key": "currency", "value": "GHS", "type": "text" },
+            { "key": "amount", "value": "{{test_amount}}", "type": "text" },
+            { "key": "order-id", "value": "{{order_id}}", "type": "text" },
+            { "key": "order-desc", "value": "AI360 ExpressPay sandbox evidence", "type": "text" },
+            { "key": "redirect-url", "value": "{{app_origin}}/api/billing/expresspay/return", "type": "text" },
+            { "key": "post-url", "value": "{{app_origin}}/api/billing/expresspay/notify", "type": "text" }
+          ]
+        },
+        "url": "{{expresspay_origin}}/api/submit.php",
+        "description": "Creates a GH₵1 hosted sandbox checkout. It does not submit payment credentials or complete a payment."
+      }
+    },
+    {
+      "name": "2 - Query checkout server-to-server",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!pm.environment.get('expresspay_token')) {",
+              "  throw new Error('Run request 1 successfully before querying a token.');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('ExpressPay Query responded over HTTP', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Query returned a documented payment state', () => pm.expect([1, 2, 3, 4]).to.include(Number(body.result)));",
+              "pm.test('Query matched the original order', () => pm.expect(body['order-id']).to.eql(pm.environment.get('order_id')));",
+              "pm.test('Query matched the provider token', () => pm.expect(body.token).to.eql(pm.environment.get('expresspay_token')));",
+              "pm.test('Query matched GHS 1.00', () => { pm.expect(body.currency).to.eql('GHS'); pm.expect(Number(body.amount)).to.eql(Number(pm.environment.get('test_amount'))); });",
+              "if (Number(body.result) === 1) pm.test('Approved payment has a transaction ID', () => pm.expect(body['transaction-id'] || body.transaction_id).to.be.a('string').and.not.empty);",
+              "const states = { 1: 'Approved', 2: 'Declined', 3: 'Failed', 4: 'Pending' };",
+              "const state = states[Number(body.result)] || 'Unknown';",
+              "pm.visualizer.set('<style>body{font-family:Arial;padding:24px;color:#17202a}.card{border:1px solid #ddd;border-radius:12px;padding:20px;max-width:680px}.ok{color:#087f23}dt{font-weight:700;margin-top:12px}dd{margin:4px 0}</style><div class=\"card\"><h1>ExpressPay Sandbox Query</h1><h2 class=\"ok\">VERIFIED</h2><dl><dt>Payment state</dt><dd>{{state}}</dd><dt>Provider result</dt><dd>{{result}} — {{resultText}}</dd><dt>Order</dt><dd>{{orderId}}</dd><dt>Amount</dt><dd>{{currency}} {{amount}}</dd><dt>Transaction ID</dt><dd>{{transactionId}}</dd></dl><p>The API key and provider token are intentionally omitted.</p></div>', { state, result: body.result, resultText: body['result-text'] || '', orderId: body['order-id'], currency: body.currency, amount: Number(body.amount).toFixed(2), transactionId: body['transaction-id'] || body.transaction_id || 'Not assigned while pending' });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "merchant-id", "value": "{{merchant_id}}", "type": "text" },
+            { "key": "api-key", "value": "{{api_key}}", "type": "text" },
+            { "key": "token", "value": "{{expresspay_token}}", "type": "text" }
+          ]
+        },
+        "url": "{{expresspay_origin}}/api/query.php",
+        "description": "Queries the token directly from ExpressPay. A new checkout should normally be Pending until someone completes hosted checkout."
+      }
+    }
+  ]
+}

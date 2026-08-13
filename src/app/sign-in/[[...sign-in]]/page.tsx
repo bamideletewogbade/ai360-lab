@@ -1,9 +1,9 @@
-import type { Metadata } from 'next'
+﻿import type { Metadata } from 'next'
 import { AuthPage } from '@/components/AuthPage'
 
 export const metadata: Metadata = {
   title: 'Sign in',
-  description: 'Sign in to continue your work in AI360 Lab.',
+  description: 'Sign in to continue your work in AI360.',
   robots: { index: false, follow: false },
 }
 

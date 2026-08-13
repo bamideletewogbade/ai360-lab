@@ -8,9 +8,13 @@
 /tmp
 .env
 .env*.local
+.deployment-id
 # Anything derived from an env file still holds the same secrets.
 .env.local.*
 *.env.backup*
+# Populated Postman environments and reports may contain payment credentials.
+postman/*.local.postman_environment.json
+postman/results/
 # The nested worker installs its own dependencies; they are not source.
 node_modules/
 *.tsbuildinfo

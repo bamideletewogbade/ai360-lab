@@ -1,8 +1,8 @@
-import type { Metadata } from 'next'
+﻿import type { Metadata } from 'next'
 import { CheckoutExperience } from '@/components/CheckoutExperience'
 
 export const metadata: Metadata = {
-  title: 'Secure checkout | AI360 Lab',
+  title: 'Secure checkout | AI360',
   description: 'Review an AI360 plan and continue to secure ExpressPay checkout.',
   robots: { index: false, follow: false },
 }

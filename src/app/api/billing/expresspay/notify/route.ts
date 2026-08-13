@@ -24,6 +24,10 @@ export async function POST(request: Request) {
     }
 
     const notification = await recordPaymentNotification({ orderId, providerReference: token })
+    if (!notification.accepted) {
+      log.finish(400, { outcome: 'unknown_notification', orderId })
+      return Response.json({ received: false }, { status: 400, headers: log.headers({ 'Cache-Control': 'no-store' }) })
+    }
     const verified = await createExpressPayProvider().queryPayment(token)
     if (verified.orderId !== orderId) throw new Error('PAYMENT_NOTIFICATION_ORDER_MISMATCH')
     const result = await applyVerifiedPayment(verified)

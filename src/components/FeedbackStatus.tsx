@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -40,7 +40,7 @@ export function FeedbackStatus({ reportId }: { reportId: string }) {
   }, [reportId])
 
   if (!receipt) {
-    return <section className={styles.state}><p>{message}</p><Link href="/app">Return to the Lab</Link></section>
+    return <section className={styles.state}><p>{message}</p><Link href="/app">Return to the workspace</Link></section>
   }
 
   const current = STATUS_COPY[receipt.status]
@@ -59,7 +59,7 @@ export function FeedbackStatus({ reportId }: { reportId: string }) {
       </div>
       {receipt.summary ? <div className={styles.update}><span>Latest update</span><p>{receipt.summary}</p></div> : null}
       <p className={styles.note}>Reports are checked before they become tests or product changes. One report never trains or changes the AI by itself.</p>
-      <Link className={styles.return} href="/app">Return to the Lab</Link>
+      <Link className={styles.return} href="/app">Return to the workspace</Link>
     </section>
   )
 }

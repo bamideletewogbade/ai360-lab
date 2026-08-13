@@ -1,103 +1,76 @@
 #!/usr/bin/env node
 
 /**
- * ExpressPay Sandbox Verification Rig
- * Runs a standalone test of ExpressPay payload formatting, checkout initialization,
- * status query parsing, and webhook event reconciliation in sandbox mode.
+ * Credentialed ExpressPay sandbox probe.
+ *
+ * This creates a hosted sandbox checkout and immediately verifies that its
+ * token can be queried. It never enters card or Mobile Money credentials and
+ * therefore cannot complete or charge the transaction.
  */
 
 import assert from 'node:assert/strict'
-import { createExpressPayProvider, ExpressPayError, isExpressPayOrderId, isExpressPayToken, parseGhsMinor } from '../src/lib/payments/expresspay.ts'
+import { randomBytes } from 'node:crypto'
+import { config } from 'dotenv'
 
-console.log('🧪 Starting ExpressPay Sandbox Verification Rig...\n')
+config({ path: '.env.local', quiet: true })
+config({ path: '.env', quiet: true })
 
-// 1. Environment Setup Test
-process.env.EXPRESSPAY_ENV = 'sandbox'
-process.env.EXPRESSPAY_MERCHANT_ID = 'test-merchant-id'
-process.env.EXPRESSPAY_API_KEY = 'test-api-key'
+if (process.env.EXPRESSPAY_ENV !== 'sandbox') {
+  throw new Error('Refusing to probe ExpressPay unless EXPRESSPAY_ENV=sandbox.')
+}
+if (!process.env.EXPRESSPAY_MERCHANT_ID?.trim() || !process.env.EXPRESSPAY_API_KEY?.trim()) {
+  throw new Error('Add ExpressPay sandbox merchant credentials before running this probe.')
+}
 
-const mockCheckoutInput = {
-  idempotencyKey: 'pay_sandbox_test_1234567890',
-  workspaceKey: 'user:test_workspace',
-  ownerId: 'user_123',
-  planSlug: 'everyday',
-  amountMinor: 12500, // GH₵ 125.00
+const appOrigin = new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://lab.aithreesixty.tech').origin
+if (!appOrigin.startsWith('https://')) throw new Error('NEXT_PUBLIC_APP_URL must use HTTPS.')
+
+const { createExpressPayProvider } = await import('../src/lib/payments/expresspay.ts')
+const orderId = `pay_probe_${Date.now()}_${randomBytes(5).toString('hex')}`
+const provider = createExpressPayProvider()
+
+console.log('ExpressPay credentialed sandbox probe')
+console.log(`Creating a hosted-checkout probe for ${orderId}...`)
+
+try {
+  const checkout = await provider.createCheckout({
+  idempotencyKey: orderId,
+  workspaceKey: 'user:expresspay_probe',
+  ownerId: 'user_expresspay_probe',
+  planSlug: 'probe',
+  amountMinor: 100,
   currency: 'GHS',
   cadence: 'monthly',
   preferredMethod: 'mobile_money',
   customer: {
-    firstName: 'Kofi',
-    lastName: 'Ansah',
-    email: 'kofi@example.com',
-    phone: '233240000000',
+    firstName: 'AI360',
+    lastName: 'Sandbox',
+    email: 'payments-test@aithreesixty.tech',
+    phone: '233244444444',
   },
-  returnUrl: 'https://lab.aithreesixty.tech/api/billing/expresspay/return',
-  webhookUrl: 'https://lab.aithreesixty.tech/api/billing/expresspay/notify',
-  metadata: { catalogVersion: 'pilot-2026-08-v3' },
+  returnUrl: `${appOrigin}/api/billing/expresspay/return`,
+  webhookUrl: `${appOrigin}/api/billing/expresspay/notify`,
+  metadata: { purpose: 'credentialed-sandbox-probe' },
+  })
+
+  const checkoutUrl = new URL(checkout.checkoutUrl)
+  assert.equal(checkoutUrl.origin, 'https://sandbox.expresspaygh.com')
+  assert.equal(checkout.status, 'pending')
+  console.log('pass  sandbox credentials created a hosted checkout')
+
+  const verified = await provider.queryPayment(checkout.providerReference)
+  assert.equal(verified.orderId, orderId)
+  assert.equal(verified.amountMinor, 100)
+  assert.equal(verified.currency, 'GHS')
+  assert.notEqual(verified.status, 'approved', 'A probe with no payment details must not be approved.')
+  console.log(`pass  server query matched order, currency and amount (${verified.status})`)
+  console.log('pass  no payment credentials were submitted and no charge was completed')
+} catch (error) {
+  if (error && typeof error === 'object' && error.code === 'invalid_ip') {
+    console.error('BLOCKED  ExpressPay status 4: this runtime\'s outbound IP is not on the merchant allowlist.')
+    console.error('Ask ExpressPay to allowlist the stable staging-server egress IP, then rerun this command there.')
+    process.exitCode = 2
+  } else {
+    throw error
+  }
 }
-
-console.log('1️⃣ Testing ExpressPay Form Payload Generation...')
-let capturedUrl = ''
-let capturedBody = null
-
-const mockFetcher = async (url, init) => {
-  capturedUrl = String(url)
-  capturedBody = new URLSearchParams(String(init?.body))
-  return new Response(JSON.stringify({
-    status: 1,
-    message: 'Success',
-    'order-id': mockCheckoutInput.idempotencyKey,
-    token: 'sb_token_abc123xyz987',
-  }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-}
-
-const provider = createExpressPayProvider(mockFetcher)
-const session = await provider.createCheckout(mockCheckoutInput)
-
-assert.equal(capturedUrl, 'https://sandbox.expresspaygh.com/api/submit.php')
-assert.equal(capturedBody.get('merchant-id'), 'test-merchant-id')
-assert.equal(capturedBody.get('api-key'), 'test-api-key')
-assert.equal(capturedBody.get('amount'), '125.00')
-assert.equal(capturedBody.get('currency'), 'GHS')
-assert.equal(capturedBody.get('order-id'), mockCheckoutInput.idempotencyKey)
-assert.equal(capturedBody.get('post-url'), mockCheckoutInput.webhookUrl)
-assert.equal(capturedBody.get('redirect-url'), mockCheckoutInput.returnUrl)
-assert.equal(session.checkoutUrl, 'https://sandbox.expresspaygh.com/payment?token=sb_token_abc123xyz987')
-
-console.log('   ✅ Submit payload parameters strictly matched ExpressPay specification.')
-console.log('   ✅ Checkout URL returned correctly:', session.checkoutUrl)
-
-console.log('\n2️⃣ Testing Server-Side Query API & Response Parsing...')
-const mockQueryFetcher = async () => new Response(JSON.stringify({
-  result: 1,
-  'result-text': 'Approved',
-  'order-id': mockCheckoutInput.idempotencyKey,
-  token: 'sb_token_abc123xyz987',
-  'transaction-id': 'txn_sandbox_9999',
-  currency: 'GHS',
-  amount: '125.00',
-  'date-processed': '11 August 2026',
-}), { status: 200, headers: { 'Content-Type': 'application/json' } })
-
-const verified = await createExpressPayProvider(mockQueryFetcher).queryPayment('sb_token_abc123xyz987')
-assert.equal(verified.status, 'approved')
-assert.equal(verified.amountMinor, 12500)
-assert.equal(verified.orderId, mockCheckoutInput.idempotencyKey)
-assert.equal(verified.providerTransactionId, 'txn_sandbox_9999')
-
-console.log('   ✅ Verified payment query normalized correctly: status = approved, amount = GH₵125.00')
-
-console.log('\n3️⃣ Testing Validation Utilities & Fail-Closed Logic...')
-assert.ok(isExpressPayOrderId('pay_12345'))
-assert.ok(isExpressPayToken('token_12345'))
-assert.equal(parseGhsMinor('350.00'), 35000)
-assert.equal(parseGhsMinor(125), 12500)
-
-// Test fail-closed on invalid token format
-await assert.rejects(
-  provider.queryPayment('invalid!token@char'),
-  (err) => err instanceof ExpressPayError && err.code === 'invalid_request',
-)
-
-console.log('   ✅ Malformed tokens & mismatched details correctly fail closed.')
-console.log('\n🎉 All ExpressPay sandbox verification tests passed successfully!\n')

@@ -1,7 +1,9 @@
-import assert from 'node:assert/strict'
+﻿import assert from 'node:assert/strict'
 import test from 'node:test'
 import { evaluateProductionEnvironment } from '../scripts/check-production.mjs'
 import { runDeploymentSmoke } from '../scripts/smoke-deployment.mjs'
+import { resolveDeploymentId } from '../scripts/build.mjs'
+import { ASSET_RECOVERY_SCRIPT } from '../src/lib/asset-recovery.ts'
 
 function releaseEnvironment() {
   return {
@@ -48,7 +50,7 @@ test('enabling transactional email requires a provider key and a valid sender', 
     ...releaseEnvironment(),
     EMAIL_ENABLED: 'true',
     RESEND_API_KEY: 're_live_example',
-    EMAIL_FROM: 'AI360 Lab <lab@aithreesixty.tech>',
+    EMAIL_FROM: 'AI360 <lab@aithreesixty.tech>',
   })
   assert.deepEqual(configured.errors, [])
 })
@@ -56,6 +58,41 @@ test('enabling transactional email requires a provider key and a valid sender', 
 test('sensitive-looking public variables block a release', () => {
   const result = evaluateProductionEnvironment({ ...releaseEnvironment(), NEXT_PUBLIC_PAYMENT_API_KEY: 'secret' })
   assert.match(result.errors.join('\n'), /must not be exposed to the browser bundle/)
+})
+
+test('the build automatically uses the checked-out Git commit as its deployment ID', () => {
+  assert.equal(resolveDeploymentId({}, () => 'abc123def456\n'), 'abc123def456')
+})
+
+test('CI can override the automatic deployment ID without changing production configuration', () => {
+  assert.equal(resolveDeploymentId({ AI360_DEPLOYMENT_ID_OVERRIDE: 'release/abc 123' }, () => 'ignored'), 'release-abc-123')
+})
+
+test('a missing Next.js chunk forces one cache-busted workspace reload', () => {
+  let onError: ((event: unknown) => void) | undefined
+  let replacedWith = ''
+  const storage = new Map<string, string>()
+  const location = {
+    pathname: '/app',
+    href: 'https://lab.aithreesixty.tech/app',
+    replace(value: string) { replacedWith = value },
+  }
+  const sessionStorage = {
+    getItem(key: string) { return storage.get(key) ?? null },
+    setItem(key: string, value: string) { storage.set(key, value) },
+    removeItem(key: string) { storage.delete(key) },
+  }
+  const addEventListener = (name: string, listener: (event: unknown) => void) => {
+    if (name === 'error') onError = listener
+  }
+
+  const installRecovery = new Function('location', 'sessionStorage', 'document', 'addEventListener', ASSET_RECOVERY_SCRIPT)
+  installRecovery(location, sessionStorage, {}, addEventListener)
+  assert.ok(onError)
+  onError({ target: { tagName: 'SCRIPT', src: 'https://lab.aithreesixty.tech/_next/static/chunks/missing.js' } })
+
+  assert.match(replacedWith, /^https:\/\/lab\.aithreesixty\.tech\/app\?_fresh=\d+$/)
+  assert.ok(storage.has('ai360:asset-recovery:/app'))
 })
 
 test('deployed smoke checks cover readiness, headers, private workspace indexing and discovery files', async () => {
