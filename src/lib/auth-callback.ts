@@ -8,7 +8,7 @@
  */
 
 export function isLocalHost(host: string) {
-  return /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?$/i.test(host.trim())
+  return /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host.trim())
 }
 
 /** Proxies may append values; the first entry is the original client-facing one. */
@@ -45,6 +45,14 @@ export function resolveCallbackOrigin(input: {
     }
   }
 
-  if (host) return `https://${host}`
-  return new URL(input.requestUrl).origin
+  if (host && !host.startsWith('0.0.0.0')) return `https://${host}`
+
+  try {
+    const reqOrigin = new URL(input.requestUrl).origin
+    if (!reqOrigin.includes('0.0.0.0')) return reqOrigin
+  } catch {
+    // malformed requestUrl falls through
+  }
+
+  return 'http://localhost:3000'
 }

@@ -23,17 +23,17 @@ function unavailable(status: number, code: string, message: string, headers: Hea
 
 export async function GET(request: Request) {
   const log = requestLogger(request, '/api/onboarding')
-  const context = await getOptionalAuthContext()
-  if (!context) {
-    log.finish(401, { outcome: 'auth_required' })
-    return unavailable(401, 'AUTH_REQUIRED', 'Sign in to load your workspace.', log.headers())
-  }
-  if (!isPostgresConfigured()) {
-    log.finish(503, { outcome: 'database_not_configured' })
-    return unavailable(503, 'DATABASE_NOT_CONFIGURED', 'Personalization sync is not configured yet.', log.headers())
-  }
-
   try {
+    const context = await getOptionalAuthContext()
+    if (!context) {
+      log.finish(401, { outcome: 'auth_required' })
+      return unavailable(401, 'AUTH_REQUIRED', 'Sign in to load your workspace.', log.headers())
+    }
+    if (!isPostgresConfigured()) {
+      log.finish(503, { outcome: 'database_not_configured' })
+      return unavailable(503, 'DATABASE_NOT_CONFIGURED', 'Personalization sync is not configured yet.', log.headers())
+    }
+
     const state = await readWorkspaceOnboarding(context)
     log.finish(200, { outcome: 'success', status: state?.status })
     return NextResponse.json(state ?? { status: 'none' }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
@@ -46,23 +46,23 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   const log = requestLogger(request, '/api/onboarding')
-  const context = await getOptionalAuthContext()
-  if (!context) {
-    log.finish(401, { outcome: 'auth_required' })
-    return unavailable(401, 'AUTH_REQUIRED', 'Sign in to save your personalization.', log.headers())
-  }
-  if (!isPostgresConfigured()) {
-    log.finish(503, { outcome: 'database_not_configured' })
-    return unavailable(503, 'DATABASE_NOT_CONFIGURED', 'Personalization sync is not configured yet.', log.headers())
-  }
-
-  const parsed = writeSchema.safeParse(await request.json().catch(() => null))
-  if (!parsed.success) {
-    log.finish(400, { outcome: 'invalid_onboarding' })
-    return unavailable(400, 'INVALID_ONBOARDING', 'The personalization data is invalid.', log.headers())
-  }
-
   try {
+    const context = await getOptionalAuthContext()
+    if (!context) {
+      log.finish(401, { outcome: 'auth_required' })
+      return unavailable(401, 'AUTH_REQUIRED', 'Sign in to save your personalization.', log.headers())
+    }
+    if (!isPostgresConfigured()) {
+      log.finish(503, { outcome: 'database_not_configured' })
+      return unavailable(503, 'DATABASE_NOT_CONFIGURED', 'Personalization sync is not configured yet.', log.headers())
+    }
+
+    const parsed = writeSchema.safeParse(await request.json().catch(() => null))
+    if (!parsed.success) {
+      log.finish(400, { outcome: 'invalid_onboarding' })
+      return unavailable(400, 'INVALID_ONBOARDING', 'The personalization data is invalid.', log.headers())
+    }
+
     const input = parsed.data.status === 'completed'
       ? { status: 'completed' as const, profile: { role: parsed.data.role, goal: parsed.data.goal } }
       : { status: 'skipped' as const }

@@ -29,17 +29,21 @@ function imageUrl(user: User) {
 
 export async function getOptionalAuthContext(): Promise<WorkspaceAuthContext | null> {
   if (!isAuthConfigured()) return null
-  const supabase = await createSupabaseServerClient()
-  const { data, error } = await supabase.auth.getUser()
-  const user = error ? null : data.user
-  if (!user?.id) return null
+  try {
+    const supabase = await createSupabaseServerClient()
+    const { data, error } = await supabase.auth.getUser()
+    const user = error ? null : data.user
+    if (!user?.id) return null
 
-  return createWorkspaceAuthContext({
-    userId: user.id,
-    email: user.email ?? null,
-    displayName: displayName(user),
-    imageUrl: imageUrl(user),
-  })
+    return createWorkspaceAuthContext({
+      userId: user.id,
+      email: user.email ?? null,
+      displayName: displayName(user),
+      imageUrl: imageUrl(user),
+    })
+  } catch {
+    return null
+  }
 }
 
 export async function getOptionalUserId() {
