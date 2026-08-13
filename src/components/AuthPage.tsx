@@ -268,9 +268,16 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 {mode === 'sign-in' ? (
                   <button
                     type="button"
-                    className={styles.secondaryAction}
-                    disabled={state === 'submitting' || !email.trim()}
+                    className={styles.forgotLink}
+                    disabled={state === 'submitting'}
                     onClick={async () => {
+                      // Asking for the address beats a dead disabled control
+                      // that never explains what it wants.
+                      if (!email.trim()) {
+                        setState('error')
+                        setMessage('Enter your email address above, then choose this again.')
+                        return
+                      }
                       setState('submitting')
                       setMessage('')
                       try {
@@ -286,7 +293,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                       }
                     }}
                   >
-                    Send password reset
+                    Forgot your password?
                   </button>
                 ) : null}
               </form>

@@ -69,7 +69,7 @@ function SignedOutActions() {
   return (
     <>
       <Link href="/sign-in" className="landing-sign-in">Sign in</Link>
-      <Link href="/app" className="landing-open">Start free <span aria-hidden="true">↗</span></Link>
+      <Link href="/sign-up" className="landing-open">Sign up <span aria-hidden="true">↗</span></Link>
     </>
   )
 }

@@ -141,6 +141,23 @@
   color: var(--ink);
 }
 .authForm .secondaryAction:hover:not(:disabled) { background: var(--paper); }
+
+/* A quiet text link, not a second button: recovering a password is the rare
+   path and should not compete with signing in. */
+.authForm .forgotLink {
+  justify-self: center;
+  min-height: 0;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--grey);
+  font-size: 0.85rem;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.authForm .forgotLink:hover:not(:disabled) { transform: none; background: none; color: var(--ink); }
 .authError,
 .authSuccess {
   border-radius: 12px;

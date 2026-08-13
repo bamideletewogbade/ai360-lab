@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { isSupabaseAuthConfigured } from '@/lib/supabase/config'
+import { resolveCallbackOrigin } from '@/lib/auth-callback'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,14 @@ function safeNext(value: string | null) {
 export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const next = safeNext(url.searchParams.get('next'))
-  const redirectUrl = new URL(next, url.origin)
+  const origin = resolveCallbackOrigin({
+    forwardedHost: request.headers.get('x-forwarded-host'),
+    host: request.headers.get('host'),
+    forwardedProto: request.headers.get('x-forwarded-proto'),
+    configuredAppUrl: process.env.NEXT_PUBLIC_APP_URL,
+    requestUrl: request.url,
+  })
+  const redirectUrl = new URL(next, origin)
 
   if (!isSupabaseAuthConfigured()) {
     redirectUrl.searchParams.set('auth_error', 'not_configured')
