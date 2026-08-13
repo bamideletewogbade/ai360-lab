@@ -11,10 +11,18 @@ export function isLocalHost(host: string) {
   return /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host.trim())
 }
 
+export function isBindAllHost(host: string) {
+  return /^(0\.0\.0\.0|\[::\]|::)(:\d+)?$/i.test(host.trim())
+}
+
 /** Proxies may append values; the first entry is the original client-facing one. */
 function firstHeaderValue(value: string | null | undefined) {
   const first = value?.split(',')[0]?.trim()
   return first || null
+}
+
+function localOrigin(host: string, proto: string | null) {
+  return `${proto === 'https' ? 'https' : 'http'}://${host}`
 }
 
 export function resolveCallbackOrigin(input: {
@@ -24,13 +32,17 @@ export function resolveCallbackOrigin(input: {
   configuredAppUrl?: string | null
   requestUrl: string
 }): string {
-  const host = firstHeaderValue(input.forwardedHost) || firstHeaderValue(input.host)
+  const forwardedHost = firstHeaderValue(input.forwardedHost)
+  const host = firstHeaderValue(input.host)
+  const forwardedProto = firstHeaderValue(input.forwardedProto)
 
   // Local development keeps using whatever host the browser actually used, so
   // http://localhost:3000 and http://127.0.0.1:3000 both work without config.
-  if (host && isLocalHost(host)) {
-    const proto = firstHeaderValue(input.forwardedProto) || 'http'
-    return `${proto}://${host}`
+  if (forwardedHost && isLocalHost(forwardedHost)) {
+    return localOrigin(forwardedHost, forwardedProto)
+  }
+  if (host && isLocalHost(host) && (!forwardedHost || isBindAllHost(forwardedHost))) {
+    return localOrigin(host, forwardedProto)
   }
 
   // Everywhere else the canonical URL wins. Taking the public origin from
@@ -45,7 +57,8 @@ export function resolveCallbackOrigin(input: {
     }
   }
 
-  if (host && !host.startsWith('0.0.0.0')) return `https://${host}`
+  const publicHost = forwardedHost && !isBindAllHost(forwardedHost) ? forwardedHost : host
+  if (publicHost && !isBindAllHost(publicHost)) return `https://${publicHost}`
 
   try {
     const reqOrigin = new URL(input.requestUrl).origin

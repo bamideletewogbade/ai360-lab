@@ -59,8 +59,10 @@ npm run dev
 ```
 
 Open `http://localhost:3000`. Guest UI and local browser recovery work without
-Clerk. OpenRouter calls require `OPENROUTER_API_KEY`. Signed-in persistence and
-credit operations require Clerk and `DATABASE_URL`.
+Supabase Auth. OpenRouter calls require `OPENROUTER_API_KEY`. Signed-in
+persistence and credit operations require Supabase Auth and `DATABASE_URL`.
+Local-only origin overrides belong in `.env.development.local`; keep secrets in
+`.env.local` and production values in the hosting environment.
 
 Before changing Next.js code, read the relevant guide under
 `node_modules/next/dist/docs/`. This repository uses Next.js 16 and its APIs and
@@ -71,7 +73,7 @@ conventions must not be assumed from an older version.
 ```mermaid
 flowchart LR
   Person["Person or team"] --> Web["Next.js public site and workspace"]
-  Web --> Identity["Clerk identity and organization context"]
+  Web --> Identity["Supabase Auth session and workspace context"]
   Web --> Routes["Route handlers: validation and policy"]
   Routes --> Services["Agent, Studio, billing and workspace services"]
   Services --> Models["OpenRouter model gateway"]
@@ -105,7 +107,7 @@ Private or utility surfaces:
 - `/app`: workspace; must remain `noindex, nofollow`
 - `/feedback/[reportId]`: private receipt opened with a signed-in identity or one-time browser token
 - `/quality`: reviewer-only Quality Desk; must remain `noindex, nofollow`
-- `/sign-in` and `/sign-up`: Clerk account flows
+- `/sign-in` and `/sign-up`: Supabase Auth account flows
 - `/api/*`: server routes; never public search results
 - `/api/health`: process liveness
 - `/api/ready`: release dependencies and configuration readiness
@@ -138,7 +140,7 @@ user flow before changing topology.
 ### Guest and signed-in work
 
 Guests can explore the workspace and recover supported local work from browser
-storage. Clerk is the only identity authority. Signed-in users receive a
+storage. Supabase Auth is the only identity authority. Signed-in users receive a
 personal workspace or an optional organization workspace, and every private
 database operation must be scoped to that workspace.
 
@@ -271,7 +273,7 @@ server-side workspace authorization remains mandatory.
 
 Provider boundaries:
 
-- Clerk: users, sessions and organizations
+- Supabase Auth: users and sessions
 - Supabase Postgres: durable application truth
 - Supabase Storage: intended private binary storage with signed access
 - OpenRouter: model and media gateway
@@ -291,17 +293,20 @@ keys.
 | Group | Required for |
 | --- | --- |
 | `OPENROUTER_*` | live chat, research, agent and Studio provider work |
-| `NEXT_PUBLIC_CLERK_*`, `CLERK_*` | signed-in identity and lifecycle sync |
 | `DATABASE_URL`, `DIRECT_URL`, `DATABASE_*` | persistence, migrations and credits |
-| `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_*` | private asset storage when connected |
+| `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_*` | signed-in identity and private asset storage when connected |
 | `NEXT_PUBLIC_BILLING_ENABLED`, payment secrets | verified checkout only |
 | `AI360_RATE_*` | pilot request limits |
 | `AI360_QUALITY_*` | reviewer access, urgent alert delivery and isolated quality evaluation |
 | `AI360_BROWSER_*`, `BROWSERBASE_*` | closed read-only browser pilot, allowlists and evidence cleanup |
 | search verification tokens | search-console ownership verification |
 
-Treat `NEXT_PUBLIC_APP_URL` as canonical. Production is
-`https://ai360.africa`.
+Treat `NEXT_PUBLIC_APP_URL` as the canonical public deployment origin.
+Production is `https://ai360.africa`. Local auth callbacks derive their return
+origin from the browser request, so localhost sign-in does not require changing
+this value. Local ExpressPay callback testing is the exception: use a public
+HTTPS tunnel as `NEXT_PUBLIC_APP_URL` because the provider must call back from
+outside your machine.
 
 ### Payment activation path
 
@@ -359,7 +364,7 @@ than being described as passing. After deployment:
 1. Confirm `/api/health` returns 200.
 2. Confirm `/api/ready` returns 200. A 503 means the release is not ready.
 3. Smoke test public pages at narrow mobile, tablet and desktop widths.
-4. Test sign-up, sign-in, sign-out and two-workspace isolation with live Clerk.
+4. Test sign-up, sign-in, sign-out and workspace isolation with live Supabase Auth.
 5. Run one representative chat, research, Studio image and quoted video flow.
 6. Verify `robots.txt`, `sitemap.xml`, `llms.txt`, canonical tags and workspace
    `noindex` behavior.

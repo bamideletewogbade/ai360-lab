@@ -45,10 +45,6 @@ OPENROUTER_SITE_NAME=AI360
 OPENROUTER_IMAGE_MODEL=openai/gpt-image-1-mini
 OPENROUTER_IMAGE_MODELS=openai/gpt-image-1-mini,google/gemini-3.1-flash-lite-image
 OPENROUTER_VIDEO_MODEL=google/veo-3.1-lite
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<Clerk production publishable key>
-CLERK_SECRET_KEY=<Clerk production secret key>
-CLERK_WEBHOOK_SIGNING_SECRET=<Clerk webhook signing secret>
-CLERK_AUTHORIZED_PARTIES=https://aithreesixty.tech,https://ai360.africa
 NEXT_PUBLIC_AI360_TEAM_WORKSPACES=false
 DATABASE_URL=<Supabase shared session-pooler URL on port 5432>
 DIRECT_URL=<Supabase direct migration URL or reviewed migration connection>
@@ -145,40 +141,28 @@ password or secret key in a `NEXT_PUBLIC_` variable.
    Supabase variables to the Lab web app environment.
 4. Run `npm run data:verify`, `npm run credits:verify` and
    `npm run runs:verify` against the intended project before deployment.
-5. Reuse the existing AI360 Clerk application so learners have one identity
-   across the informational site and Lab. In Clerk Organizations settings, use
-   optional membership, disable automatic first-Organization creation, and keep
-   public Organization creation disabled during the pilot.
-6. Allow `ai360.africa` in the Clerk production domain settings, add
-   the same production keys to Hostinger, redeploy, then test account creation,
-   sign-in, sign-out and conversation sync in two browsers.
+5. Use the production Supabase Auth project so learners have one identity across
+   the informational site and Lab.
+6. In Supabase Authentication -> URL Configuration, keep
+   `https://ai360.africa` as the Site URL and allow
+   `https://ai360.africa/auth/callback`, `https://ai360.africa/**` and
+   `http://localhost:3000/auth/callback` while local testing shares the same
+   auth project. Redeploy, then test account creation, sign-in, sign-out and
+   conversation sync in two browsers.
 7. Leave `NEXT_PUBLIC_AI360_TEAM_WORKSPACES=false` until personal/team tenant
    isolation has passed in production. Set it to `true` and redeploy to expose
    the Organization switcher for the controlled team-workspace pilot.
 
-### Clerk lifecycle webhook
+### Retired Clerk lifecycle webhook
 
-The webhook keeps the Lab's application user, workspace and membership records
-in Supabase Postgres aligned with Clerk. Clerk remains the authority for live
-access decisions; Postgres stores the durable records needed by projects, usage
-and future billing.
-
-1. In the Clerk production instance, create an endpoint at
-   `https://ai360.africa/api/webhooks/clerk`.
-2. Subscribe to `user.created`, `user.updated`, `user.deleted`,
-   `organization.created`, `organization.updated`, `organization.deleted`,
-   `organizationMembership.created`, `organizationMembership.updated` and
-   `organizationMembership.deleted`.
-3. Copy the endpoint signing secret into Hostinger as
-   `CLERK_WEBHOOK_SIGNING_SECRET`, then redeploy.
-4. Send a Clerk test event and confirm Runtime logs contain
-   `clerk.webhook.processed`. Replayed event IDs are accepted but ignored, so a
-   provider retry cannot duplicate a lifecycle change.
+AI360 now uses Supabase Auth directly. The old `/api/webhooks/clerk` endpoint
+intentionally returns a retired message and does not need Hostinger environment
+variables.
 
 Guest access remains available for supported low-cost flows and browser-local
-recovery. Signed-in users gain private cross-device sync. Whenever Clerk is
-configured, expensive Agent, Studio, image and video work requires an identified
-workspace.
+recovery. Signed-in users gain private cross-device sync. Whenever Supabase Auth
+is configured, expensive Agent, Studio, image and video work requires an
+identified workspace.
 
 ## Connect the subdomain
 

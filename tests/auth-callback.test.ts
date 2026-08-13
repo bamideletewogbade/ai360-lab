@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isLocalHost, resolveCallbackOrigin } from '../src/lib/auth-callback.ts'
+import { isBindAllHost, isLocalHost, resolveCallbackOrigin } from '../src/lib/auth-callback.ts'
 
 const PROD = 'https://ai360.africa'
 
@@ -33,6 +33,19 @@ test('local development returns to the host the browser actually used', () => {
       `${host} should stay local`,
     )
   }
+})
+
+test('a bind-all forwarded host does not pull localhost callbacks to production', () => {
+  assert.equal(
+    resolveCallbackOrigin({
+      forwardedHost: '0.0.0.0:3000',
+      host: 'localhost:3000',
+      forwardedProto: 'http',
+      configuredAppUrl: PROD,
+      requestUrl: 'http://0.0.0.0:3000/auth/callback',
+    }),
+    'http://localhost:3000',
+  )
 })
 
 test('deployed requests use the canonical URL, not the proxied internal address', () => {
@@ -97,5 +110,14 @@ test('loopback addresses are recognised as local', () => {
   }
   for (const host of ['ai360.africa', 'localhost.attacker.com', '10.0.0.5', '0.0.0.0', '0.0.0.0:3000']) {
     assert.equal(isLocalHost(host), false, `${host} should not be local`)
+  }
+})
+
+test('bind-all addresses are recognised as server listen addresses', () => {
+  for (const host of ['0.0.0.0', '0.0.0.0:3000', '[::]', '::']) {
+    assert.equal(isBindAllHost(host), true, `${host} should be bind-all`)
+  }
+  for (const host of ['localhost:3000', '127.0.0.1:3000', 'ai360.africa']) {
+    assert.equal(isBindAllHost(host), false, `${host} should not be bind-all`)
   }
 })

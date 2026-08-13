@@ -17,9 +17,12 @@ unrestricted launch.
    flow you are testing.
 4. Run `npm run dev` and open `http://localhost:3000`.
 
-Guest UI work can run without Clerk or Postgres. Signed-in persistence, credit
-accounting and production AI calls require their corresponding credentials.
+Guest UI work can run without Supabase Auth or Postgres. Signed-in persistence,
+credit accounting and production AI calls require their corresponding
+credentials.
 Never commit secrets.
+Local-only origin overrides live in `.env.development.local`, so normal
+localhost auth testing does not require editing production hPanel values.
 
 ## Engineering entry points
 
