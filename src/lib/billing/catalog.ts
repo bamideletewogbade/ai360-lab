@@ -63,10 +63,19 @@ export const BILLING_PLANS: BillingPlan[] = [
   },
 ]
 
+/**
+ * Top-ups are convenience, not the cheap route.
+ *
+ * Every top-up must cost more per credit than the entry paid plan, or someone
+ * is better off never subscribing. `topup-200` used to give 200 credits, which
+ * worked out cheaper per credit than Everyday and quietly inverted that
+ * incentive. Bulk still earns a discount relative to smaller top-ups; it just
+ * never undercuts a subscription. `tests/pricing-economics.test.ts` enforces it.
+ */
 export const CREDIT_TOP_UPS = [
   { slug: 'topup-50', priceGhs: 50, credits: 40 },
   { slug: 'topup-100', priceGhs: 100, credits: 90 },
-  { slug: 'topup-200', priceGhs: 200, credits: 200 },
+  { slug: 'topup-200', priceGhs: 200, credits: 185 },
 ] as const
 
 export const CREDIT_GUIDE = [

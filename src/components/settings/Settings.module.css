@@ -108,6 +108,31 @@
 .fieldGroup { display: grid; gap: 7px; }
 .fieldGroup > label { font-size: 13px; font-weight: 750; }
 
+/* A settings row: what it is on the left, the control on the right, separated
+   by a hairline. Cards still earn their place where a section carries rich
+   content — a plan, a balance, a history — but a single preference does not. */
+.settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.settingRow:first-child { border-top: 0; padding-top: 2px; }
+.settingRow:last-child { padding-bottom: 2px; }
+
+.settingLabel { display: grid; gap: 2px; min-width: 0; }
+.settingLabel strong { font-size: 14px; font-weight: 750; }
+.settingLabel span { color: var(--grey); font-size: 12px; line-height: 1.5; }
+.settingRow .select { max-width: 220px; }
+
+/* On a phone the control needs the full width, so the row becomes two lines. */
+@media (max-width: 560px) {
+  .settingRow { flex-direction: column; align-items: stretch; gap: 10px; }
+  .settingRow .select { max-width: none; }
+}
+
 .select {
   width: 100%;
   max-width: 340px;

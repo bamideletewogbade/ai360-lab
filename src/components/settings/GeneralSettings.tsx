@@ -31,21 +31,23 @@ export function GeneralSettings() {
 
   return (
     <>
+      {/* Simple preferences read faster as a list than as a stack of cards:
+          the setting on the left, its control on the right, one per line. A
+          hint only appears where the setting is not self-explanatory. */}
       <section className={styles.card}>
-        <div className={styles.cardHead}>
-          <h2>Appearance</h2>
-          <p>Choose how AI360 looks. System follows your device as it changes.</p>
+        <div className={styles.settingRow}>
+          <div className={styles.settingLabel}>
+            <strong>Appearance</strong>
+            <span>System follows your device as it changes</span>
+          </div>
+          <ThemeControl />
         </div>
-        <ThemeControl />
-      </section>
 
-      <section className={styles.card}>
-        <div className={styles.cardHead}>
-          <h2>Language &amp; voice</h2>
-          <p>The language AI360 prefers when you speak or ask for a reply.</p>
-        </div>
-        <div className={styles.fieldGroup}>
-          <label htmlFor="preferred-language">Preferred spoken language</label>
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel} htmlFor="preferred-language">
+            <strong>Language</strong>
+            <span>Preferred for speaking and replies</span>
+          </label>
           <select
             id="preferred-language"
             className={styles.select}
