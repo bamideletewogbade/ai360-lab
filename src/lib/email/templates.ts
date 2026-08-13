@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Email templates.
  *
  * Every function here is pure: it takes plain data and returns a subject and a
@@ -28,7 +28,7 @@ function firstName(name: string | null | undefined) {
 
 function ghs(amountGhs: number) {
   const value = Number.isFinite(amountGhs) ? amountGhs : 0
-  return `GHâ‚µ${value.toFixed(2)}`
+  return `GH₵${value.toFixed(2)}`
 }
 
 /**
@@ -60,7 +60,7 @@ function layout(input: { heading: string; bodyHtml: string; cta?: { label: strin
       </table>
     </td></tr>
     <tr><td style="padding:16px 32px 28px;border-top:1px solid #efece4;font-size:12px;line-height:1.6;color:#8a8d90;">
-      ${escapeHtml(brandName)} Â· You are receiving this because you have an account with AI360.
+      ${escapeHtml(brandName)} · You are receiving this because you have an account with AI360.
     </td></tr>
   </table>
 </body>
@@ -82,7 +82,7 @@ export function welcomeEmail(data: { name?: string | null }): RenderedEmail {
   const html = layout({
     heading: `Welcome, ${name}.`,
     bodyHtml:
-      paragraph('Your workspace is ready. Everything you create â€” conversations, projects and files â€” now stays with you across every device.') +
+      paragraph('Your workspace is ready. Everything you create — conversations, projects and files — now stays with you across every device.') +
       paragraph('You start on the free Explorer plan with monthly credits to try research, documents and voice.'),
     cta: { label: 'Open your workspace', href: `${appUrl}/app` },
   })
@@ -175,7 +175,7 @@ export function allowanceRenewedEmail(data: {
   const credits = Math.max(0, Math.floor(data.credits))
   const subject = 'Your monthly AI360 credits are ready'
   const html = layout({
-    heading: 'This monthâ€™s credits are ready',
+    heading: 'This month’s credits are ready',
     bodyHtml:
       paragraph(`Hi ${name}, your ${escapeHtml(data.planName.slice(0, 60))} plan has renewed with <strong>${credits} credit${credits === 1 ? '' : 's'}</strong> for this month.`) +
       paragraph('Unused allowance from last month has expired; any credits you purchased stay with you.'),
@@ -233,7 +233,7 @@ export function qualityUrgentAlertEmail(data: {
 }): RenderedEmail {
   const { appUrl } = emailSettings()
   const severity = escapeHtml(data.severity.toUpperCase().slice(0, 8))
-  const subject = `[${data.severity.toUpperCase().slice(0, 8)}] AI360 urgent review â€” ${data.category.slice(0, 40)}`
+  const subject = `[${data.severity.toUpperCase().slice(0, 8)}] AI360 urgent review — ${data.category.slice(0, 40)}`
   const html = layout({
     heading: `Urgent review needed (${severity})`,
     bodyHtml:

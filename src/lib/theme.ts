@@ -5,12 +5,21 @@
  * which follows the operating system and keeps following it as it changes. The
  * resolved value ("light" or "dark") is what the CSS keys off, so stylesheets
  * only ever branch on `[data-theme="dark"]`.
+ *
+ * Someone who has never chosen gets light. AI360's light surface is the designed
+ * default and the one the brand and marketing pages are built around, so a
+ * first-time visitor on a dark-set device should still meet the intended look
+ * rather than a theme they never asked for. Choosing "system" opts back in to
+ * following the device.
  */
 
 export const THEME_STORAGE_KEY = 'ai360-theme'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
+
+/** What applies before anyone has expressed a preference. */
+export const DEFAULT_THEME_CHOICE: ThemeChoice = 'light'
 
 export function isThemeChoice(value: unknown): value is ThemeChoice {
   return value === 'light' || value === 'dark' || value === 'system'
@@ -29,9 +38,10 @@ export function applyResolvedTheme(resolved: ResolvedTheme) {
 }
 
 /**
- * Runs synchronously in <head> before first paint. Reads the stored choice (or
- * the system preference when unset) and stamps the theme on <html> so there is
- * no flash of the wrong colours. Kept dependency-free and defensive because it
- * executes before any application code.
+ * Runs synchronously in <head> before first paint, stamping the theme on <html>
+ * so there is no flash of the wrong colours. Dark applies only on an explicit
+ * dark choice, or on "system" when the device asks for it; anything else —
+ * including no stored choice at all — resolves to light. Kept dependency-free
+ * and defensive because it executes before any application code.
  */
-export const THEME_INIT_SCRIPT = `(function(){try{var c=localStorage.getItem('${THEME_STORAGE_KEY}');var m=window.matchMedia('(prefers-color-scheme: dark)').matches;var dark=c==='dark'||((c==='system'||!c)&&m);var r=document.documentElement;r.dataset.theme=dark?'dark':'light';r.style.colorScheme=dark?'dark':'light';}catch(e){}})();`
+export const THEME_INIT_SCRIPT = `(function(){try{var c=localStorage.getItem('${THEME_STORAGE_KEY}');var m=window.matchMedia('(prefers-color-scheme: dark)').matches;var dark=c==='dark'||(c==='system'&&m);var r=document.documentElement;r.dataset.theme=dark?'dark':'light';r.style.colorScheme=dark?'dark':'light';}catch(e){}})();`

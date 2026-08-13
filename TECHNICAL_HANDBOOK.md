@@ -1,8 +1,8 @@
-﻿# AI360 technical handbook
+# AI360 technical handbook
 
 For unfinished brief recovery, shared intent routing, African connectivity constraints and the durable coordinator rollout, read [RECOVERABLE_EXECUTION_ARCHITECTURE.md](./RECOVERABLE_EXECUTION_ARCHITECTURE.md).
 
-For the layer-by-layer path from a personâ€™s words to a checked result, read [CONTEXT_ENGINEERING.md](./CONTEXT_ENGINEERING.md).
+For the layer-by-layer path from a person’s words to a checked result, read [CONTEXT_ENGINEERING.md](./CONTEXT_ENGINEERING.md).
 
 Last reviewed: 2026-08-08
 

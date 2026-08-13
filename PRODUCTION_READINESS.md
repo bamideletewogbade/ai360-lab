@@ -1,4 +1,4 @@
-﻿# AI360 production readiness
+# AI360 production readiness
 
 Last reviewed: 2026-08-11
 
@@ -56,7 +56,7 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
   (169), including workspace-isolation, voice and credit cases.
 - `npm run lint` and `npm run build`: pass on Next.js 16.3.0.
 - `npm run prod:check`: READY. The required production environment is now present
-  locally â€” OpenRouter key, a credential-free HTTPS `NEXT_PUBLIC_APP_URL`, all
+  locally — OpenRouter key, a credential-free HTTPS `NEXT_PUBLIC_APP_URL`, all
   three Clerk keys (publishable, secret and webhook signing), `DATABASE_URL` and
   explicitly set feature flags. Billing, the browser pilot and the external error
   webhook are intentionally disabled and reported as warnings, not errors. This

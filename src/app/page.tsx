@@ -1,4 +1,4 @@
-﻿import { redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { LabLanding } from '@/components/LabLanding'
 import { getOptionalAuthContext, isAuthConfigured } from '@/lib/auth'
 import { publicPageMetadata } from '@/lib/seo'
@@ -6,7 +6,7 @@ import { publicPageMetadata } from '@/lib/seo'
 // The signed-in redirect below reads the request's session, so this page must
 // be evaluated per request. Without this it can be statically prerendered with
 // no user, caching the marketing landing and serving it to signed-in people
-// too â€” which is exactly the "why am I not in my workspace" problem.
+// too — which is exactly the "why am I not in my workspace" problem.
 export const dynamic = 'force-dynamic'
 
 export const metadata = publicPageMetadata({

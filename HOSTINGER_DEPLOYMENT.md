@@ -1,4 +1,4 @@
-﻿# AI360 on Hostinger
+# AI360 on Hostinger
 
 AI360 is a full Next.js application with server-side API routes. Deploy it
 as a **Node.js Web App** using Hostinger's **Next.js** framework preset. Do not
@@ -197,7 +197,7 @@ After changing environment variables or deployment settings, use
 The homepage sends `Cache-Control: no-store` because it is the application
 shell. This prevents Hostinger CDN from keeping an older interface after a Git
 deployment. If the dashboard still shows a stale version immediately after
-deploying, use **Cache â†’ Clear cache** once, then reload the site.
+deploying, use **Cache → Clear cache** once, then reload the site.
 
 ## Troubleshooting with Runtime Logs
 

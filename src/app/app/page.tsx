@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -116,14 +116,14 @@ function promptPreview(message: Msg) {
     .replace(/[`*_#>~\[\]]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-  if (plainText) return plainText.length > 92 ? `${plainText.slice(0, 89).trimEnd()}â€¦` : plainText
+  if (plainText) return plainText.length > 92 ? `${plainText.slice(0, 89).trimEnd()}…` : plainText
   if (message.attachments?.length) return `Prompt with ${message.attachments[0].name}`
   return 'Prompt'
 }
 
 const AGENT_TASKS = [
   { icon: 'RS', label: 'Research and report', prompt: 'Research this topic using reliable current sources and create a concise report with practical recommendations: ' },
-  { icon: 'â‡„', label: 'Compare documents', prompt: 'Compare the attached documents, identify the important differences, and recommend the best next steps.' },
+  { icon: '⇄', label: 'Compare documents', prompt: 'Compare the attached documents, identify the important differences, and recommend the best next steps.' },
   { icon: 'Aa', label: 'Create a proposal', prompt: 'Research what is needed and create a practical, professional proposal for: ' },
   { icon: 'AP', label: 'Build an action plan', prompt: 'Turn this outcome into a researched, step-by-step action plan with priorities, risks and next actions: ' },
 ]
@@ -189,7 +189,7 @@ function freshConversation(experience: Experience = 'chat'): Conversation {
 function titleFrom(text: string) {
   const clean = text.replace(/\s+/g, ' ').trim()
   if (/^(hi|hello|hey|yo|good (morning|afternoon|evening))[!. ]*$/i.test(clean)) return 'Quick chat'
-  return clean.length > 38 ? `${clean.slice(0, 38)}â€¦` : clean || 'New conversation'
+  return clean.length > 38 ? `${clean.slice(0, 38)}…` : clean || 'New conversation'
 }
 
 function displayConversationTitle(title: string) {
@@ -389,8 +389,8 @@ function LabWorkspace({
   const workspaceStorageKey = scopedStorageKey(STORAGE_KEY, workspaceScope)
   const workspaceActiveKey = scopedStorageKey(ACTIVE_KEY, workspaceScope)
   const sidebarPreferenceKey = scopedStorageKey(SIDEBAR_KEY, workspaceScope)
-  // Personalization is remembered per member, so each signed-in person â€” and
-  // the guest â€” keeps their own first-run record on a shared device. Inside an
+  // Personalization is remembered per member, so each signed-in person — and
+  // the guest — keeps their own first-run record on a shared device. Inside an
   // organization the member id is appended so members do not share (and cannot
   // leak) one org-wide record; this mirrors the server's (workspace, owner) key.
   const onboardingScope = signedIn && memberId
@@ -501,8 +501,8 @@ function LabWorkspace({
 
   // Personalization that follows a person across devices. When signed in, the
   // durable store decides: a saved answer is applied (and cached locally); an
-  // empty store is filled from any local choice â€” including one adopted from a
-  // guest session â€” so the answer given once on any device is theirs on the
+  // empty store is filled from any local choice — including one adopted from a
+  // guest session — so the answer given once on any device is theirs on the
   // next; and only a truly new identity is offered the intake.
   useEffect(() => {
     if (!hydrated || !authLoaded || !signedIn) return
@@ -1589,7 +1589,7 @@ function LabWorkspace({
           </svg>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats..." />
           {search ? (
-            <button type="button" className="clear-search-btn" onClick={() => setSearch('')} aria-label="Clear search">âœ•</button>
+            <button type="button" className="clear-search-btn" onClick={() => setSearch('')} aria-label="Clear search">✕</button>
           ) : null}
         </label>
 
@@ -1759,7 +1759,7 @@ function LabWorkspace({
                         </ol>
                         <div className="agent-plan-actions">
                           <button type="button" className="agent-plan-approve" disabled={busy} onClick={() => active && approvePlan(active.id, message)}>
-                            Run this plan <span aria-hidden="true">â†—</span>
+                            Run this plan <span aria-hidden="true">↗</span>
                           </button>
                           <button type="button" className="agent-plan-discard" disabled={busy} onClick={() => active && discardPlan(active.id, message.id)}>
                             Discard
@@ -1777,18 +1777,18 @@ function LabWorkspace({
                               : message.agentSteps.find((step) => step.status === 'active')?.label || 'Working...'}</b>
                             <small>{message.agentDone ? 'Open activity' : 'Live activity'}</small>
                           </span>
-                          <span className="agent-run-chevron" aria-hidden="true">âŒ„</span>
+                          <span className="agent-run-chevron" aria-hidden="true">⌄</span>
                         </summary>
                         <div className="agent-steps">
                           {message.agentSteps.map((step, stepIndex) => (
                             <div className={`agent-step ${step.status}`} key={step.id}>
-                              <span>{step.status === 'complete' ? 'âœ“' : step.status === 'failed' ? 'Ã—' : String(stepIndex + 1).padStart(2, '0')}</span>
+                              <span>{step.status === 'complete' ? '✓' : step.status === 'failed' ? '×' : String(stepIndex + 1).padStart(2, '0')}</span>
                               <span>{step.label}</span>
                             </div>
                           ))}
                           {message.agentActivity?.map((activity) => (
                             <div className="agent-step activity" key={`${activity.type}:${activity.createdAt}`}>
-                              <span aria-hidden="true">Â·</span>
+                              <span aria-hidden="true">·</span>
                               <span>{activity.summary}</span>
                             </div>
                           ))}
@@ -1805,7 +1805,7 @@ function LabWorkspace({
                         <div className="message-failure-actions">
                           {message.failure.retryable && index === messages.length - 1 ? (
                             <button type="button" className="failure-retry" onClick={() => regenerate(index)} disabled={busy}>
-                              {busy ? 'Runningâ€¦' : 'Run again'}
+                              {busy ? 'Running…' : 'Run again'}
                             </button>
                           ) : null}
                           <button type="button" onClick={() => void copyFailedPrompt(index)}>
@@ -1834,7 +1834,7 @@ function LabWorkspace({
                             <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>
                               <span>{String(sourceIndex + 1).padStart(2, '0')}</span>
                               <span>{source.title}</span>
-                              <span>â†—</span>
+                              <span>↗</span>
                             </a>
                           ))}
                         </div>
@@ -1843,7 +1843,7 @@ function LabWorkspace({
                     {message.actions?.length ? (
                       <section className="action-center" aria-label="Suggested actions">
                         <div className="action-center-head">
-                          <span>âœ“</span>
+                          <span>✓</span>
                           <span><b>Approval center</b><small>Nothing runs until you review and approve it.</small></span>
                         </div>
                         <div className="action-list">
@@ -1854,7 +1854,7 @@ function LabWorkspace({
                               onClick={() => action.status === 'proposed' && reviewAction(message.id, action)}
                               disabled={action.status === 'completed'}
                             >
-                              <span className="action-kind">{action.kind === 'email' ? 'Aa' : action.kind === 'calendar' ? 'â–¡' : 'âœ“'}</span>
+                              <span className="action-kind">{action.kind === 'email' ? 'Aa' : action.kind === 'calendar' ? '□' : '✓'}</span>
                               <span><b>{action.title}</b><small>{action.result || action.description}</small></span>
                               <span className="action-state">{action.status === 'completed' ? 'Done' : 'Review'}</span>
                             </button>
@@ -1929,7 +1929,7 @@ function LabWorkspace({
           <section className="workspace-guide" role="dialog" aria-modal="true" aria-labelledby="workspace-guide-title">
             <header>
               <div><span>AI360 help</span><h2 id="workspace-guide-title">Start with what you need.</h2></div>
-              <button type="button" onClick={() => setHelpOpen(false)} aria-label="Close help">Ã—</button>
+              <button type="button" onClick={() => setHelpOpen(false)} aria-label="Close help">×</button>
             </header>
             <p>You do not need to choose a model or learn prompt formulas. Describe the outcome in ordinary words and AI360 chooses the lightest useful path.</p>
             <div className="workspace-guide-options">
@@ -1945,9 +1945,9 @@ function LabWorkspace({
         <div className="approval-backdrop" role="presentation">
           <section className="approval-dialog" role="dialog" aria-modal="true" aria-labelledby="approval-title">
             <div className="approval-head">
-              <span className="approval-mark">âœ“</span>
+              <span className="approval-mark">✓</span>
               <span><b id="approval-title">Review before approval</b><small>{actionDraft.title}</small></span>
-              <button onClick={() => setActionDraft(null)} aria-label="Close approval dialog">Ã—</button>
+              <button onClick={() => setActionDraft(null)} aria-label="Close approval dialog">×</button>
             </div>
             <div className="approval-body">
               <div className="approval-notice">
@@ -1988,7 +1988,7 @@ function LabWorkspace({
             <div className="approval-foot">
               <button className="approval-cancel" onClick={() => setActionDraft(null)} disabled={actionBusy}>Cancel</button>
               <button className="approval-confirm" onClick={approveAction} disabled={actionBusy}>
-                {actionBusy ? 'Preparingâ€¦' : actionDraft.kind === 'email' ? 'Approve and open draft' : actionDraft.kind === 'calendar' ? 'Approve and create invite' : 'Approve and save task'}
+                {actionBusy ? 'Preparing…' : actionDraft.kind === 'email' ? 'Approve and open draft' : actionDraft.kind === 'calendar' ? 'Approve and create invite' : 'Approve and save task'}
               </button>
             </div>
           </section>

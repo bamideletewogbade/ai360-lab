@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 import Image from 'next/image'
@@ -226,9 +226,9 @@ export function WhatYouCanMake() {
 
         <article className={styles.campaignProof}>
           <div className={styles.campaignProofCopy}>
-            <span>Generated campaign example Â· Sankofa Harvest</span>
-            <h3>From â€œlaunch this drinkâ€ to a creative direction a customer can recognise.</h3>
-            <p>This is not decoration. It shows the visual standard behind â€œmake a campaign graphicâ€: a specific product, art direction and format shaped from the approved brand, not an unrelated stock image.</p>
+            <span>Generated campaign example · Sankofa Harvest</span>
+            <h3>From “launch this drink” to a creative direction a customer can recognise.</h3>
+            <p>This is not decoration. It shows the visual standard behind “make a campaign graphic”: a specific product, art direction and format shaped from the approved brand, not an unrelated stock image.</p>
             <dl>
               <div><dt>Brief</dt><dd>Modern hibiscus and ginger drink for busy people in Accra</dd></div>
               <div><dt>Direction</dt><dd>Warm, grounded, unmistakably local; premium without becoming distant</dd></div>
@@ -272,7 +272,7 @@ export function WhatYouCanMake() {
         <h2>Bring the thing you have been putting off.</h2>
         <p>Five credits every month, free, no card. Enough to finish something real before you decide anything.</p>
         <div className={styles.ctaRow}>
-          <Link href="/app" className={styles.primary}>Try it now <span aria-hidden="true">â†—</span></Link>
+          <Link href="/app" className={styles.primary}>Try it now <span aria-hidden="true">↗</span></Link>
           <Link href="/how-it-works" className={styles.secondary}>See how it works</Link>
         </div>
       </section>

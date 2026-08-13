@@ -1,4 +1,4 @@
-﻿import { readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import {
   AlignmentType,
@@ -36,7 +36,7 @@ function cleanText(text: string) {
     .replace(/\[([^\]]+)]\((https?:\/\/[^)]+)\)/g, '$1 ($2)')
     .replace(/[*_`~]/g, '')
     .replace(/\s*[\u2013\u2014]\s*/g, ', ')
-    .replace(/ã€\s*\d+\s*â€ [^ã€‘]+ã€‘/g, '')
+    .replace(/ã€\s*\d+\s*†[^ã€‘]+ã€‘/g, '')
     .trim()
 }
 
@@ -420,7 +420,7 @@ async function buildPdf(title: string, blocks: ExportBlock[]) {
       state.y = blockTop - height - 10
     } else if (block.type === 'bullet' || block.type === 'number') {
       block.items.forEach((item, itemIndex) => {
-        drawWrapped(`${block.type === 'bullet' ? 'â€¢' : `${itemIndex + 1}.`}  ${item}`, { indent: 8, gap: 4 })
+        drawWrapped(`${block.type === 'bullet' ? '•' : `${itemIndex + 1}.`}  ${item}`, { indent: 8, gap: 4 })
       })
       state.y -= 5
     } else if (block.type === 'table') {

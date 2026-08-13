@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import {
-  applyResolvedTheme, isThemeChoice, resolveTheme, THEME_STORAGE_KEY, type ThemeChoice,
+  applyResolvedTheme, DEFAULT_THEME_CHOICE, isThemeChoice, resolveTheme, THEME_STORAGE_KEY,
+  type ThemeChoice,
 } from '@/lib/theme'
 
 const SunIcon = () => (
@@ -38,7 +39,9 @@ const prefersDark = () =>
  * next load. In System mode it keeps following the OS as it changes.
  */
 export function ThemeControl() {
-  const [choice, setChoice] = useState<ThemeChoice>('system')
+  // Matches the head script's default, so the control never shows a selection
+  // that disagrees with the theme actually painted.
+  const [choice, setChoice] = useState<ThemeChoice>(DEFAULT_THEME_CHOICE)
 
   useEffect(() => {
     // Sync the control to the stored choice after mount. It starts at 'system'

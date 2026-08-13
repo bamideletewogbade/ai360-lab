@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict'
+import assert from 'node:assert/strict'
 import test from 'node:test'
 import { isEmailConfigured, emailEnabled, qualityAlertRecipients, lowCreditThreshold } from '../src/lib/email/config.ts'
 import { createResendProvider, EmailError } from '../src/lib/email/provider.ts'
@@ -131,7 +131,7 @@ test('templates escape caller-supplied values and carry matching text', { concur
 
   const receipt = paymentReceiptEmail({ name: 'Kojo', planName: 'Everyday', amountGhs: 125, credits: 120, orderId: 'pay_abc' })
   assert.match(receipt.subject, /Everyday/)
-  assert.match(receipt.html, /GHâ‚µ125\.00/)
+  assert.match(receipt.html, /GH₵125\.00/)
   assert.match(receipt.html, /120/)
   assert.match(receipt.html, /pay_abc/)
 

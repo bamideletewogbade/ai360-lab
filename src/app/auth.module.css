@@ -75,6 +75,35 @@
 .panel h2 { margin: 0; font-family: var(--font-heading); font-size: clamp(1.8rem, 3vw, 2.65rem); line-height: 1.05; letter-spacing: -.045em; }
 .panelCopy { margin: 12px 0 30px; color: var(--grey); font-size: 1.037rem; line-height: 1.6; }
 .formFrame { width: 100%; min-height: 320px; }
+
+/* Google is offered first because it is the fastest route for most people and
+   needs no password on a shared device. The mark keeps its brand colours, so
+   the button stays a light surface rather than inverting with the theme. */
+.googleButton {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  border: 1px solid #cfcdc5;
+  border-radius: 12px;
+  background: #fff;
+  color: #101112;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.googleButton:hover:not(:disabled) { transform: translateY(-1px); border-color: #101112; box-shadow: 0 6px 18px rgba(16, 17, 18, .09); }
+.googleButton:disabled { opacity: .55; cursor: not-allowed; }
+.googleButton svg { flex: none; }
+
+.authDivider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--grey); font-size: 0.74rem; font-weight: 750; }
+.authDivider::before,
+.authDivider::after { flex: 1; height: 1px; background: #dedcd5; content: ''; }
+
 .authForm { display: grid; gap: 14px; }
 .authForm label { display: grid; gap: 7px; color: var(--charcoal); font-size: 0.82rem; font-weight: 800; }
 .authForm input {
