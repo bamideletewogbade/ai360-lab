@@ -301,7 +301,7 @@ keys.
 | search verification tokens | search-console ownership verification |
 
 Treat `NEXT_PUBLIC_APP_URL` as canonical. Production is
-`https://lab.aithreesixty.tech`.
+`https://ai360.africa`.
 
 ### Payment activation path
 

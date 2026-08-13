@@ -6,6 +6,7 @@ import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { scopedIdempotencyKey } from '@/lib/idempotency'
 import type { PaymentMethod, VerifiedPayment } from '@/lib/payments/contracts'
 import type { WorkspaceAuthContext } from '@/lib/workspace'
+import { ensureWorkspaceRecord } from '@/lib/workspace-db'
 
 export type PaymentStatus =
   | 'created' | 'initiating' | 'pending' | 'approved'
@@ -71,13 +72,7 @@ function attemptFromRow(row: AttemptRow): PaymentAttempt {
 }
 
 async function ensureBillingIdentity(sql: TransactionSql, context: WorkspaceAuthContext) {
-  await sql`
-    insert into public.lab_users (clerk_user_id) values (${context.userId})
-    on conflict (clerk_user_id) do nothing`
-  await sql`
-    insert into public.lab_workspaces (workspace_key, workspace_type, subject_id, created_by_user_id)
-    values (${context.workspace.key}, ${context.workspace.type}, ${context.workspace.subjectId}, ${context.userId})
-    on conflict (workspace_key) do nothing`
+  await ensureWorkspaceRecord(sql, context)
   await sql`
     insert into public.lab_credit_accounts (workspace_key) values (${context.workspace.key})
     on conflict (workspace_key) do nothing`
@@ -85,12 +80,16 @@ async function ensureBillingIdentity(sql: TransactionSql, context: WorkspaceAuth
 
 export async function readBillingProfile(context: WorkspaceAuthContext) {
   if (!isPostgresConfigured()) return null
-  const [profile] = await getPostgres()<{
-    email: string | null
-    display_name: string | null
-  }[]>`
-    select email, display_name from public.lab_users
-     where clerk_user_id = ${context.userId} and deleted_at is null`
+  const profile = await getPostgres().begin(async (tx) => {
+    await ensureBillingIdentity(tx, context)
+    const [row] = await tx<{
+      email: string | null
+      display_name: string | null
+    }[]>`
+      select email, display_name from public.lab_users
+       where clerk_user_id = ${context.userId} and deleted_at is null`
+    return row ?? null
+  })
   if (!profile?.email) return null
   const parts = (profile.display_name || 'AI360 Customer').trim().split(/\s+/)
   return {

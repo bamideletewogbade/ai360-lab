@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 
 /**
  * Credentialed ExpressPay sandbox probe.
@@ -22,7 +22,7 @@ if (!process.env.EXPRESSPAY_MERCHANT_ID?.trim() || !process.env.EXPRESSPAY_API_K
   throw new Error('Add ExpressPay sandbox merchant credentials before running this probe.')
 }
 
-const appOrigin = new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://lab.aithreesixty.tech').origin
+const appOrigin = new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://ai360.africa').origin
 if (!appOrigin.startsWith('https://')) throw new Error('NEXT_PUBLIC_APP_URL must use HTTPS.')
 
 const { createExpressPayProvider } = await import('../src/lib/payments/expresspay.ts')

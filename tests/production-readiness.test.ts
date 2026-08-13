@@ -6,9 +6,9 @@ const managedKeys = [
   'NODE_ENV',
   'OPENROUTER_API_KEY',
   'NEXT_PUBLIC_APP_URL',
-  'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-  'CLERK_SECRET_KEY',
-  'CLERK_WEBHOOK_SIGNING_SECRET',
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   'DATABASE_PROVIDER',
   'DATABASE_URL',
   'NEXT_PUBLIC_BILLING_ENABLED',
@@ -29,33 +29,32 @@ function withEnvironment(values: Partial<Record<(typeof managedKeys)[number], st
   }
 }
 
-test('partial Clerk configuration is reported as invalid', () => {
-  withEnvironment({ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_example' }, () => {
-    const clerk = productionReadinessChecks().find((check) => check.key === 'clerk')
-    assert.equal(clerk?.status, 'invalid')
-    assert.equal(clerk?.required, true)
+test('partial Supabase Auth configuration is reported as invalid', () => {
+  withEnvironment({ NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co' }, () => {
+    const auth = productionReadinessChecks().find((check) => check.key === 'supabase_auth')
+    assert.equal(auth?.status, 'invalid')
+    assert.equal(auth?.required, true)
   })
 })
 
-test('development Clerk keys are rejected in production', () => {
+test('Supabase Auth URL must be HTTPS in production', () => {
   withEnvironment({
     NODE_ENV: 'production',
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_example',
-    CLERK_SECRET_KEY: 'sk_test_example',
+    NEXT_PUBLIC_SUPABASE_URL: 'http://example.supabase.co',
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_example',
   }, () => {
-    const clerk = productionReadinessChecks().find((check) => check.key === 'clerk')
-    assert.equal(clerk?.status, 'invalid')
-    assert.match(clerk?.message ?? '', /live keys/)
+    const auth = productionReadinessChecks().find((check) => check.key === 'supabase_auth')
+    assert.equal(auth?.status, 'invalid')
   })
 })
 
-test('matching Clerk live keys satisfy the production auth check', () => {
+test('Supabase Auth settings satisfy the production auth check', () => {
   withEnvironment({
     NODE_ENV: 'production',
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_live_example',
-    CLERK_SECRET_KEY: 'sk_live_example',
+    NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_example',
   }, () => {
-    assert.equal(productionReadinessChecks().find((check) => check.key === 'clerk')?.status, 'ready')
+    assert.equal(productionReadinessChecks().find((check) => check.key === 'supabase_auth')?.status, 'ready')
   })
 })
 

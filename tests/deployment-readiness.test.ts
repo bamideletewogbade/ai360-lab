@@ -10,11 +10,9 @@ function releaseEnvironment() {
     NODE_ENV: 'production' as const,
     AI360_DEPLOYMENT_ENV: 'production',
     OPENROUTER_API_KEY: 'server-key',
-    NEXT_PUBLIC_APP_URL: 'https://lab.aithreesixty.tech',
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_live_example',
-    CLERK_SECRET_KEY: 'sk_live_example',
-    CLERK_WEBHOOK_SIGNING_SECRET: 'whsec_example',
-    CLERK_AUTHORIZED_PARTIES: 'https://aithreesixty.tech,https://lab.aithreesixty.tech',
+    NEXT_PUBLIC_APP_URL: 'https://ai360.africa',
+    NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_example',
     DATABASE_URL: 'postgresql://pooler.example.com:5432/postgres',
     DIRECT_URL: 'postgresql://migration.example.com:5432/postgres',
     DATABASE_POOL_SIZE: '5',
@@ -50,7 +48,7 @@ test('enabling transactional email requires a provider key and a valid sender', 
     ...releaseEnvironment(),
     EMAIL_ENABLED: 'true',
     RESEND_API_KEY: 're_live_example',
-    EMAIL_FROM: 'AI360 <lab@aithreesixty.tech>',
+    EMAIL_FROM: 'AI360 <noreply@ai360.africa>',
   })
   assert.deepEqual(configured.errors, [])
 })
@@ -74,7 +72,7 @@ test('a missing Next.js chunk forces one cache-busted workspace reload', () => {
   const storage = new Map<string, string>()
   const location = {
     pathname: '/app',
-    href: 'https://lab.aithreesixty.tech/app',
+    href: 'https://ai360.africa/app',
     replace(value: string) { replacedWith = value },
   }
   const sessionStorage = {
@@ -89,9 +87,9 @@ test('a missing Next.js chunk forces one cache-busted workspace reload', () => {
   const installRecovery = new Function('location', 'sessionStorage', 'document', 'addEventListener', ASSET_RECOVERY_SCRIPT)
   installRecovery(location, sessionStorage, {}, addEventListener)
   assert.ok(onError)
-  onError({ target: { tagName: 'SCRIPT', src: 'https://lab.aithreesixty.tech/_next/static/chunks/missing.js' } })
+  onError({ target: { tagName: 'SCRIPT', src: 'https://ai360.africa/_next/static/chunks/missing.js' } })
 
-  assert.match(replacedWith, /^https:\/\/lab\.aithreesixty\.tech\/app\?_fresh=\d+$/)
+  assert.match(replacedWith, /^https:\/\/ai360\.africa\/app\?_fresh=\d+$/)
   assert.ok(storage.has('ai360:asset-recovery:/app'))
 })
 

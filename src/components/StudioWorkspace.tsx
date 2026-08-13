@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ResponseContent } from '@/components/ResponseContent'
 import { ProjectStageNavigator } from '@/components/ProjectStageNavigator'
 import { ProjectKnowledge } from '@/components/ProjectKnowledge'
+import { ProjectHeader } from '@/components/ProjectHeader'
+import { ProjectStart } from '@/components/ProjectStart'
 import { CreateProjectModal } from '@/components/CreateProjectModal'
 import { mergeProjects, setProjectArchived, sortProjects, upsertProject } from '@/lib/studio-projects'
 import { PACKS, findPack, packCredits, type Pack, type PackId, type SpecialistId } from '@/lib/studio/packs'
@@ -238,11 +240,14 @@ export function StudioWorkspace({
   signedIn = false,
   workspaceScope = 'guest',
   createSignal = 0,
+  homeSignal = 0,
 }: {
   initialBrief?: string
   signedIn?: boolean
   workspaceScope?: string
   createSignal?: number
+  /** Bumped when the sidebar "Projects" entry is pressed, to return to the list. */
+  homeSignal?: number
 }) {
   const [hydrated, setHydrated] = useState(false)
   const [intake, setIntake] = useState<Intake>(EMPTY_INTAKE)
@@ -439,6 +444,14 @@ export function StudioWorkspace({
       setShowCreateModal(true)
     })
   }, [createSignal])
+
+  // The sidebar "Projects" entry bumps homeSignal. Pressing the section you are
+  // already in should take you to the top of it, which for Projects is the list
+  // — previously it did nothing, leaving an opened project with no way out.
+  useEffect(() => {
+    if (homeSignal <= 0) return
+    queueMicrotask(() => setView('dashboard'))
+  }, [homeSignal])
 
   useEffect(() => {
     if (!project || !signedIn) return
@@ -1466,72 +1479,23 @@ export function StudioWorkspace({
   }
 
   if (!project.assets.length && !project.run) {
-    const startingPoints = [
-      { label: 'Plan and launch', prompt: 'Help me plan and launch ' },
-      { label: 'Write something', prompt: 'Help me write and finish ' },
-      { label: 'Research a decision', prompt: 'Research the options and help me decide about ' },
-      { label: 'Build a campaign', prompt: 'Create a practical campaign for ' },
-    ]
     return (
       <main className="studio-main" ref={mainRef}>
+        <ProjectHeader
+          name={project.campaign.name}
+          onBack={openDashboard}
+          saveState={saveState}
+          signedIn={signedIn}
+        />
         <div className="project-workspace empty-workspace">
-          <section className="project-start-hero">
-            <div className="project-start-copy">
-              <div className="project-inline-heading">
-                <span className="workspace-eyebrow"><i /> {project.campaign.name} · New workspace</span>
-              </div>
-              <h1>What do you want<br />to get done?</h1>
-              <p>
-                Start with the outcome, even if the idea is rough. AI360 will clarify what matters,
-                build the work, and stay with you until it is ready to use.
-              </p>
-              <form onSubmit={(event) => { event.preventDefault(); startProjectWork(projectGoalInput) }}>
-                <label htmlFor="project-goal">Describe the work</label>
-                <textarea
-                  id="project-goal"
-                  rows={4}
-                  value={projectGoalInput}
-                  onChange={(event) => setProjectGoalInput(event.target.value)}
-                  placeholder="For example: Help me turn my catering idea into a plan, price the offer, and prepare what I need to find my first customers."
-                  autoFocus
-                />
-                <div className="project-start-submit">
-                  <span>It does not need to be a perfect brief.</span>
-                  <button type="submit" disabled={!projectGoalInput.trim() || briefBusy}>
-                    Start the work <span aria-hidden="true">→</span>
-                  </button>
-                </div>
-              </form>
-              <div className="project-starting-points" aria-label="Starting points">
-                {startingPoints.map((item) => (
-                  <button type="button" key={item.label} onClick={() => setProjectGoalInput(item.prompt)}>
-                    <span aria-hidden="true">+</span>{item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <aside className="project-promise-card" aria-label="How AI360 completes the work">
-              <div className="promise-orbit" aria-hidden="true"><span>A</span><i /><i /></div>
-              <span className="workspace-eyebrow">How this workspace works</span>
-              <h2>From an idea to work you can actually use.</h2>
-              <ol>
-                <li><span>01</span><div><b>Understand</b><small>We ask only for details that change the result.</small></div></li>
-                <li><span>02</span><div><b>Build</b><small>The right specialists produce one connected body of work.</small></div></li>
-                <li><span>03</span><div><b>Finish</b><small>You review, improve, approve and export each outcome.</small></div></li>
-              </ol>
-              <p><span aria-hidden="true">✓</span> Nothing is published without your approval.</p>
-            </aside>
-          </section>
-
-          <section className="project-context-dock" id="project-context">
-            <div>
-              <span className="workspace-eyebrow">Project context</span>
-              <h2>Give the work a head start.</h2>
-              <p>Add notes, price lists, research or existing drafts now—or come back to this later.</p>
-            </div>
-            <ProjectKnowledge projectId={project.id} signedIn={signedIn} />
-          </section>
+          <ProjectStart
+            projectId={project.id}
+            signedIn={signedIn}
+            value={projectGoalInput}
+            onChange={setProjectGoalInput}
+            onSubmit={() => startProjectWork(projectGoalInput)}
+            busy={briefBusy}
+          />
         </div>
       </main>
     )
@@ -1539,6 +1503,12 @@ export function StudioWorkspace({
 
   return (
     <main className="studio-main" ref={mainRef}>
+      <ProjectHeader
+        name={project.campaign.name}
+        onBack={openDashboard}
+        saveState={saveState}
+        signedIn={signedIn}
+      />
       <div className="studio-project project-workspace active-workspace">
         <section className="active-project-hero">
           <div className="active-project-intro">
@@ -1554,7 +1524,6 @@ export function StudioWorkspace({
               <span>Updated {new Date(project.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
               <span>{project.assets.length} outcome{project.assets.length === 1 ? '' : 's'}</span>
               <span>{project.sources?.length || 0} research source{project.sources?.length === 1 ? '' : 's'}</span>
-              <span>{saveState === 'saving' ? 'Saving changes' : saveState === 'unavailable' ? 'Saving paused' : 'Up to date'}</span>
             </div>
           </div>
 

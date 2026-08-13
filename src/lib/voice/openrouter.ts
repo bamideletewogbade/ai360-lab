@@ -54,7 +54,7 @@ export class OpenRouterTranscriptionProvider implements TranscriptionProvider {
       method: 'POST', signal,
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
-        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
+        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://ai360.africa',
         'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
       },
       body: form,

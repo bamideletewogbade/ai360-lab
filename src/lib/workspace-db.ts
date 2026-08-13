@@ -13,8 +13,14 @@ export async function ensureWorkspaceRecord(
   context: WorkspaceAuthContext,
 ) {
   await sql`
-    insert into public.lab_users (clerk_user_id) values (${context.userId})
-    on conflict (clerk_user_id) do nothing`
+    insert into public.lab_users (clerk_user_id, email, display_name, image_url, deleted_at)
+    values (${context.userId}, ${context.profile.email}, ${context.profile.displayName}, ${context.profile.imageUrl}, null)
+    on conflict (clerk_user_id) do update set
+      email = coalesce(excluded.email, public.lab_users.email),
+      display_name = coalesce(excluded.display_name, public.lab_users.display_name),
+      image_url = coalesce(excluded.image_url, public.lab_users.image_url),
+      deleted_at = null,
+      updated_at = now()`
   await sql`
     insert into public.lab_workspaces (workspace_key, workspace_type, subject_id, created_by_user_id)
     values (${context.workspace.key}, ${context.workspace.type}, ${context.workspace.subjectId}, ${context.userId})

@@ -124,7 +124,7 @@ export function rateLimit(
  * Expensive work must belong to someone.
  *
  * Returns null when the request may proceed. When identity is not configured at
- * all AI360 stays open, so the product still runs and demos without Clerk.
+ * all AI360 stays open, so the product still runs and demos without auth.
  */
 export function requireIdentifiedRequester(scope: RateScope, requester: Requester) {
   if (!EXPENSIVE_SCOPES.has(scope)) return null

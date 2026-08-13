@@ -35,10 +35,10 @@ export function evaluateProductionEnvironment(env = process.env) {
     } catch { /* requireHttps already records this */ }
   }
 
-  requireValue('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'required for browser authentication')
-  requireValue('CLERK_SECRET_KEY', 'required for server authentication')
-  requireValue('CLERK_WEBHOOK_SIGNING_SECRET', 'required for verified identity synchronization')
-  if (!configured('CLERK_AUTHORIZED_PARTIES')) warnings.push('CLERK_AUTHORIZED_PARTIES is not set; production-safe AI360 defaults will be used.')
+  requireHttps('NEXT_PUBLIC_SUPABASE_URL', 'required for Supabase Auth and private storage')
+  if (!configured('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY') && !configured('NEXT_PUBLIC_SUPABASE_ANON_KEY')) {
+    errors.push('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: required for browser authentication')
+  }
 
   requireValue('DATABASE_URL', 'use the Supabase session-pooler connection string on Hostinger')
   if (/@db\.[a-z0-9]+\.supabase\.co/.test(env.DATABASE_URL || '')) {

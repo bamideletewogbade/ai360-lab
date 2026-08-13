@@ -1,4 +1,4 @@
-import 'server-only'
+﻿import 'server-only'
 
 import { z } from 'zod'
 import { providerPreferences, REASONING_BUDGET } from '@/lib/models'
@@ -53,7 +53,7 @@ async function modelEvaluation(report: NonNullable<Awaited<ReturnType<typeof get
     headers: {
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
+      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://ai360.africa',
       'X-Title': 'AI360 Quality Steward',
     },
     body: JSON.stringify({
@@ -113,7 +113,7 @@ async function alertHuman(input: {
         severity: input.severity,
         category: input.category,
         summary: input.summary,
-        reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://lab.aithreesixty.tech'}/quality`,
+        reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://ai360.africa'}/quality`,
       }),
     })
     await recordHumanAlertResult(input.id, response.ok)

@@ -6,18 +6,18 @@ Canonical name: AI360
 Product name: AI360
 Creative workspace: AI360 Studio
 Primary market: Ghana and Africa
-Website: https://lab.aithreesixty.tech
+Website: https://ai360.africa
 Organization: https://aithreesixty.tech
 
 ## Public pages
 
-- [Homepage](https://lab.aithreesixty.tech/): Mission, audiences and core outcomes.
-- [What you can do](https://lab.aithreesixty.tech/what-you-can-make): Examples of research, study, proposal, campaign and public-service work.
-- [How it works](https://lab.aithreesixty.tech/how-it-works): Routing, live research, approval controls, privacy and production workflow.
-- [Plans](https://lab.aithreesixty.tech/pricing): Free and paid plans, work credits, Mobile Money and card payment information.
-- [Changelog](https://lab.aithreesixty.tech/changelog): Meaningful shipped, pilot and foundation updates with explicit release status.
-- [Privacy](https://lab.aithreesixty.tech/privacy): Data handling and user choices.
-- [Terms](https://lab.aithreesixty.tech/terms): Responsible use and service terms.
+- [Homepage](https://ai360.africa/): Mission, audiences and core outcomes.
+- [What you can do](https://ai360.africa/what-you-can-make): Examples of research, study, proposal, campaign and public-service work.
+- [How it works](https://ai360.africa/how-it-works): Routing, live research, approval controls, privacy and production workflow.
+- [Plans](https://ai360.africa/pricing): Free and paid plans, work credits, Mobile Money and card payment information.
+- [Changelog](https://ai360.africa/changelog): Meaningful shipped, pilot and foundation updates with explicit release status.
+- [Privacy](https://ai360.africa/privacy): Data handling and user choices.
+- [Terms](https://ai360.africa/terms): Responsible use and service terms.
 
 ## Product facts
 

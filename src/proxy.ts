@@ -1,53 +1,71 @@
-import { clerkMiddleware } from '@clerk/nextjs/server'
-import { NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
+import { supabaseProjectOrigin, supabasePublicConfig } from '@/lib/supabase/config'
 
-const authConfigured = Boolean(
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY,
-)
+function contentSecurityPolicy() {
+  const supabaseOrigin = supabaseProjectOrigin()
+  const connectSrc = ["'self'"]
+  if (supabaseOrigin) {
+    connectSrc.push(supabaseOrigin)
+    try {
+      const host = new URL(supabaseOrigin).host
+      connectSrc.push(`wss://${host}`)
+    } catch { /* ignored; the HTTP origin is still useful when valid */ }
+  }
 
-const configuredParties = (process.env.CLERK_AUTHORIZED_PARTIES || '')
-  .split(',')
-  .map((value) => value.trim())
-  .filter(Boolean)
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    `img-src 'self' data: blob:${supabaseOrigin ? ` ${supabaseOrigin}` : ''}`,
+    "media-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
+    `connect-src ${connectSrc.join(' ')}`,
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+  ].join('; ')
+}
 
-const authorizedParties = configuredParties.length
-  ? configuredParties
-  : process.env.NODE_ENV === 'production'
-    ? ['https://aithreesixty.tech', 'https://lab.aithreesixty.tech']
-    : ['http://localhost:3000']
+function applySecurityHeaders(response: NextResponse) {
+  response.headers.set('Content-Security-Policy', contentSecurityPolicy())
+  return response
+}
 
-const handleClerk = clerkMiddleware({
-  authorizedParties,
-  contentSecurityPolicy: {
-    directives: {
-      'img-src': ['data:', 'blob:'],
-      'media-src': ["'self'", 'data:', 'blob:'],
+export default async function proxy(request: NextRequest) {
+  const config = supabasePublicConfig()
+  let response = NextResponse.next({ request })
+
+  if (!config) return applySecurityHeaders(response)
+
+  const supabase = createServerClient(config.url, config.publishableKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll()
+      },
+      setAll(cookiesToSet, headers) {
+        for (const { name, value } of cookiesToSet) {
+          request.cookies.set(name, value)
+        }
+
+        response = NextResponse.next({ request })
+
+        for (const { name, value, options } of cookiesToSet) {
+          response.cookies.set(name, value, options)
+        }
+        for (const [key, value] of Object.entries(headers)) {
+          response.headers.set(key, value)
+        }
+      },
     },
-  },
-})
+  })
 
-const fallbackContentSecurityPolicy = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "frame-ancestors 'none'",
-  "form-action 'self'",
-  "img-src 'self' data: blob:",
-  "media-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "style-src 'self' 'unsafe-inline'",
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
-  "connect-src 'self'",
-  "worker-src 'self' blob:",
-  "object-src 'none'",
-].join('; ')
+  await supabase.auth.getClaims().catch(() => undefined)
 
-export default authConfigured
-  ? handleClerk
-  : function proxyWithoutAuth() {
-      const response = NextResponse.next()
-      response.headers.set('Content-Security-Policy', fallbackContentSecurityPolicy)
-      return response
-    }
+  return applySecurityHeaders(response)
+}
 
 export const config = {
   matcher: [

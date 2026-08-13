@@ -1,9 +1,15 @@
-﻿import Link from 'next/link'
-import { SignIn, SignUp } from '@clerk/nextjs'
+'use client'
+
+import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { BrandMark } from '@/components/BrandMark'
+import { useAuth } from '@/components/AuthProvider'
+import { getSupabaseBrowserClient } from '@/lib/supabase/browser'
 import styles from '@/app/auth.module.css'
 
 type AuthMode = 'sign-in' | 'sign-up'
+type AuthState = 'idle' | 'submitting' | 'sent' | 'error'
 
 const CONTENT: Record<AuthMode, {
   eyebrow: string
@@ -31,46 +37,66 @@ const CONTENT: Record<AuthMode, {
   },
 }
 
-const clerkAppearance = {
-  variables: {
-    colorPrimary: '#101112',
-    colorBackground: '#ffffff',
-    colorForeground: '#101112',
-    colorMutedForeground: '#56595c',
-    colorInput: '#ffffff',
-    colorInputForeground: '#101112',
-    colorBorder: '#cfcdc5',
-    colorRing: '#101112',
-    borderRadius: '0.75rem',
-    fontFamily: 'var(--font-dm), sans-serif',
-  },
-  options: {
-    logoImageUrl: '/icon-black.png',
-    animations: true,
-    autoFocus: true,
-    elevation: 'flush' as const,
-    socialButtonsVariant: 'blockButton' as const,
-    socialButtonsPlacement: 'top' as const,
-    privacyPageUrl: '/privacy',
-    termsPageUrl: '/terms',
-  },
-  elements: {
-    rootBox: { width: '100%' },
-    cardBox: { width: '100%', boxShadow: 'none' },
-    card: { width: '100%', boxShadow: 'none', padding: 0 },
-    header: { display: 'none' },
-    footer: { display: 'none' },
-    formButtonPrimary: { boxShadow: 'none', minHeight: '46px', fontWeight: 700, transition: 'transform 180ms ease, background 180ms ease' },
-    socialButtonsBlockButton: { minHeight: '46px', boxShadow: 'none', transition: 'transform 180ms ease, border-color 180ms ease' },
-    formFieldInput: { minHeight: '46px', boxShadow: 'none', transition: 'border-color 180ms ease, box-shadow 180ms ease' },
-  },
+function safeNext(value: string | null, plan: string | null) {
+  if (plan && /^[a-z0-9-]{2,40}$/i.test(plan)) return `/checkout?plan=${encodeURIComponent(plan)}`
+  if (value?.startsWith('/') && !value.startsWith('//')) return value
+  return '/app'
 }
 
 export function AuthPage({ mode }: { mode: AuthMode }) {
   const content = CONTENT[mode]
-  const authConfigured = Boolean(
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY,
-  )
+  const { configured, user, loading, refresh } = useAuth()
+  const router = useRouter()
+  const params = useSearchParams()
+  const redirectTo = useMemo(() => safeNext(params.get('next'), params.get('plan')), [params])
+  const alternateHref = `${content.alternateHref}${redirectTo !== '/app' ? `?next=${encodeURIComponent(redirectTo)}` : ''}`
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [state, setState] = useState<AuthState>('idle')
+  const [message, setMessage] = useState('')
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setState('submitting')
+    setMessage('')
+    try {
+      const supabase = getSupabaseBrowserClient()
+      if (mode === 'sign-in') {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        })
+        if (error) throw error
+      } else {
+        const origin = window.location.origin
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+            data: name.trim() ? { full_name: name.trim() } : undefined,
+          },
+        })
+        if (error) throw error
+        if (!data.session) {
+          setState('sent')
+          setMessage('Check your email to confirm your AI360 account, then come back here to continue.')
+          return
+        }
+      }
+      await refresh()
+      router.push(redirectTo)
+      router.refresh()
+    } catch (error) {
+      setState('error')
+      setMessage(error instanceof Error ? error.message : 'Account access could not be completed.')
+    }
+  }
+
+  useEffect(() => {
+    if (!loading && user) router.replace(redirectTo)
+  }, [loading, redirectTo, router, user])
 
   return (
     <main className={`${styles.shell} ${mode === 'sign-in' ? styles.signIn : styles.signUp}`}>
@@ -114,28 +140,97 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           <h2>{mode === 'sign-in' ? 'Sign in to AI360' : 'Create your AI360 account'}</h2>
           <p className={styles.panelCopy}>
             {mode === 'sign-in'
-              ? 'Use the same account you use across AI360.'
-              : 'Start free. You can explore before deciding what to save.'}
+              ? 'Use your AI360 account to keep projects, credits and finished work connected.'
+              : 'Start free. Your work stays with the same Supabase-backed AI360 account.'}
           </p>
 
           <div className={styles.formFrame}>
-            {authConfigured ? (
-              mode === 'sign-in' ? (
-                <SignIn appearance={clerkAppearance} signUpUrl="/sign-up" fallbackRedirectUrl="/app" />
-              ) : (
-                <SignUp appearance={clerkAppearance} signInUrl="/sign-in" fallbackRedirectUrl="/app" />
-              )
+            {configured ? (
+              <form className={styles.authForm} onSubmit={submit}>
+                {mode === 'sign-up' ? (
+                  <label>
+                    <span>Your name</span>
+                    <input
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      autoComplete="name"
+                      maxLength={80}
+                      disabled={state === 'submitting'}
+                      placeholder="Ama Mensah"
+                    />
+                  </label>
+                ) : null}
+                <label>
+                  <span>Email address</span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    autoComplete="email"
+                    required
+                    disabled={state === 'submitting'}
+                    placeholder="you@example.com"
+                  />
+                </label>
+                <label>
+                  <span>Password</span>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
+                    minLength={8}
+                    required
+                    disabled={state === 'submitting'}
+                    placeholder="At least 8 characters"
+                  />
+                </label>
+                {message ? (
+                  <div className={state === 'error' ? styles.authError : styles.authSuccess} role="status">
+                    {message}
+                  </div>
+                ) : null}
+                <button type="submit" disabled={state === 'submitting' || state === 'sent'}>
+                  {state === 'submitting'
+                    ? mode === 'sign-in' ? 'Signing in…' : 'Creating account…'
+                    : mode === 'sign-in' ? 'Sign in' : 'Create account'}
+                </button>
+                {mode === 'sign-in' ? (
+                  <button
+                    type="button"
+                    className={styles.secondaryAction}
+                    disabled={state === 'submitting' || !email.trim()}
+                    onClick={async () => {
+                      setState('submitting')
+                      setMessage('')
+                      try {
+                        const { error } = await getSupabaseBrowserClient().auth.resetPasswordForEmail(email.trim(), {
+                          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/settings/account')}`,
+                        })
+                        if (error) throw error
+                        setState('sent')
+                        setMessage('Password reset sent. Check your email.')
+                      } catch (error) {
+                        setState('error')
+                        setMessage(error instanceof Error ? error.message : 'Password reset could not be sent.')
+                      }
+                    }}
+                  >
+                    Send password reset
+                  </button>
+                ) : null}
+              </form>
             ) : (
               <div className={styles.setupNotice} role="status">
                 <b>Account access is being connected</b>
-                <p>You can still explore AI360 as a guest. Sign-in will appear here once the secure account service is enabled.</p>
+                <p>Add your Supabase project URL and publishable key to enable sign-in. You can still explore AI360 as a guest.</p>
                 <Link href="/app">Continue as a guest</Link>
               </div>
             )}
           </div>
 
           <p className={styles.alternate}>
-            {content.alternate} <Link href={content.alternateHref}>{content.alternateAction}</Link>
+            {content.alternate} <Link href={alternateHref}>{content.alternateAction}</Link>
           </p>
           <p className={styles.legal}>By continuing, you agree to our <Link href="/terms">Terms</Link> and acknowledge our <Link href="/privacy">Privacy notice</Link>.</p>
         </div>

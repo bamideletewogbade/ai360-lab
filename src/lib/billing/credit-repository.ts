@@ -11,6 +11,7 @@ import {
 } from '@/lib/billing/credits'
 import { findBillingPlan } from '@/lib/billing/catalog'
 import { scopedIdempotencyKey } from '@/lib/idempotency'
+import { ensureWorkspaceRecord } from '@/lib/workspace-db'
 
 /**
  * Durable side of the credit engine, on Supabase Postgres.
@@ -58,13 +59,7 @@ type LedgerMetadata = Record<string, string | number | boolean | null>
 
 /** Identity rows must exist before anything can reference the workspace. */
 async function ensureWorkspace(sql: TransactionSql, context: WorkspaceAuthContext) {
-  await sql`
-    insert into public.lab_users (clerk_user_id) values (${context.userId})
-    on conflict (clerk_user_id) do nothing`
-  await sql`
-    insert into public.lab_workspaces (workspace_key, workspace_type, subject_id, created_by_user_id)
-    values (${context.workspace.key}, ${context.workspace.type}, ${context.workspace.subjectId}, ${context.userId})
-    on conflict (workspace_key) do nothing`
+  await ensureWorkspaceRecord(sql, context)
   await sql`
     insert into public.lab_credit_accounts (workspace_key) values (${context.workspace.key})
     on conflict (workspace_key) do nothing`

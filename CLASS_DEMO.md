@@ -2,7 +2,7 @@
 
 ## Before learners arrive
 
-- Confirm `https://lab.aithreesixty.tech/api/health` reports `aiConfigured: true`.
+- Confirm `https://ai360.africa/api/health` reports `aiConfigured: true`.
 - Confirm the OpenRouter account has sufficient credit.
 - Test one Chat response, one Agent response and one Studio launch pack.
 - Decide whether to demonstrate paid media generation. A four-second 720p

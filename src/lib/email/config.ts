@@ -4,9 +4,9 @@
  * Email is provider-isolated behind `provider.ts` and disabled by default. It
  * only sends once `EMAIL_ENABLED=true` and a provider key and a credential-free
  * `EMAIL_FROM` address are present, which mirrors how billing and the browser
- * pilot stay dark until their external service is verified. Clerk continues to
- * send its own authentication mail (verification, password reset, magic links);
- * this plane is only for application messages such as receipts and alerts.
+ * pilot stay dark until their external service is verified. Supabase Auth sends
+ * authentication mail (verification and password reset); this plane is only for
+ * application messages such as receipts and alerts.
  */
 
 const FROM_PATTERN = /^(?:[^<>]{1,64}<)?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]{2,}>?$/
@@ -30,9 +30,9 @@ export function isEmailConfigured() {
 }
 
 export function emailSettings() {
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://lab.aithreesixty.tech').replace(/\/+$/, '')
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://ai360.africa').replace(/\/+$/, '')
   return {
-    from: (process.env.EMAIL_FROM || 'AI360 <lab@aithreesixty.tech>').trim(),
+    from: (process.env.EMAIL_FROM || 'AI360 <noreply@ai360.africa>').trim(),
     replyTo: process.env.EMAIL_REPLY_TO?.trim() || null,
     appUrl,
     brandName: 'AI360',

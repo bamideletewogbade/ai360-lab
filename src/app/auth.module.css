@@ -75,6 +75,52 @@
 .panel h2 { margin: 0; font-family: var(--font-heading); font-size: clamp(1.8rem, 3vw, 2.65rem); line-height: 1.05; letter-spacing: -.045em; }
 .panelCopy { margin: 12px 0 30px; color: var(--grey); font-size: 1.037rem; line-height: 1.6; }
 .formFrame { width: 100%; min-height: 320px; }
+.authForm { display: grid; gap: 14px; }
+.authForm label { display: grid; gap: 7px; color: var(--charcoal); font-size: 0.82rem; font-weight: 800; }
+.authForm input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #cfcdc5;
+  border-radius: 12px;
+  background: #fff;
+  padding: 0 14px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  outline: 0;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.authForm input:focus { border-color: var(--ink); box-shadow: 0 0 0 4px rgba(16, 17, 18, .08); }
+.authForm input:disabled { opacity: .65; cursor: not-allowed; }
+.authForm button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition: transform .18s ease, background .18s ease, opacity .18s ease;
+}
+.authForm button:hover:not(:disabled) { transform: translateY(-1px); background: var(--charcoal); }
+.authForm button:disabled { opacity: .55; cursor: not-allowed; }
+.authForm .secondaryAction {
+  border: 1px solid #dedcd5;
+  background: #fff;
+  color: var(--ink);
+}
+.authForm .secondaryAction:hover:not(:disabled) { background: var(--paper); }
+.authError,
+.authSuccess {
+  border-radius: 12px;
+  padding: 12px 13px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.authError { border: 1px solid #e5b8b1; background: #fff4f2; color: #8a2519; }
+.authSuccess { border: 1px solid #b7d6c2; background: #f1fbf4; color: #285c3b; }
 .setupNotice { display: grid; min-height: 310px; place-items: center; align-content: center; border: 1px solid #dedcd5; border-radius: 16px; background: var(--paper); padding: 42px; text-align: center; }
 .setupNotice b { font-family: var(--font-heading); font-size: 1.15rem; }
 .setupNotice p { max-width: 330px; margin: 10px 0 20px; color: var(--grey); font-size: 0.9rem; line-height: 1.6; }

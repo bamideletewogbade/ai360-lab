@@ -38,9 +38,9 @@ Add these in hPanel. Never prefix the OpenRouter key with `NEXT_PUBLIC_`.
 
 ```text
 OPENROUTER_API_KEY=<newly rotated key>
-NEXT_PUBLIC_APP_URL=https://lab.aithreesixty.tech
+NEXT_PUBLIC_APP_URL=https://ai360.africa
 AI360_DEPLOYMENT_ENV=production
-OPENROUTER_SITE_URL=https://lab.aithreesixty.tech
+OPENROUTER_SITE_URL=https://ai360.africa
 OPENROUTER_SITE_NAME=AI360
 OPENROUTER_IMAGE_MODEL=openai/gpt-image-1-mini
 OPENROUTER_IMAGE_MODELS=openai/gpt-image-1-mini,google/gemini-3.1-flash-lite-image
@@ -48,7 +48,7 @@ OPENROUTER_VIDEO_MODEL=google/veo-3.1-lite
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<Clerk production publishable key>
 CLERK_SECRET_KEY=<Clerk production secret key>
 CLERK_WEBHOOK_SIGNING_SECRET=<Clerk webhook signing secret>
-CLERK_AUTHORIZED_PARTIES=https://aithreesixty.tech,https://lab.aithreesixty.tech
+CLERK_AUTHORIZED_PARTIES=https://aithreesixty.tech,https://ai360.africa
 NEXT_PUBLIC_AI360_TEAM_WORKSPACES=false
 DATABASE_URL=<Supabase shared session-pooler URL on port 5432>
 DIRECT_URL=<Supabase direct migration URL or reviewed migration connection>
@@ -149,7 +149,7 @@ password or secret key in a `NEXT_PUBLIC_` variable.
    across the informational site and Lab. In Clerk Organizations settings, use
    optional membership, disable automatic first-Organization creation, and keep
    public Organization creation disabled during the pilot.
-6. Allow `lab.aithreesixty.tech` in the Clerk production domain settings, add
+6. Allow `ai360.africa` in the Clerk production domain settings, add
    the same production keys to Hostinger, redeploy, then test account creation,
    sign-in, sign-out and conversation sync in two browsers.
 7. Leave `NEXT_PUBLIC_AI360_TEAM_WORKSPACES=false` until personal/team tenant
@@ -164,7 +164,7 @@ access decisions; Postgres stores the durable records needed by projects, usage
 and future billing.
 
 1. In the Clerk production instance, create an endpoint at
-   `https://lab.aithreesixty.tech/api/webhooks/clerk`.
+   `https://ai360.africa/api/webhooks/clerk`.
 2. Subscribe to `user.created`, `user.updated`, `user.deleted`,
    `organization.created`, `organization.updated`, `organization.deleted`,
    `organizationMembership.created`, `organizationMembership.updated` and
@@ -183,7 +183,7 @@ workspace.
 ## Connect the subdomain
 
 1. From the Node.js application dashboard, select **Connect domain**.
-2. Enter `lab.aithreesixty.tech`.
+2. Enter `ai360.africa`.
 3. If `aithreesixty.tech` uses Hostinger nameservers, Hostinger creates the DNS
    routing and SSL certificate automatically.
 4. If the domain uses external nameservers, add the DNS record shown by hPanel
@@ -240,7 +240,7 @@ authorization headers and cookies are not logged.
 The health endpoint is:
 
 ```text
-https://lab.aithreesixty.tech/api/health
+https://ai360.africa/api/health
 ```
 
 It confirms whether the service is running and whether an OpenRouter key is

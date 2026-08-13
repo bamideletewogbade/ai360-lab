@@ -306,7 +306,10 @@ const SIDEBAR_GROUPS: Array<{
   { id: 'chats', label: 'Chats', match: (experience) => !experience || experience === 'chat' || experience === 'agent' },
 ]
 
-const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
+const AUTH_ENABLED = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL
+  && (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+)
 
 export default function LabPage() {
   const identity = useWorkspaceIdentity()
@@ -367,6 +370,9 @@ function LabWorkspace({
   // create-project modal. A counter rather than a boolean so a second click
   // after closing still fires.
   const [createProjectSignal, setCreateProjectSignal] = useState(0)
+  // Pressing "Projects" returns to the project list, the way pressing a section
+  // you are already in takes you to the top of it.
+  const [projectsHomeSignal, setProjectsHomeSignal] = useState(0)
   const [helpOpen, setHelpOpen] = useState(false)
   const [showReturnToLatest, setShowReturnToLatest] = useState(false)
   const [copiedPromptId, setCopiedPromptId] = useState('')
@@ -1531,7 +1537,7 @@ function LabWorkspace({
             <button
               type="button"
               className={`nav-menu-item${experience === 'studio' ? ' active' : ''}`}
-              onClick={() => { selectExperience('studio'); setSidebarOpen(false) }}
+              onClick={() => { selectExperience('studio'); setSidebarOpen(false); setProjectsHomeSignal((n) => n + 1) }}
             >
               <span className="nav-menu-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -1669,6 +1675,7 @@ function LabWorkspace({
             signedIn={signedIn}
             workspaceScope={workspaceScope}
             createSignal={createProjectSignal}
+            homeSignal={projectsHomeSignal}
           />
         ) : experience === 'apps' ? (
           <AppsDirectory />

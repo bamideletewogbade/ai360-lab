@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict'
+﻿import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { createExpressPayProvider, ExpressPayError, parseGhsMinor } from '../src/lib/payments/expresspay.ts'
@@ -19,8 +19,8 @@ function providerInput() {
       email: 'ama@example.com',
       phone: '233240000000',
     },
-    returnUrl: 'https://lab.aithreesixty.tech/api/billing/expresspay/return',
-    webhookUrl: 'https://lab.aithreesixty.tech/api/billing/expresspay/notify',
+    returnUrl: 'https://ai360.africa/api/billing/expresspay/return',
+    webhookUrl: 'https://ai360.africa/api/billing/expresspay/notify',
     metadata: {},
   }
 }

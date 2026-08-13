@@ -329,7 +329,7 @@ export async function POST(request: Request) {
           headers: {
             Authorization: `Bearer ${key}`,
             'Content-Type': 'application/json',
-            'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
+            'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://ai360.africa',
             'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
           },
           body: JSON.stringify({
@@ -402,7 +402,7 @@ export async function POST(request: Request) {
           headers: {
             Authorization: `Bearer ${key}`,
             'Content-Type': 'application/json',
-            'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
+            'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://ai360.africa',
             'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
           },
           body: providerPayload,

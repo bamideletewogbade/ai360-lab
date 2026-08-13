@@ -158,7 +158,7 @@ async function providerHeaders() {
   return {
     Authorization: `Bearer ${providerKey()}`,
     'Content-Type': 'application/json',
-    'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
+    'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://ai360.africa',
     'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
   }
 }

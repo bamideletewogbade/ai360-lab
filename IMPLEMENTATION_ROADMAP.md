@@ -18,7 +18,7 @@ AI360 should help an individual or team move from an outcome to a reviewed deliv
 
 ## Architecture decisions
 
-- [x] Reuse the existing AI360 Clerk application for `aithreesixty.tech` and `lab.aithreesixty.tech`.
+- [x] Reuse the existing AI360 Clerk application for `aithreesixty.tech` and `ai360.africa`.
 - [x] Keep personal accounts available. Organization membership must be optional.
 - [x] Treat Clerk Organizations as team or customer workspaces, not as the AI360 product boundary.
 - [x] Keep the existing AI360 Organization for internal staff and pilot administration.
@@ -85,7 +85,7 @@ Why: every conversation, campaign, generated file, agent run and cost must have 
 - [ ] Keep automatic first-Organization creation disabled.
 - [ ] Keep public user-created Organizations disabled during the pilot.
 - [ ] Keep the internal AI360 Organization at a limited membership size.
-- [ ] Confirm `aithreesixty.tech` and `lab.aithreesixty.tech` are accepted production origins/domains.
+- [ ] Confirm `aithreesixty.tech` and `ai360.africa` are accepted production origins/domains.
 - [ ] Add the existing Clerk production keys to Hostinger environment variables. Never paste secret keys into source control or chat.
 
 ### Application work

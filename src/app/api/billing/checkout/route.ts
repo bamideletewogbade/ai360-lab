@@ -17,12 +17,33 @@ import { isPostgresConfigured } from '@/lib/postgres'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+/**
+ * The origin ExpressPay will call back on.
+ *
+ * The provider fetches `redirect-url` and `post-url` from its own servers, so
+ * they must be publicly reachable over HTTPS. A localhost origin cannot satisfy
+ * that: it used to be allowed through here and then rejected a few lines later
+ * by the provider adapter, which turned "you need a public URL" into a generic
+ * checkout failure. It is refused here instead, with a reason that names the fix.
+ * To exercise checkout locally, point `NEXT_PUBLIC_APP_URL` at an HTTPS tunnel.
+ */
 function applicationOrigin() {
   const configured = process.env.NEXT_PUBLIC_APP_URL
   if (!configured) throw new Error('AI360_APP_URL_NOT_CONFIGURED')
-  const origin = new URL(configured)
-  if (origin.protocol !== 'https:' && origin.hostname !== 'localhost') {
-    throw new Error('AI360_APP_URL_MUST_USE_HTTPS')
+
+  let origin: URL
+  try {
+    origin = new URL(configured)
+  } catch {
+    throw new Error('AI360_APP_URL_INVALID: NEXT_PUBLIC_APP_URL must be an absolute URL')
+  }
+
+  if (origin.protocol !== 'https:') {
+    throw new Error(
+      'AI360_APP_URL_MUST_BE_PUBLIC_HTTPS: ExpressPay calls redirect-url and post-url '
+      + 'from its own servers, so NEXT_PUBLIC_APP_URL must be a public HTTPS origin. '
+      + 'Use the deployed origin or an HTTPS tunnel; localhost cannot receive callbacks.',
+    )
   }
   return origin.origin
 }

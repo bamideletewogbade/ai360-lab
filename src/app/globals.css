@@ -536,6 +536,59 @@ button { color: inherit; }
 .theme-option:hover { color: var(--black); }
 .theme-option.active { background: var(--white); color: var(--black); box-shadow: 0 1px 3px rgba(16,17,18,.1); }
 .theme-option svg { flex: none; }
+
+/* Project bar: the persistent way back out of a project, plus its identity and
+   storage state. Sticky so the exit is reachable from anywhere in a long page. */
+.project-bar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 12px; padding: 10px clamp(16px, 3vw, 28px); border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(12px); }
+.project-bar-back { display: inline-flex; align-items: center; gap: 7px; flex: none; min-height: 38px; padding: 0 12px; border: 1px solid var(--line-dark); border-radius: 10px; background: var(--white); color: var(--black); cursor: pointer; font-size: 12.5px; font-weight: 750; transition: border-color .16s ease, transform .16s ease; }
+.project-bar-back:hover { border-color: var(--black); transform: translateX(-2px); }
+.project-bar-name { flex: 1; min-width: 0; overflow: hidden; color: var(--grey); font-size: 12.5px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.project-bar-side { display: inline-flex; align-items: center; gap: 9px; flex: none; }
+.project-bar-save { display: inline-flex; align-items: center; gap: 6px; color: var(--grey); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.project-bar-save i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.project-bar-save.saving i { background: var(--clay); animation: project-bar-pulse 1.1s ease-in-out infinite; }
+.project-bar-save.unavailable i { background: var(--clay); }
+.project-bar-save.local i { background: var(--soft-grey); }
+@keyframes project-bar-pulse { 50% { opacity: .35; } }
+
+/* A new project. The composer is the page; knowledge sits beside it. Single
+   column on a phone, with the composer first because it is the reason to be here. */
+.project-start { display: grid; gap: clamp(16px, 3vw, 26px); max-width: 1180px; margin: 0 auto; padding: clamp(20px, 4vw, 40px) clamp(16px, 4vw, 32px) 64px; }
+.project-start-main { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.project-start-form { display: grid; gap: 10px; padding: clamp(16px, 3vw, 22px); border: 1px solid var(--line-dark); border-radius: 16px; background: var(--white); }
+.project-start-form > label { font-family: var(--font-heading); font-size: 17px; font-weight: 800; letter-spacing: -.02em; }
+.project-start-form textarea { width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-radius: 12px; outline: 0; background: var(--paper); color: var(--black); font: inherit; font-size: 15px; line-height: 1.6; resize: vertical; transition: border-color .16s ease; }
+.project-start-form textarea:focus-visible { border-color: var(--black); }
+.project-start-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.project-start-actions span { flex: 1; min-width: 180px; color: var(--grey); font-size: 12px; line-height: 1.5; }
+.project-start-actions button { display: inline-flex; align-items: center; gap: 10px; flex: none; min-height: 46px; padding: 0 18px; border: 0; border-radius: 11px; background: var(--black); color: var(--paper); cursor: pointer; font-size: 13.5px; font-weight: 800; transition: transform .16s ease, opacity .16s ease; }
+.project-start-actions button:hover:not(:disabled) { transform: translateY(-1px); }
+.project-start-actions button:disabled { cursor: not-allowed; opacity: .45; }
+.project-start-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.project-start-chips button { min-height: 38px; padding: 0 13px; border: 1px solid var(--line-dark); border-radius: 999px; background: transparent; color: var(--grey); cursor: pointer; font-size: 12.5px; font-weight: 700; transition: border-color .16s ease, color .16s ease; }
+.project-start-chips button:hover { border-color: var(--black); color: var(--black); }
+.project-start-assurance { display: flex; align-items: center; gap: 8px; margin: 2px 0 0; color: var(--grey); font-size: 12px; line-height: 1.5; }
+.project-start-assurance span { color: var(--green); font-weight: 900; }
+.project-start-side { min-width: 0; }
+
+@media (max-width: 720px) {
+  /* iOS zooms the page when a focused field is under 16px. */
+  .project-start-form textarea { font-size: 16px; }
+  .project-start-actions button { width: 100%; justify-content: center; }
+}
+
+@media (min-width: 900px) {
+  .project-start { grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr); align-items: start; }
+}
+@media (max-width: 720px) {
+  .project-bar { gap: 8px; padding: 8px 14px; }
+  /* On a phone the label is the least useful part; the control still reads as
+     a back arrow and keeps its full touch target. */
+  .project-bar-back { min-width: 44px; min-height: 44px; justify-content: center; padding: 0 10px; font-size: 0; gap: 0; }
+  .project-bar-back svg { width: 17px; height: 17px; }
+  .project-bar-save { font-size: 0; gap: 0; }
+  .project-bar-save i { width: 8px; height: 8px; }
+}
 .scrim { display: none; }
 
 /* Help stays inside the workspace. The longer public guide remains optional. */
@@ -603,6 +656,64 @@ button { color: inherit; }
 .auth-sign-up:hover { background: var(--charcoal); }
 .guest-badge { min-height: 30px; border: 1px solid var(--line); color: var(--grey); }
 .guest-badge b { color: var(--black); font-size: 9px; }
+.account-loading { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(90deg, var(--line), var(--warm-white), var(--line)); background-size: 220% 100%; animation: shimmer 1.2s linear infinite; }
+.account-menu { position: relative; }
+.account-menu summary { list-style: none; }
+.account-menu summary::-webkit-details-marker { display: none; }
+.account-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line-dark);
+  border-radius: 50%;
+  background: var(--black);
+  color: var(--paper);
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .18s var(--ease), border-color .18s;
+}
+.account-avatar:hover { transform: translateY(-1px); border-color: var(--black); }
+.account-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.account-menu-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  gap: 6px;
+  width: min(260px, calc(100vw - 24px));
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--white);
+  box-shadow: 0 20px 70px rgba(0,0,0,.14);
+}
+.account-menu-person { display: grid; gap: 2px; padding: 7px 8px 10px; border-bottom: 1px solid var(--line); }
+.account-menu-person b { color: var(--black); font-size: 12px; }
+.account-menu-person small { color: var(--grey); font-size: 11px; overflow-wrap: anywhere; }
+.account-menu-popover a,
+.account-menu-popover button {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  padding: 0 9px;
+  color: var(--black);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.account-menu-popover a:hover,
+.account-menu-popover button:hover { background: var(--warm-white); }
+@keyframes shimmer { to { background-position: -220% 0; } }
 .guest-status { width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px rgba(67,106,85,.1); }
 @keyframes menu-in { from { transform: translateY(-5px); opacity: 0; } }
 @keyframes route-stage-in { from { opacity: 0; transform: translateY(7px); } }

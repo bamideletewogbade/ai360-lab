@@ -1,11 +1,12 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
-import { Show, UserButton } from '@clerk/nextjs'
+import { useAuth } from '@/components/AuthProvider'
 import { BrandMark } from '@/components/BrandMark'
 import { PUBLIC_NAV_LINKS } from '@/lib/brand'
+import { isSupabaseAuthConfigured } from '@/lib/supabase/config'
 
-const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
+const AUTH_ENABLED = isSupabaseAuthConfigured()
 
 /**
  * The one navigation for every public page.
@@ -17,6 +18,8 @@ const AUTH_ENABLED = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
 export type SiteNavCurrent = 'home' | 'what' | 'how' | 'pricing' | 'changelog' | 'legal'
 
 export function SiteNav({ current = 'home' }: { current?: SiteNavCurrent }) {
+  const { user } = useAuth()
+
   return (
     <nav className="landing-nav" aria-label="AI360 navigation">
       <Link href="/" className="landing-logo" aria-label="AI360 home">
@@ -24,10 +27,8 @@ export function SiteNav({ current = 'home' }: { current?: SiteNavCurrent }) {
       </Link>
       {/* Top-of-funnel links are for prospects. A signed-in person has already
           arrived, so they get a workspace-focused nav instead of the pitch. */}
-      {AUTH_ENABLED
-        ? <Show when="signed-out"><MarketingLinks current={current} /></Show>
-        : <MarketingLinks current={current} />}
-      <SiteNavActions />
+      {user ? null : <MarketingLinks current={current} />}
+      <SiteNavActions signedIn={Boolean(user)} />
     </nav>
   )
 }
@@ -52,20 +53,15 @@ function MarketingLinks({ current }: { current: SiteNavCurrent }) {
   )
 }
 
-function SiteNavActions() {
+function SiteNavActions({ signedIn }: { signedIn: boolean }) {
   if (!AUTH_ENABLED) return <div className="landing-account-actions"><SignedOutActions /></div>
 
-  return (
-    <Show
-      when="signed-in"
-      fallback={<div className="landing-account-actions"><SignedOutActions /></div>}
-    >
-      <div className="landing-account-actions landing-account-signed-in">
-        <span className="landing-user" aria-label="Your AI360 account">
-          <UserButton appearance={{ elements: { avatarBox: { width: 34, height: 34 } } }} showName={false} />
-        </span>
-      </div>
-    </Show>
+  return signedIn ? (
+    <div className="landing-account-actions landing-account-signed-in">
+      <Link href="/app" className="landing-open">Open workspace <span aria-hidden="true">↗</span></Link>
+    </div>
+  ) : (
+    <div className="landing-account-actions"><SignedOutActions /></div>
   )
 }
 
@@ -73,7 +69,7 @@ function SignedOutActions() {
   return (
     <>
       <Link href="/sign-in" className="landing-sign-in">Sign in</Link>
-      <Link href="/app" className="landing-open">Start free <span aria-hidden="true">â†—</span></Link>
+      <Link href="/app" className="landing-open">Start free <span aria-hidden="true">↗</span></Link>
     </>
   )
 }

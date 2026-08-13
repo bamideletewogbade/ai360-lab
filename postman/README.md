@@ -1,42 +1,105 @@
-# ExpressPay Postman evidence
+# ExpressPay Postman verification kit
 
-This collection proves the direct ExpressPay sandbox connection in a format
-that can be demonstrated or screenshotted for a reviewer. It complements:
+This kit tests ExpressPay's hosted-checkout Submit and Query APIs directly in
+either sandbox or live. It does not submit card or Mobile Money credentials and
+cannot complete a charge by itself.
 
-- `npm run payments:contract` — application/provider contract tests;
-- `npm run payments:verify` — disposable database activation and credits test;
-- the later manual hosted-checkout payment — the final end-to-end proof.
+Official contract: <https://expresspaygh.com/developers/docs/accept-payments/merchant-api>
 
-## Set up Postman
+## Files to import
 
-1. Import `AI360_ExpressPay_Sandbox.postman_collection.json`.
-2. Import `AI360_ExpressPay_Sandbox.postman_environment.json`.
-3. Duplicate the environment and call the copy `AI360 ExpressPay Sandbox - LOCAL`.
-4. Enter the sandbox `merchant_id` and `api_key` as **current values** only.
-5. Select that environment. Never commit or share the populated copy.
+Import all three files into Postman:
 
-Run request 1, then request 2. Open each response's **Test Results** and
-**Visualize** tabs. The Visualize views deliberately omit the API key and token.
+1. `AI360_ExpressPay_Sandbox.postman_collection.json`
+2. `AI360_ExpressPay_Sandbox.postman_environment.json`
+3. `AI360_ExpressPay_Live.postman_environment.json`
 
-If request 1 returns provider status 4, the payload reached ExpressPay but the
-runtime's outbound IP is not allowlisted. ExpressPay must allowlist the stable
-staging-server egress IP before the test can pass.
+The collection filename retains its original name for compatibility, but the
+collection supports both environments.
 
-## What to share with management
+## Prepare sandbox
 
-Create a short PDF or slide containing:
+1. Duplicate `AI360 ExpressPay Sandbox - TEMPLATE`.
+2. Name the copy `AI360 ExpressPay Sandbox - LOCAL`.
+3. Add the sandbox merchant ID and API key as secret/current values.
+4. Set a real test email and phone number approved by ExpressPay.
+5. Keep `target_environment=sandbox` and
+   `expresspay_origin=https://sandbox.expresspaygh.com` unchanged.
+6. Select the environment.
 
-1. Screenshot of request 1's Visualize tab.
-2. Screenshot of request 2's Visualize tab.
-3. Terminal screenshot showing `payments:contract` passed.
-4. Terminal screenshot showing `payments:verify` passed.
-5. For final approval, the AI360 payment-status page after a completed sandbox
-   payment showing `approved`, plus the corresponding ExpressPay portal entry.
+Run requests in order:
 
-Do **not** share the Postman environment, raw request body, Postman Console, full
-run export, checkout URL, or provider token. Those can contain credentials or
-transaction capabilities.
+1. `0 - Show this Postman runner's public IP`
+2. `1 - Create hosted checkout`
+3. `2 - Query checkout server-to-server`
 
-The first two requests create and query a pending hosted checkout; they do not
-test AI360 subscription activation by themselves. Final sign-off still requires
-one completed sandbox checkout through the staging application.
+Request 1 stores the returned token only in the selected local environment.
+Request 2 queries that exact token and verifies order, currency and amount.
+
+## Prepare live
+
+Only continue after ExpressPay confirms all of the following:
+
+- live merchant ID and API key are active;
+- the public IP shown by request 0 is allowlisted for the live merchant;
+- a low-value live order is permitted;
+- the expected minimum test amount and test payer details.
+
+Then:
+
+1. Duplicate `AI360 ExpressPay Live - TEMPLATE`.
+2. Name the copy `AI360 ExpressPay Live - LOCAL`.
+3. Add the live merchant ID and API key as secret/current values.
+4. Confirm `expresspay_origin=https://expresspaygh.com`.
+5. Set the ExpressPay-approved live amount, email and phone.
+6. Set `live_confirmation=YES_I_UNDERSTAND`.
+7. Select the live environment and run requests 0, 1 and 2 in order.
+
+The collection refuses a live provider request unless the exact confirmation
+text is present. It also refuses any mismatch between the selected target and
+the endpoint.
+
+## IP allowlisting warning
+
+Postman calls ExpressPay directly. Therefore ExpressPay sees the public IP of
+the Postman runner, not Hostinger's server IP:
+
+- Postman Desktop app/agent: normally your current internet public IP;
+- Postman cloud runner: a Postman-owned outbound IP, which may differ;
+- AI360 production checkout: Hostinger's outbound server IP.
+
+An ExpressPay Submit status `4` means the request reached the provider but that
+source IP is not allowed for the selected merchant. Ask ExpressPay to allowlist
+the IP shown by request 0, or test through the deployed AI360 application.
+
+## Provider results
+
+Submit response `status`:
+
+- `1`: success; token created
+- `2`: invalid credentials
+- `3`: invalid request
+- `4`: invalid source IP
+
+Query response `result`:
+
+- `1`: approved
+- `2`: declined
+- `3`: transaction/system error
+- `4`: pending
+
+A successful Submit is not a completed payment. A new token will normally be
+Pending until someone opens hosted checkout and completes the transaction.
+
+## Safe evidence sharing
+
+Share screenshots from each response's **Test Results** and **Visualize** tabs.
+The visualizations omit the API key and full provider token.
+
+Never share:
+
+- populated Postman environments;
+- raw request bodies or the Postman Console;
+- merchant API keys;
+- provider tokens or checkout URLs;
+- environment exports after credentials have been entered.

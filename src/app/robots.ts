@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next'
 import { BRAND } from '@/lib/brand'
 
-const privatePaths = ['/api/', '/sign-in', '/sign-up']
+const privatePaths = ['/api/', '/auth/', '/sign-in', '/sign-up']
 const agentPrivatePaths = [...privatePaths, '/app']
 
 export default function robots(): MetadataRoute.Robots {

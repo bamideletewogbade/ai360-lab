@@ -29,11 +29,10 @@ export function selectedDatabaseProvider() {
 export function productionReadinessChecks(): ReadinessCheck[] {
   const production = process.env.NODE_ENV === 'production'
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.OPENROUTER_SITE_URL
-  const clerkPublishable = configured('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY')
-  const clerkSecret = configured('CLERK_SECRET_KEY')
-  const clerkUsesLiveKeys = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.startsWith('pk_live_')
-    && process.env.CLERK_SECRET_KEY?.startsWith('sk_live_')
-  const clerkReady = clerkPublishable && clerkSecret && (!production || clerkUsesLiveKeys)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabasePublishable = configured('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY')
+    || configured('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  const supabaseAuthReady = supabasePublishable && validUrl(supabaseUrl, production)
   const databaseProvider = selectedDatabaseProvider()
   const billingEnabled = process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true'
   const paymentProviderReady = process.env.PAYMENTS_PROVIDER === 'expresspay'
@@ -66,20 +65,14 @@ export function productionReadinessChecks(): ReadinessCheck[] {
       message: 'The server-side AI gateway key is configured.',
     },
     {
-      key: 'clerk',
-      status: clerkReady ? 'ready' : clerkPublishable || clerkSecret ? 'invalid' : 'missing',
+      key: 'supabase_auth',
+      status: supabaseAuthReady
+        ? 'ready'
+        : configured('NEXT_PUBLIC_SUPABASE_URL') || supabasePublishable
+          ? 'invalid'
+          : 'missing',
       required: true,
-      message: production && clerkPublishable && clerkSecret && !clerkUsesLiveKeys
-        ? 'Production requires Clerk live keys; development keys are not deployment-ready.'
-        : clerkPublishable === clerkSecret
-          ? 'Clerk publishable and secret keys are configured as a pair.'
-          : 'Clerk is partially configured; both keys are required.',
-    },
-    {
-      key: 'clerk_webhook',
-      status: configured('CLERK_WEBHOOK_SIGNING_SECRET') ? 'ready' : 'missing',
-      required: true,
-      message: 'Clerk lifecycle events can be verified and synchronized.',
+      message: 'Supabase Auth is configured with a public project URL and publishable browser key.',
     },
     {
       key: 'database',

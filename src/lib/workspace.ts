@@ -10,6 +10,11 @@ export type WorkspaceAuthContext = {
   userId: string
   orgId: string | null
   orgRole: string | null
+  profile: {
+    email: string | null
+    displayName: string | null
+    imageUrl: string | null
+  }
   workspace: WorkspaceIdentity
 }
 
@@ -19,18 +24,18 @@ export type WorkspaceSessionClaims = {
   sessionStatus?: 'active' | 'pending' | null
 }
 
-const CLERK_ID = /^[A-Za-z0-9_-]{1,64}$/
+const AUTH_SUBJECT_ID = /^[A-Za-z0-9_-]{1,64}$/
 
-/** Pending Clerk sessions have not completed their required security tasks. */
+/** Pending auth sessions have not completed their required security tasks. */
 export function sessionCanAccessWorkspace(session: WorkspaceSessionClaims) {
   return session.isAuthenticated === true
     && session.sessionStatus === 'active'
     && typeof session.userId === 'string'
-    && CLERK_ID.test(session.userId)
+    && AUTH_SUBJECT_ID.test(session.userId)
 }
 
 function validSubjectId(value: string, label: string) {
-  if (!CLERK_ID.test(value)) throw new Error(`Invalid ${label}`)
+  if (!AUTH_SUBJECT_ID.test(value)) throw new Error(`Invalid ${label}`)
   return value
 }
 
@@ -52,6 +57,9 @@ export function createWorkspaceAuthContext(input: {
   userId: string
   orgId?: string | null
   orgRole?: string | null
+  email?: string | null
+  displayName?: string | null
+  imageUrl?: string | null
 }): WorkspaceAuthContext {
   const userId = validSubjectId(input.userId, 'user ID')
   const orgId = input.orgId ? validSubjectId(input.orgId, 'organization ID') : null
@@ -59,6 +67,11 @@ export function createWorkspaceAuthContext(input: {
     userId,
     orgId,
     orgRole: orgId ? input.orgRole || null : null,
+    profile: {
+      email: input.email || null,
+      displayName: input.displayName || null,
+      imageUrl: input.imageUrl || null,
+    },
     workspace: resolveWorkspaceIdentity(userId, orgId),
   }
 }

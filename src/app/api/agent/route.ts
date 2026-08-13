@@ -249,7 +249,7 @@ export async function POST(request: Request) {
           sessionId,
           context: requester.context,
           apiKey: key,
-          siteUrl: process.env.OPENROUTER_SITE_URL || 'https://lab.aithreesixty.tech',
+          siteUrl: process.env.OPENROUTER_SITE_URL || 'https://ai360.africa',
           siteName: process.env.OPENROUTER_SITE_NAME || 'AI360',
           emit: (event) => send(event as unknown as Record<string, unknown>),
           log,

@@ -10,7 +10,7 @@ import {
   scopedStorageKey,
 } from '../src/lib/workspace.ts'
 
-test('only a fully active Clerk session can enter a workspace', () => {
+test('only a fully active auth session can enter a workspace', () => {
   assert.equal(sessionCanAccessWorkspace({
     userId: 'user_alpha',
     isAuthenticated: true,
@@ -45,7 +45,7 @@ test('a signed-in user defaults to a personal workspace', () => {
   assert.equal(context.orgRole, null)
 })
 
-test('an active Clerk organization becomes the authoritative workspace', () => {
+test('an active organization becomes the authoritative workspace', () => {
   const context = createWorkspaceAuthContext({
     userId: 'user_alpha',
     orgId: 'org_acme',

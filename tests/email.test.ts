@@ -29,8 +29,8 @@ function withEnv(overrides: Record<string, string | undefined>) {
 const ENABLED = {
   EMAIL_ENABLED: 'true',
   RESEND_API_KEY: 're_test_key',
-  EMAIL_FROM: 'AI360 <lab@aithreesixty.tech>',
-  NEXT_PUBLIC_APP_URL: 'https://lab.aithreesixty.tech',
+  EMAIL_FROM: 'AI360 <noreply@ai360.africa>',
+  NEXT_PUBLIC_APP_URL: 'https://ai360.africa',
 }
 
 const stubProvider = (sent: unknown[], impl?: () => never) => ({
@@ -170,7 +170,7 @@ test('dispatch delivers and stamps the sender, kind tag and recipient array', { 
   const sent: { from: string; to: string[]; tags: Record<string, string> }[] = []
   const result = await deliverEmail('welcome', { to: 'ada@example.com', data: { name: 'Ada' } }, stubProvider(sent) as never)
   assert.equal(result.delivered, true)
-  assert.equal(sent[0].from, 'AI360 <lab@aithreesixty.tech>')
+  assert.equal(sent[0].from, 'AI360 <noreply@ai360.africa>')
   assert.deepEqual(sent[0].to, ['ada@example.com'])
   assert.equal(sent[0].tags.kind, 'welcome')
   restore()
