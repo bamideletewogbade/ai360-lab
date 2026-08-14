@@ -21,23 +21,20 @@ type Props = {
   onOpenGuide: () => void
   onSelectChats: () => void
   onSelectProjects: () => void
-  onStartProject: () => void
   onSelectMedia: () => void
   onSelectApps: () => void
 }
 
-type Sheet = 'create' | 'you' | null
+type Sheet = 'more' | null
 
-function NavIcon({ kind }: { kind: 'chat' | 'project' | 'create' | 'you' }) {
+function NavIcon({ kind }: { kind: 'chat' | 'project' | 'media' | 'more' }) {
   if (kind === 'chat') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 3v-13a2 2 0 0 1 1-2Z" /></svg>
   if (kind === 'project') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5h6l2-2h9v13h-17Z" /><path d="M3.5 9.5h17" /></svg>
-  if (kind === 'create') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M4 12h16" /></svg>
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.25" /><path d="M5.5 19c.55-3.35 3-5.25 6.5-5.25s5.95 1.9 6.5 5.25" /></svg>
+  if (kind === 'media') return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="8.5" cy="9" r="1.5" /><path d="m4.5 17 4.5-4.5 3.2 3.2 2.3-2.3 5 5" /></svg>
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" /></svg>
 }
 
-function SheetIcon({ kind }: { kind: 'project' | 'image' | 'apps' | 'history' | 'settings' | 'guide' }) {
-  if (kind === 'project') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5h6l2-2h9v13h-17Z" /><path d="M15.5 12h-7M12 8.5v7" /></svg>
-  if (kind === 'image') return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m4.5 17 4.5-4.5 3.2 3.2 2.3-2.3 5 5" /></svg>
+function SheetIcon({ kind }: { kind: 'apps' | 'history' | 'settings' | 'guide' }) {
   if (kind === 'apps') return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.5" /><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.5" /><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.5" /><rect x="14" y="14" width="6.5" height="6.5" rx="1.5" /></svg>
   if (kind === 'history') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7v5h5" /><path d="M5.5 17.5A8 8 0 1 0 4 12" /><path d="M12 8v4l2.5 2" /></svg>
   if (kind === 'settings') return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7-.7-2h-3l-.7 2-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7-2 .7v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2h3l.7-2 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7Z" /></svg>
@@ -57,7 +54,6 @@ export function MobileWorkspaceNav({
   onOpenGuide,
   onSelectChats,
   onSelectProjects,
-  onStartProject,
   onSelectMedia,
   onSelectApps,
 }: Props) {
@@ -103,7 +99,7 @@ export function MobileWorkspaceNav({
     action()
   }
   const chatsActive = experience === 'chat' || experience === 'agent'
-  const createActive = experience === 'media' || experience === 'apps' || sheet === 'create'
+  const moreActive = experience === 'apps' || sheet === 'more'
 
   return (
     <>
@@ -114,11 +110,11 @@ export function MobileWorkspaceNav({
         <button type="button" className={experience === 'studio' ? 'active' : ''} aria-current={experience === 'studio' ? 'page' : undefined} onClick={onSelectProjects}>
           <NavIcon kind="project" /><span>Projects</span>
         </button>
-        <button type="button" className={`mobile-create-nav${createActive ? ' active' : ''}`} aria-expanded={sheet === 'create'} onClick={() => setSheet((current) => current === 'create' ? null : 'create')}>
-          <span className="mobile-create-icon"><NavIcon kind="create" /></span><span>Create</span>
+        <button type="button" className={experience === 'media' ? 'active' : ''} aria-current={experience === 'media' ? 'page' : undefined} aria-label="Media: create images and video" onClick={onSelectMedia}>
+          <NavIcon kind="media" /><span>Media</span>
         </button>
-        <button type="button" className={sheet === 'you' ? 'active' : ''} aria-expanded={sheet === 'you'} onClick={() => setSheet((current) => current === 'you' ? null : 'you')}>
-          <NavIcon kind="you" /><span>You</span>
+        <button type="button" className={moreActive ? 'active' : ''} aria-current={experience === 'apps' ? 'page' : undefined} aria-haspopup="dialog" aria-expanded={sheet === 'more'} onClick={() => setSheet((current) => current === 'more' ? null : 'more')}>
+          <NavIcon kind="more" /><span>More</span>
         </button>
       </nav>
 
@@ -128,31 +124,21 @@ export function MobileWorkspaceNav({
             <div className="mobile-sheet-grab" aria-hidden="true" />
             <header>
               <div>
-                <span>{sheet === 'create' ? 'Create' : 'Your workspace'}</span>
-                <h2 id={titleId}>{sheet === 'create' ? 'What do you want to make?' : user?.displayName || 'AI360'}</h2>
-                {sheet === 'you' && user?.email ? <small>{user.email}</small> : null}
+                <span>Workspace and account</span>
+                <h2 id={titleId}>{user?.displayName || 'More in AI360'}</h2>
+                {user?.email ? <small>{user.email}</small> : null}
               </div>
               <button type="button" onClick={() => setSheet(null)} aria-label={`Close ${sheet} menu`}>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
               </button>
             </header>
 
-            {sheet === 'create' ? (
-              <div className="mobile-sheet-actions mobile-create-actions">
-                <button ref={firstActionRef} type="button" onClick={() => choose(onStartProject)}>
-                  <span><SheetIcon kind="project" /></span><span><b>Start a project</b><small>Build lasting work from a simple brief</small></span><i aria-hidden="true">›</i>
-                </button>
-                <button type="button" onClick={() => choose(onSelectMedia)}>
-                  <span><SheetIcon kind="image" /></span><span><b>Create images or video</b><small>Generate campaign-ready visual media</small></span><i aria-hidden="true">›</i>
-                </button>
-                <button type="button" onClick={() => choose(onSelectApps)}>
-                  <span><SheetIcon kind="apps" /></span><span><b>Use an app or outcome</b><small>Start from a focused way to get work done</small></span><i aria-hidden="true">›</i>
-                </button>
-              </div>
-            ) : (
-              <div className="mobile-sheet-actions mobile-account-actions">
+            <div className="mobile-sheet-actions mobile-account-actions">
                 <button ref={firstActionRef} type="button" onClick={() => choose(onOpenSidebar)}>
                   <span><SheetIcon kind="history" /></span><span><b>Search and recent chats</b><small>Find work or manage a conversation</small></span><i aria-hidden="true">›</i>
+                </button>
+                <button type="button" onClick={() => choose(onSelectApps)}>
+                  <span><SheetIcon kind="apps" /></span><span><b>Apps and outcomes</b><small>Browse focused tools and finished work</small></span><i aria-hidden="true">›</i>
                 </button>
                 <Link href="/settings" onClick={() => setSheet(null)}>
                   <span><SheetIcon kind="settings" /></span><span><b>Settings</b><small>Appearance, credits and account</small></span><i aria-hidden="true">›</i>
@@ -168,8 +154,7 @@ export function MobileWorkspaceNav({
                     <><Link href="/settings/account">Account</Link><button type="button" onClick={() => void signOut()}>Sign out</button></>
                   ) : <span className="mobile-account-loading">Checking your account…</span>}
                 </div>
-              </div>
-            )}
+            </div>
           </section>
         </div>
       ) : null}

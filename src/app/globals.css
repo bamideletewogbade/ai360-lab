@@ -421,6 +421,7 @@ button { color: inherit; }
 .media-nav-switch button { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border: 0; border-radius: 10px; background: transparent; color: #9ca3af; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.18s ease; }
 .media-nav-switch button:hover { color: #fff; }
 .media-nav-switch button.active { background: #fff; color: #0f172a; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
+.media-tab-label-short { display: none; }
 .studio-toast-banner { margin: 0 40px 24px; padding: 12px 20px; border-radius: 12px; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #065f46; font-size: 13px; font-weight: 700; animation: toast-in .34s var(--ease, cubic-bezier(.22,.61,.36,1)) both; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -1660,9 +1661,6 @@ button { color: inherit; }
   .mobile-workspace-nav > button::after { position: absolute; bottom: 1px; left: 50%; width: 4px; height: 4px; border-radius: 50%; background: var(--black); content: ''; opacity: 0; transform: translateX(-50%) scale(.5); transition: opacity .16s,transform .2s var(--ease); }
   .mobile-workspace-nav > button.active { color: var(--black); }
   .mobile-workspace-nav > button.active::after { opacity: 1; transform: translateX(-50%) scale(1); }
-  .mobile-create-icon { display: grid; width: 29px; height: 29px; place-items: center; margin-top: -8px; border-radius: 10px; background: var(--black); color: var(--white); box-shadow: 0 5px 16px rgba(16,17,18,.2); transition: transform .18s var(--ease); }
-  .mobile-create-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
-  .mobile-create-nav:active .mobile-create-icon { transform: scale(.94); }
   .mobile-keyboard-open .mobile-workspace-nav { display: none; }
 
   .mobile-sheet-backdrop { position: fixed; inset: 0; z-index: 80; display: flex; align-items: flex-end; padding: 0; background: rgba(16,17,18,.34); backdrop-filter: blur(3px); animation: mobile-sheet-backdrop-in .18s ease both; }
@@ -1779,9 +1777,11 @@ button { color: inherit; }
   .apps-card { padding: 18px; }
   .media-hero-banner { padding: 34px 16px 28px; margin-bottom: 24px; }
   .media-hero-banner p { font-size: 13px; }
-  .media-nav-switch { display: flex; width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; scroll-snap-type: x proximity; }
+  .media-nav-switch { display: flex; width: 100%; overflow: hidden; }
   .media-nav-switch::-webkit-scrollbar { display: none; }
-  .media-nav-switch button { min-width: max-content; min-height: 44px; flex: 1 0 auto; justify-content: center; padding-inline: 12px; scroll-snap-align: start; }
+  .media-nav-switch button { min-width: 0; min-height: 44px; flex: 1 1 0; justify-content: center; gap: 6px; padding-inline: 8px; }
+  .media-tab-label-full { display: none; }
+  .media-tab-label-short { display: inline; white-space: nowrap; }
   .media-studio-main { padding-inline: 14px; }
   .studio-toast-banner { margin: 0 14px 18px; }
   .studio-panel-card { padding: 20px 15px; border-radius: 17px; }

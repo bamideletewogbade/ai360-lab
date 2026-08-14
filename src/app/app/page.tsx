@@ -2020,7 +2020,6 @@ function LabWorkspace({
           onOpenGuide={() => setHelpOpen(true)}
           onSelectChats={openChatsHome}
           onSelectProjects={() => { selectExperience('studio'); setProjectsHomeSignal((n) => n + 1) }}
-          onStartProject={() => { selectExperience('studio'); setCreateProjectSignal((n) => n + 1) }}
           onSelectMedia={() => selectExperience('media')}
           onSelectApps={() => selectExperience('apps')}
         />

@@ -185,25 +185,31 @@ export function MediaStudio() {
             type="button"
             className={tab === 'image' ? 'active' : ''}
             onClick={() => setTab('image')}
+            aria-label="Image Studio"
           >
             <span className="tab-icon"><StudioIcon name="image" /></span>
-            <span>Image Studio</span>
+            <span className="media-tab-label-full">Image Studio</span>
+            <span className="media-tab-label-short" aria-hidden="true">Image</span>
           </button>
           <button
             type="button"
             className={tab === 'video' ? 'active' : ''}
             onClick={() => setTab('video')}
+            aria-label="Video Studio"
           >
             <span className="tab-icon"><StudioIcon name="video" /></span>
-            <span>Video Studio</span>
+            <span className="media-tab-label-full">Video Studio</span>
+            <span className="media-tab-label-short" aria-hidden="true">Video</span>
           </button>
           <button
             type="button"
             className={tab === 'gallery' ? 'active' : ''}
             onClick={() => setTab('gallery')}
+            aria-label={`Asset Gallery, ${gallery.length} assets`}
           >
             <span className="tab-icon"><StudioIcon name="library" /></span>
-            <span>Asset Gallery ({gallery.length})</span>
+            <span className="media-tab-label-full">Asset Gallery ({gallery.length})</span>
+            <span className="media-tab-label-short" aria-hidden="true">Assets</span>
           </button>
         </div>
       </section>
