@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import { ArrowUpRightIcon } from '@/components/ArrowUpRightIcon'
 import { ContextVideo } from '@/components/ContextVideo'
 import { BRAND, workspaceHref } from '@/lib/brand'
 
@@ -38,7 +39,7 @@ export function LandingMission() {
         <h2 id="mission-title">{BRAND.mission}</h2>
         <p>Built from Accra for students, builders, families, teams and public servants. AI360 turns access to intelligence into the confidence and capacity to act.</p>
         <blockquote>“{BRAND.vision}”</blockquote>
-        <Link href="/what-you-can-make">See what that looks like in real life <span aria-hidden="true">↗</span></Link>
+        <Link href="/what-you-can-make">See what that looks like in real life</Link>
       </div>
     </section>
   )
@@ -50,14 +51,14 @@ export function LandingOutcomes() {
       <div className="landing-section-head">
         <p>What you can move forward</p>
         <h2>One place.<br />Many ways to move.</h2>
-        <span>AI should expand what people can do, not ask them to learn a new language first. Choose the outcome that feels closest to yours. <Link href="/what-you-can-make">Explore real examples and costs ↗</Link></span>
+        <span>AI should expand what people can do, not ask them to learn a new language first. Choose the outcome that feels closest to yours. <Link href="/what-you-can-make">Explore real examples and costs</Link></span>
       </div>
       <div className="outcome-grid">
         {OUTCOMES.map((outcome) => (
           <Link href={workspaceHref(outcome.prompt, outcome.mode)} className="outcome-card" key={outcome.number}>
             <span>{outcome.number}</span>
             <div><h3>{outcome.title}</h3><p>{outcome.copy}</p></div>
-            <i aria-hidden="true">↗</i>
+            <ArrowUpRightIcon className="outcome-direction" />
           </Link>
         ))}
       </div>
@@ -71,7 +72,7 @@ export function LandingOutcomes() {
             <li><span>02</span><b>Review the direction</b></li>
             <li><span>03</span><b>Approve production</b></li>
           </ol>
-          <Link href={workspaceHref('Create a brand and launch campaign for this idea: ', 'studio')}>Build a campaign in Studio <span aria-hidden="true">↗</span></Link>
+          <Link href={workspaceHref('Create a brand and launch campaign for this idea: ', 'studio')}>Build a campaign in Studio</Link>
         </div>
         <div className="launch-proof-stage">
           <div className="launch-proof-trace">
@@ -109,8 +110,8 @@ export function LandingProcess() {
         <p>From intention to action</p>
         <h2>From “I need to…”<br />to “it’s ready.”</h2>
         <div className="process-actions">
-          <Link className="process-primary" href="/app">Start with your goal <span aria-hidden="true">↗</span></Link>
-          <Link className="process-detail" href="/how-it-works">See how routing, approvals, credits and safety work <span aria-hidden="true">↗</span></Link>
+          <Link className="process-primary" href="/app">Start with your goal</Link>
+          <Link className="process-detail" href="/how-it-works">See how routing, approvals, credits and safety work</Link>
         </div>
       </div>
       <ol className="process-list">

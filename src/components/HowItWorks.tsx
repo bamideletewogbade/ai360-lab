@@ -164,7 +164,7 @@ export function HowItWorks() {
         <h2>The only way to judge it is to use it.</h2>
         <p>Five credits a month, free, no card. Bring something real and see how far it gets.</p>
         <div className={styles.ctaRow}>
-          <Link href="/app" className={styles.primary}>Start now <span aria-hidden="true">↗</span></Link>
+          <Link href="/app" className={styles.primary}>Start now</Link>
           <Link href="/what-you-can-make" className={styles.secondary}>See what people make</Link>
         </div>
       </section>

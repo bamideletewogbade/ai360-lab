@@ -65,7 +65,7 @@ export function LandingHero() {
           <input type="hidden" name="mode" value={mode} />
           <div className="composer-actions">
             <span>No special prompts. Start in your own words.</span>
-            <button type="submit">Take the first step <b aria-hidden="true">↗</b></button>
+            <button type="submit">Take the first step</button>
           </div>
         </form>
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { ArrowUpRightIcon } from '@/components/ArrowUpRightIcon'
 import { ResponseContent } from '@/components/ResponseContent'
 import { ProjectStageNavigator } from '@/components/ProjectStageNavigator'
 import { ProjectKnowledge } from '@/components/ProjectKnowledge'
@@ -1231,11 +1232,11 @@ export function StudioWorkspace({
         : [...activeProjects, ...archivedProjects]
     const visible = pool.filter(matches)
     const canGhost = projectFilter !== 'archived' && !query
-    const presets: Array<{ icon: string; label: string; prompt: string }> = [
-      { icon: '🚀', label: 'Startup launch', prompt: 'Help me build a complete startup launch package including business model, brand brief, and marketing plan for: ' },
-      { icon: '📈', label: 'Growth & marketing', prompt: 'Create a digital marketing and growth campaign for: ' },
-      { icon: '🎨', label: 'Brand identity', prompt: 'Define the brand identity, positioning, voice, and visual direction for: ' },
-      { icon: '📄', label: 'Proposal', prompt: 'Draft an executive summary and financial proposal for: ' },
+    const presets: Array<{ label: string; prompt: string }> = [
+      { label: 'Startup launch', prompt: 'Help me build a complete startup launch package including business model, brand brief, and marketing plan for: ' },
+      { label: 'Growth and marketing', prompt: 'Create a digital marketing and growth campaign for: ' },
+      { label: 'Brand identity', prompt: 'Define the brand identity, positioning, voice, and visual direction for: ' },
+      { label: 'Proposal', prompt: 'Draft an executive summary and financial proposal for: ' },
     ]
     return (
       <main className="studio-main" ref={mainRef}>
@@ -1284,7 +1285,7 @@ export function StudioWorkspace({
 
           {guestProjects.length ? (
             <section className="studio-import-banner">
-              <span className="import-mark">↥</span>
+              <span className="import-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V5m0 0-4 4m4-4 4 4M5 14v5h14v-5" /></svg></span>
               <span>
                 <b>Bring your guest work into this account</b>
                 <small>{guestProjects.length} guest project{guestProjects.length === 1 ? ' is' : 's are'} ready to add to your account.</small>
@@ -1336,7 +1337,7 @@ export function StudioWorkspace({
           <div className="library-quickstart">
             <button type="button" className="quickstart-toggle" onClick={() => setShowQuickStart((value) => !value)} aria-expanded={showQuickStart}>
               <span>Quick start<em>Describe a goal and AI360 builds a full pack</em></span>
-              <i aria-hidden="true">{showQuickStart ? '↑' : '↓'}</i>
+              <svg className={showQuickStart ? 'quickstart-chevron open' : 'quickstart-chevron'} viewBox="0 0 20 20" aria-hidden="true"><path d="m5 8 5 5 5-5" /></svg>
             </button>
             {showQuickStart ? (
               <form
@@ -1365,7 +1366,7 @@ export function StudioWorkspace({
                         key={preset.label}
                         onClick={() => { setBriefInput(preset.prompt); setView('kickoff'); void continueBrief() }}
                       >
-                        <span aria-hidden="true">{preset.icon}</span>{preset.label}
+                        {preset.label}
                       </button>
                     ))}
                   </div>
@@ -1770,7 +1771,7 @@ export function StudioWorkspace({
             {project.sources?.length ? (
               <section className="studio-sources">
                 <div>
-                  <span className="execution-mark">↗</span>
+                  <ArrowUpRightIcon className="execution-mark" />
                   <span><b>Live research used</b><small>Current information was checked while building this campaign.</small></span>
                 </div>
                 <div>
@@ -1778,7 +1779,7 @@ export function StudioWorkspace({
                     <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>
                       <span>{String(index + 1).padStart(2, '0')}</span>
                       <span>{source.title}</span>
-                      <span>↗</span>
+                      <ArrowUpRightIcon />
                     </a>
                   ))}
                 </div>

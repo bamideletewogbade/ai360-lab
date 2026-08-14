@@ -76,7 +76,8 @@ export function ContextVideo({ src, poster, title, caption, eyebrow = 'Studio ou
         {overlayLabel ? <span className={styles.brandPlate}><b>{overlayLabel}</b><small>{overlaySubline}</small></span> : null}
         {!attachSource || (reducedMotion && !manualPlay) ? (
           <button type="button" className={styles.play} onClick={playWithIntent} aria-label={`Play ${title}`}>
-            <span aria-hidden="true">▶</span> Play 4-second reel
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 3 7 5-7 5Z" /></svg>
+            Play 4-second reel
           </button>
         ) : null}
         <span className={styles.format}>4 sec · silent · 9:16</span>

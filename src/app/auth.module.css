@@ -106,7 +106,7 @@
 .authDivider::after { flex: 1; height: 1px; background: #dedcd5; content: ''; }
 
 .authForm { display: grid; gap: 14px; }
-.authForm label { display: grid; gap: 7px; color: var(--charcoal); font-size: 0.82rem; font-weight: 650; }
+.authForm label { display: grid; gap: 7px; color: var(--charcoal); font-size: 0.82rem; font-weight: 600; }
 .authForm input {
   width: 100%;
   min-height: 48px;
@@ -243,6 +243,17 @@
   .alternate { margin-top: 20px; }
   .legal { margin-top: 16px; }
   .setupNotice { min-height: 260px; padding: 28px 18px; }
+}
+
+/* At the narrowest supported width, three labels and two progress rules make
+   the journey harder to read than the form itself. Keep the context and the
+   current destination, then restore the full journey as soon as it fits. */
+@media (max-width: 360px) {
+  .journey { display: flex; justify-content: space-between; gap: 16px; }
+  .journey::before { color: #85888a; content: 'Account setup'; }
+  .journey > i,
+  .journey > span:not(.current) { display: none; }
+  .journey .current { margin-left: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

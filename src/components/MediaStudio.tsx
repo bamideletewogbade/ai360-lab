@@ -108,7 +108,7 @@ export function MediaStudio() {
         createdAt: 'Just now',
       }
       setGallery((prev) => [newItem, ...prev])
-      setToastNotice('✨ Visual asset generated successfully!')
+      setToastNotice('Visual asset generated successfully.')
       setPrompt('')
       setTab('gallery')
     } catch {

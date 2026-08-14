@@ -91,11 +91,11 @@ export function PricingExperience() {
                 <div className={styles.templates}><small>Example templates</small><p>{plan.templateExamples.join(' · ')}</p></div>
                 {plan.assisted ? (
                   <a href="mailto:info@accrainnovationcentre.com?subject=AI360%20Team%20pilot" className={styles.choose}>
-                    Request Team pilot <span>↗</span>
+                    Request Team pilot
                   </a>
                 ) : (
                   <Link href={paid && BILLING_ENABLED ? checkoutHref : paid ? `/sign-up?plan=${plan.slug}&cadence=monthly` : '/app'} className={paid ? styles.choose : styles.start}>
-                    {paid ? (BILLING_ENABLED ? `Choose ${plan.name}` : `Join the ${plan.name} pilot`) : 'Start free'} <span>↗</span>
+                    {paid ? (BILLING_ENABLED ? `Choose ${plan.name}` : `Join the ${plan.name} pilot`) : 'Start free'}
                   </Link>
                 )}
               </article>

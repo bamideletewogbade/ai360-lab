@@ -58,7 +58,7 @@ function SiteNavActions({ signedIn }: { signedIn: boolean }) {
 
   return signedIn ? (
     <div className="landing-account-actions landing-account-signed-in">
-      <Link href="/app" className="landing-open">Open workspace <span aria-hidden="true">↗</span></Link>
+      <Link href="/app" className="landing-open">Open workspace</Link>
     </div>
   ) : (
     <div className="landing-account-actions"><SignedOutActions /></div>
@@ -69,7 +69,7 @@ function SignedOutActions() {
   return (
     <>
       <Link href="/sign-in" className="landing-sign-in">Sign in</Link>
-      <Link href="/sign-up" className="landing-open">Sign up <span aria-hidden="true">↗</span></Link>
+      <Link href="/sign-up" className="landing-open">Sign up</Link>
     </>
   )
 }

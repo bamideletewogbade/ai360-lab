@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { ArrowUpRightIcon } from '@/components/ArrowUpRightIcon'
 
 function polishProse(text: string) {
   const segments = text.split(/(```[\s\S]*?```)/g)
@@ -142,7 +143,7 @@ export function ResponseContent({ content }: { content: string }) {
           a: ({ children, href }) => (
             <a href={href} target="_blank" rel="noreferrer">
               {children}
-              <span className="external-mark" aria-hidden="true">↗</span>
+              <ArrowUpRightIcon className="external-mark" />
             </a>
           ),
           blockquote: ({ children }) => (
@@ -164,4 +165,3 @@ export function ResponseContent({ content }: { content: string }) {
     </div>
   )
 }
-

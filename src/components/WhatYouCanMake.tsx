@@ -272,7 +272,7 @@ export function WhatYouCanMake() {
         <h2>Bring the thing you have been putting off.</h2>
         <p>Five credits every month, free, no card. Enough to finish something real before you decide anything.</p>
         <div className={styles.ctaRow}>
-          <Link href="/app" className={styles.primary}>Try it now <span aria-hidden="true">↗</span></Link>
+          <Link href="/app" className={styles.primary}>Try it now</Link>
           <Link href="/how-it-works" className={styles.secondary}>See how it works</Link>
         </div>
       </section>

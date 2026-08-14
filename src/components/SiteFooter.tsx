@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import { ArrowUpRightIcon } from '@/components/ArrowUpRightIcon'
 import styles from './SiteFooter.module.css'
 
 const exploreLinks = [
@@ -29,9 +30,9 @@ export function SiteFooter() {
               Bring the goal. AI360 helps you research, decide and make the work while you stay in control.
             </p>
             <div className={styles.actions}>
-              <Link className={styles.primaryAction} href="/app">Start with a goal <span aria-hidden="true">↗</span></Link>
+              <Link className={styles.primaryAction} href="/app">Start with a goal</Link>
               <a className={styles.secondaryAction} href="https://accrainnovationcenter.com/" target="_blank" rel="noreferrer">
-                Visit AIC <span aria-hidden="true">↗</span>
+                Visit AIC <ArrowUpRightIcon />
               </a>
             </div>
           </div>
@@ -44,7 +45,7 @@ export function SiteFooter() {
             <span>Adjirigano, East Legon</span>
             <span>Accra, Ghana</span>
             <a href={directionsUrl} target="_blank" rel="noreferrer">
-              GPS GD-253-5017 <span aria-hidden="true">↗</span>
+              GPS GD-253-5017 <ArrowUpRightIcon />
             </a>
           </address>
         </div>

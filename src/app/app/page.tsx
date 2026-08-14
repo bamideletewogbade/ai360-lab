@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { type ChatMode } from '@/lib/models'
+import { ArrowUpRightIcon } from '@/components/ArrowUpRightIcon'
 import { ResponseContent } from '@/components/ResponseContent'
 import {
   browserSpeechLocale, DEFAULT_LANGUAGE, DEFAULT_SPEECH_INPUT,
@@ -1844,7 +1845,7 @@ function LabWorkspace({
                         </ol>
                         <div className="agent-plan-actions">
                           <button type="button" className="agent-plan-approve" disabled={busy} onClick={() => active && approvePlan(active.id, message)}>
-                            Run this plan <span aria-hidden="true">↗</span>
+                            Run this plan
                           </button>
                           <button type="button" className="agent-plan-discard" disabled={busy} onClick={() => active && discardPlan(active.id, message.id)}>
                             Discard
@@ -1919,7 +1920,7 @@ function LabWorkspace({
                             <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>
                               <span>{String(sourceIndex + 1).padStart(2, '0')}</span>
                               <span>{source.title}</span>
-                              <span>↗</span>
+                              <ArrowUpRightIcon />
                             </a>
                           ))}
                         </div>
