@@ -1,5 +1,25 @@
 # Decision and incident log
 
+## 2026-08-14 · Decision · ExpressPay owns phone collection
+
+AI360's checkout form no longer asks for a phone number. The customer reviews the
+plan and payment method, then continues to ExpressPay, which collects the Mobile
+Money number on its own payment page.
+
+**Why.** The number was collected twice: once on AI360's form, once on
+ExpressPay's hosted checkout, with no pre-fill between them. AI360 never stored
+the number (no table or migration column), never used it for reconciliation
+(matching is by order, token, amount and GHS) and ExpressPay's Merchant API
+lists `phonenumber` as optional. Removing the field removes the double entry,
+keeps card payers from being asked for a number at all, and stops AI360
+collecting personal data it does not use. Extends the 2026-08-08 ExpressPay
+decision: the provider owns the payment form, so it owns phone collection too.
+
+**Revisit if.** ExpressPay's checkout stops collecting the phone reliably, a
+provider requires a phone from the merchant at creation time, or AI360 needs the
+number for support and reconciliation — it would then be stored deliberately,
+with its own retention and privacy terms.
+
 ## 2026-08-10 · Incident · Chat displayed raw JSON and leaked model reasoning
 
 **Symptom.** A real first-time user (Leo) received an answer rendered as a raw

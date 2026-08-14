@@ -11,7 +11,6 @@ type CheckoutState = 'ready' | 'starting' | 'redirecting' | 'error'
 
 export function CheckoutExperience({ planSlug }: { planSlug: string }) {
   const plan = findBillingPlan(planSlug)
-  const [phone, setPhone] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'card'>('mobile_money')
   const [state, setState] = useState<CheckoutState>('ready')
   const [error, setError] = useState('')
@@ -46,7 +45,6 @@ export function CheckoutExperience({ planSlug }: { planSlug: string }) {
           plan: plan!.slug,
           cadence: 'monthly',
           paymentMethod,
-          phone,
         }),
       })
       const result = await response.json() as { checkoutUrl?: string; error?: string }
@@ -99,21 +97,6 @@ export function CheckoutExperience({ planSlug }: { planSlug: string }) {
               <span><b>Debit or credit card</b><small>Enter the card only on ExpressPay</small></span>
             </label>
           </fieldset>
-
-          <label className={styles.phone}>
-            <span>Phone number</span>
-            <input
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              placeholder="024 000 0000"
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              required
-              disabled={busy}
-            />
-            <small>Used to prepare the payment and help match your receipt.</small>
-          </label>
 
           {error && <div className={styles.error} role="alert">{error}</div>}
           <button type="submit" disabled={busy}>

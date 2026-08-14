@@ -154,7 +154,7 @@ export async function POST(request: Request) {
       currency: 'GHS',
       cadence: 'monthly',
       preferredMethod: parsed.data.paymentMethod,
-      customer: { ...profile, phone: parsed.data.phone },
+      customer: profile,
       returnUrl: `${origin}/api/billing/expresspay/return`,
       webhookUrl: `${origin}/api/billing/expresspay/notify`,
       metadata: { catalogVersion: 'current' },

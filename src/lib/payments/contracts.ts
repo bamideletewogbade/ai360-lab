@@ -10,7 +10,7 @@ export type CreateCheckoutInput = {
   currency: 'GHS'
   cadence: PaymentCadence
   preferredMethod: PaymentMethod
-  customer: { email: string; phone: string; firstName: string; lastName: string }
+  customer: { email: string; firstName: string; lastName: string }
   returnUrl: string
   webhookUrl: string
   metadata: Record<string, string>

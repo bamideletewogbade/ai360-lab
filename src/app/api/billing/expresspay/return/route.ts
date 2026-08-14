@@ -4,15 +4,23 @@ import { rateLimit } from '@/lib/guardrails'
 import { createExpressPayProvider, isExpressPayOrderId, isExpressPayToken } from '@/lib/payments/expresspay'
 import { applyVerifiedPayment, isKnownPaymentReference } from '@/lib/payments/payment-repository'
 import { sendPaymentReceipt } from '@/lib/payments/receipts'
+import { paymentStatusUrl } from '@/lib/payments/status-url'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 function statusUrl(request: Request, orderId: string, check?: string) {
-  const url = new URL('/payment/status', request.url)
-  if (orderId) url.searchParams.set('order', orderId)
-  if (check) url.searchParams.set('check', check)
-  return url
+  // Never resolve the redirect from `request.url` alone: behind a proxy it is
+  // the listen address (0.0.0.0:3000), not the origin the browser can reach.
+  return paymentStatusUrl({
+    forwardedHost: request.headers.get('x-forwarded-host'),
+    host: request.headers.get('host'),
+    forwardedProto: request.headers.get('x-forwarded-proto'),
+    configuredAppUrl: process.env.NEXT_PUBLIC_APP_URL,
+    requestUrl: request.url,
+    orderId,
+    check,
+  })
 }
 
 export async function GET(request: Request) {

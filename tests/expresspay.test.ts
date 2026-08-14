@@ -17,7 +17,6 @@ function providerInput() {
       firstName: 'Ama',
       lastName: 'Mensah',
       email: 'ama@example.com',
-      phone: '233240000000',
     },
     returnUrl: 'https://ai360.africa/api/billing/expresspay/return',
     webhookUrl: 'https://ai360.africa/api/billing/expresspay/notify',

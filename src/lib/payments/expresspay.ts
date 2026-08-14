@@ -152,7 +152,6 @@ export function createExpressPayProvider(fetcher: typeof fetch = fetch): Payment
         firstname: input.customer.firstName.slice(0, 32),
         lastname: input.customer.lastName.slice(0, 64),
         email: input.customer.email.slice(0, 64),
-        phonenumber: input.customer.phone.slice(0, 64),
         username: input.customer.email.slice(0, 64),
         currency: input.currency,
         amount: (input.amountMinor / 100).toFixed(2),
