@@ -3,6 +3,7 @@
 import { useState } from 'react'
 
 type MediaKind = 'image' | 'video'
+type StudioIconName = 'spark' | 'image' | 'video' | 'library' | 'workspace' | 'product' | 'city' | 'mark'
 type MediaItem = {
   id: string
   kind: MediaKind
@@ -55,11 +56,22 @@ const DEMO_GALLERY: MediaItem[] = [
 ]
 
 const PROMPT_SUGGESTIONS = [
-  { icon: '🚀', label: 'Tech Founder Workspace', text: 'A futuristic tech founder working with glowing holographic AI interfaces in a high-rise Accra office, cinematic 8k.' },
-  { icon: '🍵', label: 'Luxury Brand Pack', text: 'Minimalist luxury product packaging for organic hibiscus tea on a marble pedestal, soft studio sunlight.' },
-  { icon: '🏙️', label: 'Sunset Drone Shot', text: 'Cinematic wide drone flyover of Accra skyline at golden hour sunset with modern glass skyscrapers.' },
-  { icon: '🎨', label: 'Minimalist Studio Logo', text: 'Modern minimalist vector logo for an AI creative studio, obsidian background, clean gold geometry.' },
-]
+  { icon: 'workspace', label: 'Tech Founder Workspace', text: 'A futuristic tech founder working with glowing holographic AI interfaces in a high-rise Accra office, cinematic 8k.' },
+  { icon: 'product', label: 'Luxury Brand Pack', text: 'Minimalist luxury product packaging for organic hibiscus tea on a marble pedestal, soft studio sunlight.' },
+  { icon: 'city', label: 'Sunset Drone Shot', text: 'Cinematic wide drone flyover of Accra skyline at golden hour sunset with modern glass skyscrapers.' },
+  { icon: 'mark', label: 'Minimalist Studio Logo', text: 'Modern minimalist vector logo for an AI creative studio, obsidian background, clean gold geometry.' },
+] satisfies Array<{ icon: StudioIconName; label: string; text: string }>
+
+function StudioIcon({ name }: { name: StudioIconName }) {
+  if (name === 'image') return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2" /><circle cx="8.5" cy="9" r="1.5" /><path d="m5 18 5-5 3.2 3.2 2.2-2.2 3.6 4" /></svg>
+  if (name === 'video') return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="13" height="14" rx="2" /><path d="m16.5 10 4-2v8l-4-2" /></svg>
+  if (name === 'library') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h6l2-2h8v13H4z" /></svg>
+  if (name === 'workspace') return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="13" rx="2" /><path d="M8 21h8M12 18v3M8 9h8M8 12h5" /></svg>
+  if (name === 'product') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 7-4 7 4v8l-7 4-7-4zM5 8l7 4 7-4M12 12v8" /></svg>
+  if (name === 'city') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V9h6v11M10 20V4h6v16M16 20v-8h4v8M2 20h20M7 12h1M13 8h1M13 12h1" /></svg>
+  if (name === 'mark') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 16l.7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7z" /></svg>
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /></svg>
+}
 
 export function MediaStudio() {
   const [tab, setTab] = useState<'image' | 'video' | 'gallery'>('image')
@@ -131,7 +143,7 @@ export function MediaStudio() {
         createdAt: 'Just now',
       }
       setGallery((prev) => [newItem, ...prev])
-      setToastNotice('🎬 Motion video clip rendered successfully!')
+      setToastNotice('Motion video clip rendered successfully.')
       setPrompt('')
       setTab('gallery')
     } catch {
@@ -160,7 +172,7 @@ export function MediaStudio() {
         <div className="hero-scrim" />
         <div className="hero-content">
           <div className="hero-badge">
-            <span className="sparkle-icon">✨</span>
+            <span className="sparkle-icon"><StudioIcon name="spark" /></span>
             <span>AI CREATIVE STUDIO</span>
           </div>
           <h1>Turn a sentence into studio-grade images and motion</h1>
@@ -174,7 +186,7 @@ export function MediaStudio() {
             className={tab === 'image' ? 'active' : ''}
             onClick={() => setTab('image')}
           >
-            <span className="tab-icon">🖼️</span>
+            <span className="tab-icon"><StudioIcon name="image" /></span>
             <span>Image Studio</span>
           </button>
           <button
@@ -182,7 +194,7 @@ export function MediaStudio() {
             className={tab === 'video' ? 'active' : ''}
             onClick={() => setTab('video')}
           >
-            <span className="tab-icon">🎬</span>
+            <span className="tab-icon"><StudioIcon name="video" /></span>
             <span>Video Studio</span>
           </button>
           <button
@@ -190,7 +202,7 @@ export function MediaStudio() {
             className={tab === 'gallery' ? 'active' : ''}
             onClick={() => setTab('gallery')}
           >
-            <span className="tab-icon">📁</span>
+            <span className="tab-icon"><StudioIcon name="library" /></span>
             <span>Asset Gallery ({gallery.length})</span>
           </button>
         </div>
@@ -219,7 +231,7 @@ export function MediaStudio() {
                   className="chip-btn"
                   onClick={() => setPrompt(item.text)}
                 >
-                  <span>{item.icon}</span>
+                  <span><StudioIcon name={item.icon} /></span>
                   <span>{item.label}</span>
                 </button>
               ))}
@@ -305,7 +317,7 @@ export function MediaStudio() {
                   className="chip-btn"
                   onClick={() => setPrompt(item.text)}
                 >
-                  <span>{item.icon}</span>
+                  <span><StudioIcon name={item.icon} /></span>
                   <span>{item.label}</span>
                 </button>
               ))}
@@ -394,7 +406,7 @@ export function MediaStudio() {
                     <img src={item.url} alt={item.prompt} className="card-media-img" />
                   )}
                   <div className="card-overlay">
-                    <span className="media-badge">{item.kind === 'video' ? '🎬 MOTION VIDEO' : '🖼️ AI VISUAL'}</span>
+                    <span className="media-badge"><StudioIcon name={item.kind === 'video' ? 'video' : 'image'} />{item.kind === 'video' ? 'MOTION VIDEO' : 'AI VISUAL'}</span>
                     <span className="ratio-tag">{item.aspectRatio}</span>
                   </div>
                 </div>

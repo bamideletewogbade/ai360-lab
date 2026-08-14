@@ -1262,7 +1262,7 @@ export function StudioWorkspace({
                   aria-label="Search projects"
                 />
               </label>
-              <button className="new-project-primary-btn" onClick={() => setShowCreateModal(true)}>New project <span>+</span></button>
+              <button className="new-project-primary-btn" onClick={() => setShowCreateModal(true)}>New project <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button>
             </div>
           </header>
 
@@ -1308,7 +1308,7 @@ export function StudioWorkspace({
               ))}
               {canGhost ? (
                 <button type="button" className="project-card ghost" onClick={() => setShowCreateModal(true)}>
-                  <span className="ghost-plus">+</span>
+                  <span className="ghost-plus"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></span>
                   <b>New project</b>
                   <small>Name it, then add files, a brief and chats</small>
                 </button>
@@ -1326,7 +1326,7 @@ export function StudioWorkspace({
                   ? 'Projects you archive will rest here, never lost.'
                   : 'A project keeps your files, brief and chats in one place. Name one to begin.'}</p>
               {projectFilter !== 'archived' ? (
-                <button className="new-project-primary-btn" onClick={() => setShowCreateModal(true)}>New project <span>+</span></button>
+                <button className="new-project-primary-btn" onClick={() => setShowCreateModal(true)}>New project <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button>
               ) : null}
             </div>
           )}

@@ -23,28 +23,19 @@ export function BrandMark({
   className?: string
   alt?: string
 }) {
-  const light = kind === 'wordmark' ? '/logo-black.png' : '/icon-mark-black.png'
-  const dark = kind === 'wordmark' ? '/logo-white.png' : '/icon-white.png'
+  const src = kind === 'wordmark' ? '/logo-black.png' : '/icon-mark-black.png'
 
+  // Both marks are monochrome. Using one tightly cropped source and inverting
+  // it in dark themed containers keeps its geometry identical in both themes
+  // and avoids loading a hidden duplicate above the fold.
   return (
-    <>
-      <Image
-        src={light}
-        width={width}
-        height={height}
-        alt={alt}
-        priority={priority}
-        className={`brand-mark brand-mark-light ${className}`.trim()}
-      />
-      <Image
-        src={dark}
-        width={width}
-        height={height}
-        alt=""
-        aria-hidden="true"
-        priority={priority}
-        className={`brand-mark brand-mark-dark ${className}`.trim()}
-      />
-    </>
+    <Image
+      src={src}
+      width={width}
+      height={height}
+      alt={alt}
+      loading={priority ? 'eager' : undefined}
+      className={`brand-mark brand-mark-${kind} ${className}`.trim()}
+    />
   )
 }

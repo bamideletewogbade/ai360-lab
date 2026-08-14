@@ -13,6 +13,7 @@ import { StudioWorkspace } from '@/components/StudioWorkspace'
 import { AppsDirectory } from '@/components/AppsDirectory'
 import { MediaStudio } from '@/components/MediaStudio'
 import { AccountControls } from '@/components/AccountControls'
+import { BrandMark } from '@/components/BrandMark'
 import { CreditBalance } from '@/components/CreditBalance'
 import { WorkspaceBoot } from '@/components/WorkspaceBoot'
 import { QualityFeedback } from '@/components/QualityFeedback'
@@ -77,6 +78,15 @@ type AgentPlan = {
 }
 type SourceLink = { title: string; url: string }
 type ActionKind = 'email' | 'calendar' | 'task'
+function ActionKindIcon({ kind }: { kind: ActionKind }) {
+  if (kind === 'email') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2" /><path d="m5 8 7 5 7-5" /></svg>
+  }
+  if (kind === 'calendar') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2" /><path d="M8 3.5v4M16 3.5v4M4 9.5h16" /></svg>
+  }
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="m8.5 12 2.25 2.25L15.8 9.2" /></svg>
+}
 type AgentAction = {
   id: string
   kind: ActionKind
@@ -1503,6 +1513,23 @@ function LabWorkspace({
 
   if (!hydrated || !active) return <WorkspaceBoot authLoaded={authLoaded} signedIn={signedIn} />
 
+  const workspaceHeading = experience === 'studio'
+    ? 'Projects'
+    : experience === 'media'
+      ? 'Media Studio'
+      : experience === 'apps'
+        ? 'Apps & outcomes'
+        : 'Chats'
+  const workspaceSubtitle = experience === 'studio'
+    ? 'Build and improve lasting work'
+    : experience === 'media'
+      ? 'Create images and short video'
+      : experience === 'apps'
+        ? 'Ready-made ways to get work done'
+        : experience === 'agent'
+          ? 'Research is on'
+          : 'Ask, write and research'
+
   return (
     <div className={`lab-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       {showIntake ? <WorkspaceOnboarding onComplete={completeIntake} onSkip={skipIntake} /> : null}
@@ -1551,7 +1578,7 @@ function LabWorkspace({
               title="New project"
               onClick={() => { selectExperience('studio'); setSidebarOpen(false); setCreateProjectSignal((n) => n + 1) }}
             >
-              +
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
             </button>
           </div>
 
@@ -1589,7 +1616,9 @@ function LabWorkspace({
           </svg>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search chats..." />
           {search ? (
-            <button type="button" className="clear-search-btn" onClick={() => setSearch('')} aria-label="Clear search">✕</button>
+            <button type="button" className="clear-search-btn" onClick={() => setSearch('')} aria-label="Clear search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+            </button>
           ) : null}
         </label>
 
@@ -1657,12 +1686,11 @@ function LabWorkspace({
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2.5" /><path d="M9 4v16M11.5 9l3 3-3 3" /></svg>
             </button>
             <Link className="lab-brand" href="/" aria-label="AI360 home">
-              <img src="/icon-mark-black.png" alt="" className="brand-mark-light" />
-              <img src="/icon-white.png" alt="" className="brand-mark-dark" />
+              <BrandMark kind="icon" width={28} height={33} alt="" />
               <span><b>AI360</b></span>
             </Link>
           </div>
-          <div className="workspace-title"><b>{experience === 'studio' ? 'Projects' : 'Chats'}</b><small>{experience === 'studio' ? 'Build and improve lasting work' : experience === 'agent' ? 'Research is on' : 'Ask, write and research'}</small></div>
+          <div className="workspace-title"><b>{workspaceHeading}</b><small>{workspaceSubtitle}</small></div>
           <div className="lab-top-right">
           <CreditBalance signedIn={signedIn} busy={busy} />
           <AccountControls enabled={AUTH_ENABLED} />
@@ -1724,10 +1752,7 @@ function LabWorkspace({
                 >
                   <div className="avatar">
                     {message.role === 'assistant' ? (
-                      <>
-                        <img src="/icon-mark-black.png" alt="" className="brand-mark-light" />
-                        <img src="/icon-white.png" alt="" className="brand-mark-dark" />
-                      </>
+                      <BrandMark kind="icon" width={25} height={29} alt="" />
                     ) : <span>You</span>}
                   </div>
                   <div className="message-body">
@@ -1843,7 +1868,7 @@ function LabWorkspace({
                     {message.actions?.length ? (
                       <section className="action-center" aria-label="Suggested actions">
                         <div className="action-center-head">
-                          <span>✓</span>
+                          <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 12 3.2 3.2L17.5 8" /></svg></span>
                           <span><b>Approval center</b><small>Nothing runs until you review and approve it.</small></span>
                         </div>
                         <div className="action-list">
@@ -1854,7 +1879,7 @@ function LabWorkspace({
                               onClick={() => action.status === 'proposed' && reviewAction(message.id, action)}
                               disabled={action.status === 'completed'}
                             >
-                              <span className="action-kind">{action.kind === 'email' ? 'Aa' : action.kind === 'calendar' ? '□' : '✓'}</span>
+                              <span className="action-kind"><ActionKindIcon kind={action.kind} /></span>
                               <span><b>{action.title}</b><small>{action.result || action.description}</small></span>
                               <span className="action-state">{action.status === 'completed' ? 'Done' : 'Review'}</span>
                             </button>

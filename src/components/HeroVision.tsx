@@ -90,7 +90,7 @@ export function HeroVision() {
             <span className="core-ring ring-one" />
             <span className="core-ring ring-two" />
             <span className="core-pulse" />
-            <div className="core-mark"><Image src="/icon-white.png" width={48} height={48} alt="" /></div>
+            <div className="core-mark"><Image src="/icon-mark-black.png" width={48} height={48} alt="" /></div>
             <small>AI360</small>
           </div>
 

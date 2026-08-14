@@ -65,6 +65,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [state, setState] = useState<AuthState>('idle')
   const [message, setMessage] = useState('')
 
@@ -198,7 +199,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           <p className={styles.panelCopy}>
             {mode === 'sign-in'
               ? 'Use your AI360 account to keep projects, credits and finished work connected.'
-              : 'Start free. Your work stays with the same Supabase-backed AI360 account.'}
+              : 'Start free and keep your work connected to your AI360 account.'}
           </p>
 
           <div className={styles.formFrame}>
@@ -237,6 +238,10 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     autoComplete="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    inputMode="email"
+                    enterKeyHint="next"
                     required
                     disabled={state === 'submitting'}
                     placeholder="you@example.com"
@@ -244,16 +249,33 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 </label>
                 <label>
                   <span>Password</span>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
-                    minLength={8}
-                    required
-                    disabled={state === 'submitting'}
-                    placeholder="At least 8 characters"
-                  />
+                  <span className={styles.passwordField}>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
+                      enterKeyHint="go"
+                      minLength={8}
+                      required
+                      disabled={state === 'submitting'}
+                      placeholder="At least 8 characters"
+                    />
+                    <button
+                      type="button"
+                      className={styles.passwordToggle}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword((visible) => !visible)}
+                      disabled={state === 'submitting'}
+                    >
+                      {showPassword ? (
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l16 16M9.9 9.9a3 3 0 0 0 4.2 4.2M6.4 6.5C4.3 8 3 10 3 12c1.7 3.5 5 5.5 9 5.5 1.4 0 2.7-.25 3.8-.72M10.2 6.6A9.6 9.6 0 0 1 12 6.5c4 0 7.3 2 9 5.5a10.2 10.2 0 0 1-2.1 2.8" /></svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12c1.7-3.5 5-5.5 9-5.5s7.3 2 9 5.5c-1.7 3.5-5 5.5-9 5.5S4.7 15.5 3 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+                      )}
+                    </button>
+                  </span>
                 </label>
                 {shownMessage ? (
                   <div className={shownState === 'error' ? styles.authError : styles.authSuccess} role="status">

@@ -48,7 +48,13 @@ export function AccountControls({ enabled }: { enabled: boolean }) {
 function SignedOutControls() {
   return (
     <div className="signed-out-controls">
-      <Link href="/sign-in" className="auth-sign-in">Sign in</Link>
+      <Link href="/sign-in" className="auth-sign-in">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="8" r="3.25" />
+          <path d="M5.5 19c.55-3.35 3-5.25 6.5-5.25s5.95 1.9 6.5 5.25" />
+        </svg>
+        <span>Sign in</span>
+      </Link>
       <Link href="/sign-up" className="auth-sign-up">Save your work</Link>
     </div>
   )

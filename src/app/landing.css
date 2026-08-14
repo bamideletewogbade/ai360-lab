@@ -106,7 +106,7 @@
 .landing-links a:hover::after { transform: scaleX(1); transform-origin: left; }
 .landing-account-actions { display: flex; align-items: center; gap: 12px; }
 .landing-account-signed-in { margin-left: auto; }
-.landing-sign-in { font-size: 0.85rem; font-weight: 750; }
+.landing-sign-in { font-size: 0.85rem; font-weight: 650; }
 .landing-sign-in { color: var(--institutional-grey) !important; }
 .landing-sign-in:hover { color: var(--ai-black) !important; }
 .landing-user { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; }
@@ -196,7 +196,7 @@
 .outcome-parts i { display: grid; width: 15px; height: 15px; place-items: center; border-radius: 50%; background: #343638; color: #b8babd; font-style: normal; }
 .vision-core { position: absolute; z-index: 6; top: 46%; left: 50%; width: 88px; height: 88px; display: grid; place-items: center; transform: translate(-50%,-50%); }
 .core-mark { position: relative; z-index: 3; display: grid; width: 58px; height: 58px; place-items: center; border: 1px solid #707375; border-radius: 18px; background: #101112; box-shadow: 0 0 0 8px rgba(16,17,18,.7), 0 0 45px rgba(247,246,242,.12); animation: vision-core 3s ease-in-out infinite; }
-.core-mark img { width: 38px; height: 38px; object-fit: contain; }
+.core-mark img { width: 38px; height: 38px; object-fit: contain; filter: invert(1); }
 .vision-core > small { position: absolute; z-index: 4; top: calc(100% + 9px); color: #b8babd; font-size: 0.537rem; font-weight: 800; letter-spacing: .16em; white-space: nowrap; }
 .core-ring { position: absolute; border: 1px solid rgba(247,246,242,.2); border-radius: 50%; animation: vision-ring 3s ease-out infinite; }
 .ring-one { inset: -14px; }
@@ -371,6 +371,7 @@
 @media (max-width: 760px) {
   .landing-nav { min-height: calc(68px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); }
   .landing-logo img { width: 112px; }
+  .landing-logo { min-height: 44px; }
   .landing-links { display: none; }
   .landing-account-actions { margin-left: auto; }
   .landing-hero { gap: 28px; padding: 49px 16px 58px; }
