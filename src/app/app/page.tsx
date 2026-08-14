@@ -22,6 +22,7 @@ import { ConversationMinimap, type ConversationPrompt } from '@/components/Conve
 import { PromptComposer } from '@/components/PromptComposer'
 import { ResponseActions } from '@/components/ResponseActions'
 import { WorkspaceOnboarding } from '@/components/WorkspaceOnboarding'
+import { MobileWorkspaceNav } from '@/components/MobileWorkspaceNav'
 import { useWorkspaceIdentity } from '@/components/WorkspaceIdentityProvider'
 import { scopedStorageKey } from '@/lib/workspace'
 import { routeIntentDeterministically, type IntentRoute } from '@/lib/intent-router'
@@ -386,6 +387,8 @@ function LabWorkspace({
   const [helpOpen, setHelpOpen] = useState(false)
   const [showReturnToLatest, setShowReturnToLatest] = useState(false)
   const [copiedPromptId, setCopiedPromptId] = useState('')
+  const [mobileKeyboardOpen, setMobileKeyboardOpen] = useState(false)
+  const shellRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const followLatestRef = useRef(true)
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -395,6 +398,44 @@ function LabWorkspace({
   const recordingStreamRef = useRef<MediaStream | null>(null)
   const loadedWorkspaceRef = useRef('')
   const cloudWorkspaceRef = useRef('')
+
+  useEffect(() => {
+    const viewport = window.visualViewport
+    const shell = shellRef.current
+    if (!viewport || !shell) return
+
+    let tallestViewport = Math.max(window.innerHeight, viewport.height)
+    const syncVisibleViewport = () => {
+      const isPhone = window.matchMedia('(max-width: 590px)').matches
+      if (!isPhone) {
+        shell.style.removeProperty('--mobile-workspace-height')
+        setMobileKeyboardOpen(false)
+        tallestViewport = Math.max(window.innerHeight, viewport.height)
+        return
+      }
+      tallestViewport = Math.max(tallestViewport, window.innerHeight, viewport.height)
+      shell.style.setProperty('--mobile-workspace-height', `${Math.round(viewport.height)}px`)
+      const editing = document.activeElement instanceof HTMLTextAreaElement
+        || document.activeElement instanceof HTMLInputElement
+      setMobileKeyboardOpen(editing && viewport.height < tallestViewport - 110)
+    }
+
+    const syncAfterFocus = () => window.setTimeout(syncVisibleViewport, 80)
+    syncVisibleViewport()
+    viewport.addEventListener('resize', syncVisibleViewport)
+    viewport.addEventListener('scroll', syncVisibleViewport)
+    window.addEventListener('resize', syncVisibleViewport)
+    document.addEventListener('focusin', syncAfterFocus)
+    document.addEventListener('focusout', syncAfterFocus)
+    return () => {
+      viewport.removeEventListener('resize', syncVisibleViewport)
+      viewport.removeEventListener('scroll', syncVisibleViewport)
+      window.removeEventListener('resize', syncVisibleViewport)
+      document.removeEventListener('focusin', syncAfterFocus)
+      document.removeEventListener('focusout', syncAfterFocus)
+      shell.style.removeProperty('--mobile-workspace-height')
+    }
+  }, [])
 
   const workspaceStorageKey = scopedStorageKey(STORAGE_KEY, workspaceScope)
   const workspaceActiveKey = scopedStorageKey(ACTIVE_KEY, workspaceScope)
@@ -1496,6 +1537,25 @@ function LabWorkspace({
     setSidebarOpen(false)
   }
 
+  function openChatsHome() {
+    if (experience === 'chat' || experience === 'agent') {
+      setSidebarOpen(false)
+      return
+    }
+    const recentChat = conversations.find((conversation) => !conversation.experience || conversation.experience === 'chat' || conversation.experience === 'agent')
+    if (recentChat) {
+      setActiveId(recentChat.id)
+    } else {
+      const next = freshConversation('chat')
+      setConversations((items) => [next, ...items])
+      setActiveId(next.id)
+    }
+    setInput('')
+    setAttachment(null)
+    discardRecording()
+    setSidebarOpen(false)
+  }
+
   function collapseDesktopSidebar() {
     setSidebarCollapsed(true)
     requestAnimationFrame(() => sidebarOpenButtonRef.current?.focus())
@@ -1531,7 +1591,7 @@ function LabWorkspace({
           : 'Ask, write and research'
 
   return (
-    <div className={`lab-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+    <div ref={shellRef} className={`lab-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}${mobileKeyboardOpen ? ' mobile-keyboard-open' : ''}`}>
       {showIntake ? <WorkspaceOnboarding onComplete={completeIntake} onSkip={skipIntake} /> : null}
       <aside className={`sidebar${sidebarOpen ? ' open' : ''}${sidebarCollapsed ? ' collapsed' : ''}`} id="workspace-sidebar">
         <div className="side-head">
@@ -1552,7 +1612,7 @@ function LabWorkspace({
           <button
             type="button"
             className={`nav-menu-item${experience === 'chat' ? ' active' : ''}`}
-            onClick={() => { selectExperience('chat'); setSidebarOpen(false) }}
+            onClick={openChatsHome}
           >
             <span className="nav-menu-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -1948,6 +2008,22 @@ function LabWorkspace({
           />
           </>
         )}
+        <MobileWorkspaceNav
+          experience={experience}
+          authEnabled={AUTH_ENABLED}
+          feedbackContext={{
+            sourceSurface: experience === 'chat' ? 'quick' : experience === 'agent' ? 'research' : 'studio',
+            conversationId: active.id,
+            conversationText: messages.slice(-6).map((message) => `${message.role === 'user' ? 'Customer' : 'AI360'}: ${message.content}`).join('\n\n'),
+          }}
+          onOpenSidebar={openWorkspaceSidebar}
+          onOpenGuide={() => setHelpOpen(true)}
+          onSelectChats={openChatsHome}
+          onSelectProjects={() => { selectExperience('studio'); setProjectsHomeSignal((n) => n + 1) }}
+          onStartProject={() => { selectExperience('studio'); setCreateProjectSignal((n) => n + 1) }}
+          onSelectMedia={() => selectExperience('media')}
+          onSelectApps={() => selectExperience('apps')}
+        />
       </section>
       {helpOpen && (
         <div className="workspace-guide-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setHelpOpen(false)}>

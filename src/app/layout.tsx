@@ -1,5 +1,6 @@
 ﻿import type { Metadata } from 'next'
 import { Plus_Jakarta_Sans, DM_Sans } from 'next/font/google'
+import type { Viewport } from 'next'
 import './globals.css'
 import './landing.css'
 import { AuthProvider } from '@/components/AuthProvider'
@@ -62,6 +63,12 @@ export const metadata: Metadata = {
     title: BRAND.productName,
     statusBarStyle: 'black-translucent',
   },
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  interactiveWidget: 'resizes-content',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
