@@ -219,7 +219,8 @@ export async function readWorkspaceSubscription(context: WorkspaceAuthContext): 
   }[]>`
     select id, plan_slug, status, cadence, current_period_start, current_period_end, cancel_at_period_end
       from public.lab_subscriptions
-     where workspace_key = ${context.workspace.key} and status = 'active'`
+     where workspace_key = ${context.workspace.key} and status = 'active'
+       and current_period_end > now()`
   if (!row) return null
   return {
     id: row.id,

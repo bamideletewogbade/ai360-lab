@@ -13,6 +13,7 @@ import type { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser'
 import { isSupabaseAuthConfigured } from '@/lib/supabase/config'
+import { authDisplayName, authImageUrl } from '@/lib/auth-profile'
 
 export type AuthUser = {
   id: string
@@ -37,21 +38,12 @@ const AuthContext = createContext<AuthState>({
   signOut: async () => undefined,
 })
 
-function metadata(user: User, key: string) {
-  const value = (user.user_metadata as Record<string, unknown> | null | undefined)?.[key]
-  return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
 function authUser(user: User): AuthUser {
-  const displayName = metadata(user, 'full_name')
-    || metadata(user, 'name')
-    || [metadata(user, 'first_name'), metadata(user, 'last_name')].filter(Boolean).join(' ')
-    || null
   return {
     id: user.id,
     email: user.email ?? null,
-    displayName,
-    imageUrl: metadata(user, 'avatar_url') || metadata(user, 'picture'),
+    displayName: authDisplayName(user),
+    imageUrl: authImageUrl(user),
   }
 }
 

@@ -172,7 +172,16 @@ export async function POST(request: Request) {
       reused: false,
     }, { status: 201, headers: log.headers({ 'Cache-Control': 'no-store' }) })
   } catch (error) {
-    if (attempt) await markPaymentFailed(attempt.id, attempt.workspaceKey, error instanceof ExpressPayError ? error.code : 'internal_error').catch(() => {})
+    if (attempt) {
+      try {
+        await markPaymentFailed(attempt.id, attempt.workspaceKey, error instanceof ExpressPayError ? error.code : 'internal_error')
+      } catch (stateError) {
+        log.error('billing.checkout_failure_state_unpersisted', {
+          orderId: attempt.id,
+          ...errorDetails(stateError),
+        })
+      }
+    }
     const response = checkoutError(error)
     log.error('billing.checkout_failed', errorDetails(error))
     log.finish(response.status, { outcome: 'checkout_failed' })

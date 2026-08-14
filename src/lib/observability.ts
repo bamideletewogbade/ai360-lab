@@ -66,6 +66,7 @@ export function errorDetails(error: unknown) {
     return {
       errorName: error.name,
       errorMessage: redact(error.message),
+      ...(error.stack ? { errorStack: redact(error.stack) } : {}),
       ...(cause?.code ? { causeCode: String(cause.code).slice(0, 80) } : {}),
       ...(cause?.name ? { causeName: String(cause.name).slice(0, 80) } : {}),
       ...(cause?.message ? { causeMessage: redact(String(cause.message)) } : {}),

@@ -15,6 +15,19 @@ export function isBindAllHost(host: string) {
   return /^(0\.0\.0\.0|\[::\]|::)(:\d+)?$/i.test(host.trim())
 }
 
+export function safeInternalPath(value: string | null | undefined, fallback = '/app') {
+  if (!value?.startsWith('/')) return fallback
+  try {
+    const base = new URL('https://ai360.invalid')
+    const target = new URL(value, base)
+    return target.origin === base.origin
+      ? `${target.pathname}${target.search}${target.hash}`
+      : fallback
+  } catch {
+    return fallback
+  }
+}
+
 /** Proxies may append values; the first entry is the original client-facing one. */
 function firstHeaderValue(value: string | null | undefined) {
   const first = value?.split(',')[0]?.trim()

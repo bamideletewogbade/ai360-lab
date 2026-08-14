@@ -1,5 +1,6 @@
 import 'server-only'
-import type { User } from '@supabase/supabase-js'
+import { authDisplayName, authImageUrl } from '@/lib/auth-profile'
+import { errorDetails, logEvent } from '@/lib/observability'
 import {
   createWorkspaceAuthContext,
   type WorkspaceAuthContext,
@@ -11,20 +12,8 @@ export function isAuthConfigured() {
   return isSupabaseAuthConfigured()
 }
 
-function stringMetadata(user: User, key: string) {
-  const value = (user.user_metadata as Record<string, unknown> | null | undefined)?.[key]
-  return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-function displayName(user: User) {
-  return stringMetadata(user, 'full_name')
-    || stringMetadata(user, 'name')
-    || [stringMetadata(user, 'first_name'), stringMetadata(user, 'last_name')].filter(Boolean).join(' ')
-    || null
-}
-
-function imageUrl(user: User) {
-  return stringMetadata(user, 'avatar_url') || stringMetadata(user, 'picture')
+function isMissingSession(error: { name?: string; code?: string }) {
+  return error.name === 'AuthSessionMissingError' || error.code === 'session_not_found'
 }
 
 export async function getOptionalAuthContext(): Promise<WorkspaceAuthContext | null> {
@@ -32,16 +21,21 @@ export async function getOptionalAuthContext(): Promise<WorkspaceAuthContext | n
   try {
     const supabase = await createSupabaseServerClient()
     const { data, error } = await supabase.auth.getUser()
-    const user = error ? null : data.user
+    if (error) {
+      if (!isMissingSession(error)) logEvent('warn', 'auth.context_unavailable', errorDetails(error))
+      return null
+    }
+    const user = data.user
     if (!user?.id) return null
 
     return createWorkspaceAuthContext({
       userId: user.id,
       email: user.email ?? null,
-      displayName: displayName(user),
-      imageUrl: imageUrl(user),
+      displayName: authDisplayName(user),
+      imageUrl: authImageUrl(user),
     })
-  } catch {
+  } catch (error) {
+    logEvent('error', 'auth.context_resolution_failed', errorDetails(error))
     return null
   }
 }

@@ -1,18 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { isSupabaseAuthConfigured } from '@/lib/supabase/config'
-import { resolveCallbackOrigin } from '@/lib/auth-callback'
+import { resolveCallbackOrigin, safeInternalPath } from '@/lib/auth-callback'
 
 export const dynamic = 'force-dynamic'
 
-function safeNext(value: string | null) {
-  if (value?.startsWith('/') && !value.startsWith('//')) return value
-  return '/app'
-}
-
 export async function GET(request: NextRequest) {
   const url = new URL(request.url)
-  const next = safeNext(url.searchParams.get('next'))
+  const next = safeInternalPath(url.searchParams.get('next'))
   const origin = resolveCallbackOrigin({
     forwardedHost: request.headers.get('x-forwarded-host'),
     host: request.headers.get('host'),

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isBindAllHost, isLocalHost, resolveCallbackOrigin } from '../src/lib/auth-callback.ts'
+import { isBindAllHost, isLocalHost, resolveCallbackOrigin, safeInternalPath } from '../src/lib/auth-callback.ts'
 
 const PROD = 'https://ai360.africa'
 
@@ -120,4 +120,12 @@ test('bind-all addresses are recognised as server listen addresses', () => {
   for (const host of ['localhost:3000', '127.0.0.1:3000', 'ai360.africa']) {
     assert.equal(isBindAllHost(host), false, `${host} should not be bind-all`)
   }
+})
+
+test('post-auth redirects stay inside AI360', () => {
+  assert.equal(safeInternalPath('/checkout?plan=everyday'), '/checkout?plan=everyday')
+  assert.equal(safeInternalPath('//attacker.example'), '/app')
+  assert.equal(safeInternalPath('/\\attacker.example'), '/app')
+  assert.equal(safeInternalPath('https://attacker.example'), '/app')
+  assert.equal(safeInternalPath(null), '/app')
 })

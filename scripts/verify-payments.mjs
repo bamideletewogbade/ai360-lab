@@ -93,6 +93,15 @@ try {
   const balance = await readBalance(context)
   check('activation grants the plan allowance', balance?.available === plan.includedCredits && balance.allowance === plan.includedCredits)
 
+  // Paid pilot access is manually renewed. Crossing a calendar month may
+  // refresh Explorer, but it must never manufacture a second paid allowance.
+  await sql`
+    update public.lab_credit_accounts set allowance_period = '2000-01'
+     where workspace_key = ${context.workspace.key}`
+  const afterCalendarBoundary = await readBalance(context)
+  check('a calendar boundary cannot grant paid credits without another payment',
+    afterCalendarBoundary?.available === plan.includedCredits && afterCalendarBoundary.allowance === plan.includedCredits)
+
   const duplicateApproval = await applyVerifiedPayment({
     provider: 'expresspay', providerReference: token, providerTransactionId: `txn_${stamp}`,
     orderId: first.attempt.id, status: 'approved', statusText: 'Approved',
@@ -105,6 +114,14 @@ try {
     select count(*)::text as count from public.lab_credit_ledger
      where workspace_key = ${context.workspace.key} and source_type = 'subscription_payment'`
   check('the ledger contains one payment grant', Number(paymentGrants) === 1)
+
+  await sql`
+    update public.lab_subscriptions set current_period_end = now() - interval '1 second'
+     where workspace_key = ${context.workspace.key}`
+  const expired = await readBalance(context)
+  check('expired prepaid access falls back to Explorer on the next credit touch',
+    expired?.plan === 'explorer' && expired.available === 5 && expired.allowance === 5,
+    JSON.stringify(expired))
 } finally {
   for (const eventId of notificationIds) {
     await sql`delete from public.lab_billing_webhook_events where provider = 'expresspay' and event_id = ${eventId}`

@@ -4,7 +4,7 @@ For unfinished brief recovery, shared intent routing, African connectivity const
 
 For the layer-by-layer path from a person’s words to a checked result, read [CONTEXT_ENGINEERING.md](./CONTEXT_ENGINEERING.md).
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-14
 
 This is the canonical entry point for engineers and operators picking up AI360
 Lab. It explains what the product is, how the system is divided, how work moves
@@ -328,6 +328,14 @@ outside database transactions. A row lock, `activated_at`, unique provider
 transaction IDs and ledger idempotency keys make duplicate delivery harmless.
 The signed-in status route can claim a stale pending attempt and re-query it,
 so a missed delayed notification does not permanently strand Mobile Money.
+
+The first paid pilot is prepaid and manual: each approved payment buys one
+month, and AI360 stores no reusable card or wallet token. The payment
+transaction is the only path that grants a paid allowance. The lazy calendar
+refresh applies only to Explorer; it must never create paid credits at a month
+boundary. Expired paid access is treated as Explorer on the next credit touch.
+Top-up checkout and automatic renewal are intentionally not advertised until
+their purchase, reversal and customer-control paths exist end to end.
 
 ## 9. Verification and release
 

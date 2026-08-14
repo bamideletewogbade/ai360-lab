@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { BILLING_CATALOG_VERSION, BILLING_PLANS, findBillingPlan } from '../src/lib/billing/catalog.ts'
 import { checkoutRequestSchema } from '../src/lib/billing/checkout-contract.ts'
+import { allowanceAction } from '../src/lib/billing/allowance-policy.ts'
 
 test('the pilot catalog keeps a free entry point and prices paid access in Ghana cedis', () => {
   assert.equal(BILLING_PLANS[0]?.slug, 'explorer')
@@ -36,3 +37,35 @@ test('payment repository exposes workspace subscription and payment history help
   assert.equal(typeof repository.listWorkspacePaymentAttempts, 'function')
 })
 
+test('a calendar boundary never grants a paid allowance without another payment', () => {
+  assert.equal(allowanceAction({
+    entitledPlan: 'everyday',
+    accountPlan: 'everyday',
+    accountPeriod: '2026-08',
+    currentPeriod: '2026-09',
+  }), 'keep')
+})
+
+test('expired prepaid access returns to the free monthly allowance', () => {
+  assert.equal(allowanceAction({
+    entitledPlan: 'explorer',
+    accountPlan: 'builder',
+    accountPeriod: '2026-08',
+    currentPeriod: '2026-09',
+  }), 'refresh_free')
+  assert.equal(allowanceAction({
+    entitledPlan: 'explorer',
+    accountPlan: 'explorer',
+    accountPeriod: '2026-09',
+    currentPeriod: '2026-09',
+  }), 'keep')
+})
+
+test('a mismatched paid account fails closed instead of manufacturing credits', () => {
+  assert.equal(allowanceAction({
+    entitledPlan: 'builder',
+    accountPlan: 'explorer',
+    accountPeriod: '2026-09',
+    currentPeriod: '2026-09',
+  }), 'invalid_paid_state')
+})

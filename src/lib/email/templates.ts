@@ -154,14 +154,14 @@ export function lowCreditEmail(data: {
     heading: 'Running low on credits',
     bodyHtml:
       paragraph(`Hi ${name}, you have <strong>${available} credit${available === 1 ? '' : 's'}</strong> left on your ${escapeHtml(data.planName.slice(0, 60))} plan.`) +
-      paragraph('Your allowance refreshes at the start of each month. If you need more before then, you can top up or move to a larger plan any time.'),
-    cta: { label: 'View plans and top up', href: `${appUrl}/pricing` },
+      paragraph('AI360 will not create a surprise overage charge. During the pilot, you can move to a larger plan or choose another month of access when you are ready.'),
+    cta: { label: 'View plans', href: `${appUrl}/pricing` },
   })
   const text = `Running low on credits
 
 Hi ${name}, you have ${available} credit${available === 1 ? '' : 's'} left on your ${data.planName} plan.
 
-Your allowance refreshes at the start of each month. To get more now, view plans and top up: ${appUrl}/pricing`
+AI360 will not create a surprise overage charge. To compare the pilot plans: ${appUrl}/pricing`
   return { subject, html, text }
 }
 
@@ -173,17 +173,17 @@ export function allowanceRenewedEmail(data: {
   const { appUrl } = emailSettings()
   const name = firstName(data.name)
   const credits = Math.max(0, Math.floor(data.credits))
-  const subject = 'Your monthly AI360 credits are ready'
+  const subject = 'Your AI360 credits are ready'
   const html = layout({
-    heading: 'This month’s credits are ready',
+    heading: 'Your credits are ready',
     bodyHtml:
-      paragraph(`Hi ${name}, your ${escapeHtml(data.planName.slice(0, 60))} plan has renewed with <strong>${credits} credit${credits === 1 ? '' : 's'}</strong> for this month.`) +
+      paragraph(`Hi ${name}, your ${escapeHtml(data.planName.slice(0, 60))} allowance now has <strong>${credits} credit${credits === 1 ? '' : 's'}</strong> ready for this month.`) +
       paragraph('Unused allowance from last month has expired; any credits you purchased stay with you.'),
     cta: { label: 'Start working', href: `${appUrl}/app` },
   })
-  const text = `This month's credits are ready
+  const text = `Your credits are ready
 
-Hi ${name}, your ${data.planName} plan has renewed with ${credits} credit${credits === 1 ? '' : 's'} for this month.
+Hi ${name}, your ${data.planName} allowance now has ${credits} credit${credits === 1 ? '' : 's'} ready for this month.
 
 Unused allowance from last month has expired; any credits you purchased stay with you.
 

@@ -47,8 +47,8 @@ export default function TermsPage() {
 
           <section>
             <h2>Pilot plans and payments</h2>
-            <p>Prices and allowances shown on the pricing page are a pilot proposal until checkout is activated. Before payment, the final amount, billing period, included allowance, applicable taxes and renewal method will be displayed for approval.</p>
-            <p>Individuals will not receive silent usage overage charges. If an allowance is exhausted, the service may pause paid capabilities until renewal, a top-up or a plan change. Failed or cancelled provider work should release unused reserved credits after reconciliation.</p>
+            <p>Prices and allowances shown on the pricing page are a pilot proposal until checkout is activated. During the first paid pilot, each successful payment buys one month of access and does not renew automatically. Before payment, the final amount, access period, included allowance and applicable taxes will be displayed for approval.</p>
+            <p>Individuals will not receive silent renewal or usage-overage charges. If an allowance is exhausted, paid capabilities may pause until the person chooses another month or a different plan. One-time top-ups are not sold during the first pilot. Failed provider work should release unused reserved credits after reconciliation.</p>
           </section>
         </article>
       </div>

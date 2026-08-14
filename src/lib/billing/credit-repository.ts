@@ -10,6 +10,7 @@ import {
   settleCredits,
 } from '@/lib/billing/credits'
 import { findBillingPlan } from '@/lib/billing/catalog'
+import { allowanceAction } from '@/lib/billing/allowance-policy'
 import { scopedIdempotencyKey } from '@/lib/idempotency'
 import { ensureWorkspaceRecord } from '@/lib/workspace-db'
 
@@ -85,33 +86,50 @@ async function writeLedger(sql: TransactionSql, entry: {
     on conflict (idempotency_key) do nothing`
 }
 
-/** The plan a workspace is entitled to. No active subscription means the free tier. */
+/** The plan a workspace is entitled to right now. Expired prepaid access is free. */
 async function resolvePlan(sql: TransactionSql, workspaceKey: string) {
   const [subscription] = await sql<{ plan_slug: string }[]>`
     select plan_slug from public.lab_subscriptions
      where workspace_key = ${workspaceKey} and status in ('active', 'trialing')
-     order by created_at desc limit 1`
+       and current_period_end > now()
+     order by current_period_end desc limit 1`
   const plan = findBillingPlan(subscription?.plan_slug ?? 'explorer') ?? findBillingPlan('explorer')
   return { slug: plan?.slug ?? 'explorer', credits: plan?.includedCredits ?? 0 }
 }
 
 /**
- * Grants this month's allowance the first time a workspace is touched in a new
- * period, and expires whatever was left of the last one.
+ * Grants Explorer's monthly allowance on first touch and expires the previous
+ * allowance. Paid allowances are granted only by a verified payment.
  *
- * Renewal is lazy rather than scheduled, so a monthly allowance cannot silently
- * fail to arrive because a cron job did not run. The trade-off is that a
- * dormant workspace refreshes on its next visit rather than at midnight, which
- * is invisible to the person and removes an entire class of outage.
+ * Explorer refresh is lazy rather than scheduled, so it cannot silently fail
+ * because a cron job did not run. A dormant workspace refreshes on its next
+ * visit. Manual paid access never refreshes from this path.
  */
 async function ensureAllowance(sql: TransactionSql, context: WorkspaceAuthContext) {
   const period = currentBillingPeriod()
   const workspaceKey = context.workspace.key
+  const plan = await resolvePlan(sql, workspaceKey)
 
-  const [account] = await sql<{ allowance_credits: string; allowance_period: string | null }[]>`
-    select allowance_credits, allowance_period
+  const [account] = await sql<{
+    allowance_credits: string
+    allowance_period: string | null
+    allowance_plan: string | null
+  }[]>`
+    select allowance_credits, allowance_period, allowance_plan
       from public.lab_credit_accounts where workspace_key = ${workspaceKey} for update`
-  if (account?.allowance_period === period) return
+  const action = allowanceAction({
+    entitledPlan: plan.slug,
+    accountPlan: account?.allowance_plan ?? null,
+    accountPeriod: account?.allowance_period ?? null,
+    currentPeriod: period,
+  })
+  if (action === 'keep') return
+  if (action === 'invalid_paid_state') {
+    // Payment activation grants paid credits atomically. Manufacturing a paid
+    // allowance here would hide a broken payment transaction and give away
+    // work that has not been reconciled.
+    throw new Error('PAID_ALLOWANCE_STATE_MISMATCH')
+  }
 
   // Credits may only move if the ledger records the movement. Checking the
   // ledger first keeps the two in step: without this, a grant whose ledger row
@@ -128,7 +146,6 @@ async function ensureAllowance(sql: TransactionSql, context: WorkspaceAuthContex
     return
   }
 
-  const plan = await resolvePlan(sql, workspaceKey)
   const unspent = account?.allowance_period ? toNumber(account.allowance_credits) : 0
 
   await sql`
@@ -483,7 +500,7 @@ export async function settleReservation(input: {
   }) as Promise<SettlementResult>
 }
 
-/** Grants a plan's monthly allowance or a purchased top-up. */
+/** Grants an operator-approved allowance, purchased top-up or adjustment. */
 export async function grantCredits(input: {
   context: WorkspaceAuthContext
   credits: number
@@ -518,7 +535,11 @@ export async function grantCredits(input: {
        where workspace_key = ${input.context.workspace.key}`
     await writeLedger(tx, {
       workspaceKey: input.context.workspace.key,
-      entryType: input.sourceType === 'top_up' ? 'top_up' : 'grant',
+      entryType: input.sourceType === 'top_up'
+        ? 'top_up'
+        : input.sourceType === 'adjustment'
+          ? 'adjustment'
+          : 'grant',
       creditsDelta: credits,
       sourceType: input.sourceType,
       sourceId: input.sourceId,

@@ -6,6 +6,7 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { BrandMark } from '@/components/BrandMark'
 import { useAuth } from '@/components/AuthProvider'
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser'
+import { safeInternalPath } from '@/lib/auth-callback'
 import styles from '@/app/auth.module.css'
 
 type AuthMode = 'sign-in' | 'sign-up'
@@ -51,8 +52,7 @@ function GoogleMark() {
 
 function safeNext(value: string | null, plan: string | null) {
   if (plan && /^[a-z0-9-]{2,40}$/i.test(plan)) return `/checkout?plan=${encodeURIComponent(plan)}`
-  if (value?.startsWith('/') && !value.startsWith('//')) return value
-  return '/app'
+  return safeInternalPath(value)
 }
 
 export function AuthPage({ mode }: { mode: AuthMode }) {

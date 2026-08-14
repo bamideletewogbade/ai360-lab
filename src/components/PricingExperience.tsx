@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { BILLING_PLANS, CREDIT_GUIDE, CREDIT_TOP_UPS } from '@/lib/billing/catalog'
+import { BILLING_PLANS, CREDIT_GUIDE } from '@/lib/billing/catalog'
 import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
 import styles from '@/app/pricing/pricing.module.css'
@@ -68,8 +68,8 @@ export function PricingExperience() {
         <div className={styles.sectionHead}>
           <div><p>AI360 plans</p><h2 id="plans-title">Choose the pace that fits.</h2></div>
           <div className={styles.pricingDecision}>
-            <span>Monthly pilot</span>
-            <p>One clear price. Annual billing opens only after renewal and refund operations are proven.</p>
+            <span>One-month pilot access</span>
+            <p>Pay for one month at a time. Automatic renewal and annual billing stay off until renewal and refund operations are proven.</p>
           </div>
         </div>
 
@@ -84,9 +84,9 @@ export function PricingExperience() {
                 <p className={styles.planEyebrow}>{plan.eyebrow}</p>
                 <h3>{plan.name}</h3>
                 <p className={styles.audience}>{plan.audience}</p>
-                <div className={styles.price}><span>GH₵</span><b>{price.toLocaleString()}</b><small>{paid ? '/ month' : 'forever'}</small></div>
-                <p className={styles.billingNote}>{plan.assisted ? 'Five people included · assisted pilot' : paid ? 'Monthly pilot · no annual commitment' : 'No payment method required'}</p>
-                <div className={styles.creditLine}><span>{plan.includedCredits.toLocaleString()}</span><span>{plan.slug === 'explorer' ? 'free credits, reset monthly' : 'work credits included monthly'}</span></div>
+                <div className={styles.price}><span>GH₵</span><b>{price.toLocaleString()}</b><small>{paid ? '/ one month' : 'forever'}</small></div>
+                <p className={styles.billingNote}>{plan.assisted ? 'Five people included · assisted pilot' : paid ? 'One month of access · renew only when you choose' : 'No payment method required'}</p>
+                <div className={styles.creditLine}><span>{plan.includedCredits.toLocaleString()}</span><span>{plan.slug === 'explorer' ? 'free credits, reset monthly' : 'work credits for one month'}</span></div>
                 <ul>{plan.features.map((feature) => <li key={feature}><span>✓</span>{feature}</li>)}</ul>
                 <div className={styles.templates}><small>Example templates</small><p>{plan.templateExamples.join(' · ')}</p></div>
                 {plan.assisted ? (
@@ -103,7 +103,7 @@ export function PricingExperience() {
           })}
         </div>
         <p className={styles.pilotNote}>{BILLING_ENABLED
-          ? 'Prices are monthly and shown in Ghana cedis. Before payment, you will see the full amount due today, renewal terms and any applicable taxes or fees. Team onboarding is assisted during the pilot.'
+          ? 'Prices are shown in Ghana cedis. Each successful payment buys one month of access and does not renew automatically during the pilot. Team onboarding is assisted.'
           : 'Paid checkout is not open yet. Joining a paid-plan pilot does not charge you; payment will only open after the payment and reconciliation flow passes verification. Team onboarding is assisted.'}</p>
       </section>
 
@@ -122,10 +122,6 @@ export function PricingExperience() {
         <div className={styles.creditGuide}>
           <div><b>What might work cost?</b><small>Shown before a task begins. Final charges follow measured work.</small></div>
           {CREDIT_GUIDE.map((item) => <div key={item.task}><span>{item.task}</span><b>{item.credits} {item.credits === '1' ? 'credit' : 'credits'}</b></div>)}
-        </div>
-        <div className={styles.topups}>
-          <span><b>Need a little more?</b><small>Optional one-time top-ups for paid plans</small></span>
-          {CREDIT_TOP_UPS.map((topup) => <span key={topup.slug}><b>GH₵{topup.priceGhs}</b><small>{topup.credits} credits</small></span>)}
         </div>
       </section>
 
@@ -154,11 +150,11 @@ export function PricingExperience() {
           <div className={styles.reviewTop}><span>CHECKOUT PREVIEW</span><b>Clear before confirmation</b></div>
           <dl>
             <div><dt>Due today</dt><dd>Plan price plus clearly listed tax or fees</dd></div>
-            <div><dt>Billing</dt><dd>Monthly during the pilot, with the next renewal date</dd></div>
+            <div><dt>Access</dt><dd>One month during the pilot, with no automatic renewal</dd></div>
             <div><dt>Included</dt><dd>Your plan features and monthly work credits</dd></div>
-            <div><dt>Credits</dt><dd>Reset, rollover and top-up rules shown plainly</dd></div>
+            <div><dt>Credits</dt><dd>Included allowance and expiry rules shown plainly</dd></div>
             <div><dt>Payment</dt><dd>Your selected Mobile Money wallet or card</dd></div>
-            <div><dt>Control</dt><dd>Renewal, cancellation and refund terms before payment</dd></div>
+            <div><dt>Control</dt><dd>Pay again only when you choose; refund terms shown before payment</dd></div>
           </dl>
           <p><span>✓</span> A receipt and updated credit balance appear after successful payment.</p>
         </div>
@@ -168,13 +164,13 @@ export function PricingExperience() {
         <div><p>Important questions</p><h2>Clear before checkout.</h2></div>
         <div className={styles.faqs}>
           <details><summary>Why not promise unlimited AI?<span>+</span></summary><p>Model, research, image and video costs vary. An allowance keeps entry prices low and prevents one unusually expensive workflow from raising prices for everyone.</p></details>
-          <details><summary>Will Mobile Money renew automatically?<span>+</span></summary><p>Checkout will say clearly whether your payment can renew automatically. If your wallet requires approval for each payment, AI360 will remind you and you will confirm the renewal yourself.</p></details>
-          <details><summary>Will I see the complete price before paying?<span>+</span></summary><p>Yes. The final review shows the amount due today, billing period, renewal date and any applicable tax or payment fee before you confirm.</p></details>
-          <details><summary>Can I pay annually?<span>+</span></summary><p>Not during the first pilot. AI360 will prove monthly renewals, reversals and refunds before asking anyone to make a longer commitment.</p></details>
-          <details><summary>Can I cancel or change my plan?<span>+</span></summary><p>Yes. The account area will show your current plan, next renewal and cancellation options. Changing or cancelling a plan will not create a surprise charge.</p></details>
+          <details><summary>Will Mobile Money renew automatically?<span>+</span></summary><p>No. During the pilot, every payment buys one month of access. AI360 will not charge the wallet or card again unless you start and confirm another payment.</p></details>
+          <details><summary>Will I see the complete price before paying?<span>+</span></summary><p>Yes. The final review shows the amount due today, one-month access period and any applicable tax or payment fee before you confirm.</p></details>
+          <details><summary>Can I pay annually?<span>+</span></summary><p>Not during the first pilot. AI360 will prove repeat payments, reversals and refunds before asking anyone to make a longer commitment.</p></details>
+          <details><summary>Can I stop or change my plan?<span>+</span></summary><p>Yes. There is nothing to cancel during the pilot because access does not renew automatically. You can choose a different plan when you make your next payment.</p></details>
           <details><summary>Can a student or programme receive a discount?<span>+</span></summary><p>Yes. Sponsored seats and verified education or community programmes should receive controlled allowances rather than a permanent blanket discount with no funding source.</p></details>
           <details><summary>Do the five free credits roll over?<span>+</span></summary><p>No. They reset on the first day of each month and unused free credits expire. This keeps the free tier generous enough to test real work without creating an open-ended cost.</p></details>
-          <details><summary>What happens when credits finish?<span>+</span></summary><p>People can wait for renewal, buy a top-up or move to a larger plan. AI360 will not silently create an overage bill for individuals.</p></details>
+          <details><summary>What happens when credits finish?<span>+</span></summary><p>You can wait until you choose another month of access or move to a larger plan. One-time top-ups are not part of the first pilot, and AI360 will not create a silent overage bill.</p></details>
         </div>
       </section>
 

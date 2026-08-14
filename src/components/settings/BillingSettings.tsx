@@ -137,13 +137,13 @@ export function BillingSettings() {
           </div>
           {subscription ? (
             <div className={styles.planMetric}>
-              <span>Renews</span>
+              <span>Access until</span>
               <strong>{new Date(subscription.currentPeriodEnd).toLocaleDateString()}</strong>
             </div>
           ) : null}
         </div>
         <Link href="/pricing" className={styles.primaryLink}>
-          View plans and top up <span aria-hidden="true">→</span>
+          View plans <span aria-hidden="true">→</span>
         </Link>
       </section>
 

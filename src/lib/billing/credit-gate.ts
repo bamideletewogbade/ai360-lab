@@ -1,6 +1,7 @@
 import type { Requester } from '@/lib/guardrails'
 import { estimateCredits, type CreditEstimate, type CreditFeature } from '@/lib/billing/credits'
 import { reserveCredits, settleReservation } from '@/lib/billing/credit-repository'
+import { errorDetails, logEvent } from '@/lib/observability'
 
 /**
  * The seam between a route and the credit engine.
@@ -113,15 +114,12 @@ export async function openCreditGate(input: {
         }).catch((error) => {
           // A settlement failure must never break the user's response. The
           // reservation expires and is reclaimed by the sweeper instead.
-          console.error(JSON.stringify({
-            timestamp: new Date().toISOString(),
-            level: 'error',
-            service: 'ai360-lab',
-            event: 'credit.settle_failed',
+          logEvent('error', 'credit.settle_failed', {
             requestId: input.requestId.slice(0, 64),
             feature: input.feature,
-            errorName: error instanceof Error ? error.name : 'UnknownError',
-          }))
+            reservationId: reservation.reservationId,
+            ...errorDetails(error),
+          })
         })
       },
     },

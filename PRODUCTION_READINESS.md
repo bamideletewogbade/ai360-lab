@@ -1,6 +1,6 @@
 # AI360 production readiness
 
-Last reviewed: 2026-08-11
+Last reviewed: 2026-08-14
 
 This document is the release truth for AI360. A feature is only marked
 ready when its code, configuration, external service and failure path have been
@@ -10,12 +10,40 @@ verified. A polished screen alone is not considered production-ready.
 
 **Current release state: private pilot candidate, not yet ready for unrestricted public use.**
 
-The product experience is functional in guest mode and the core AI routes are
-implemented. Supabase Postgres is the only application data plane and its
-credit runtime has been verified. The remaining launch blockers include live
-identity verification, runtime database connectivity from the production host,
-a durable queue, distributed cost controls, monitoring and verification of
-external media and payment providers.
+The product experience is functional in guest and signed-in modes and the core
+AI routes are implemented. Supabase Auth and Postgres are the identity and data
+planes. The product is suitable for a small, staffed private pilot after the
+payment sandbox matrix and deployed release checks pass. Unrestricted public
+launch remains blocked by distributed cost controls, durable background replay,
+external monitoring, backup restoration, load testing and production-provider
+verification.
+
+## Audit snapshot: 2026-08-14
+
+- An external source review was checked against the running tree. Its claimed
+  syntax errors in onboarding and billing were false; both routes compile and
+  the release tests cover them.
+- `npm test`: 251/251 pass, including new prepaid-entitlement regressions.
+  `npm run lint` and the Next.js 16.3 production build pass.
+- `npm audit --omit=dev`: zero known production vulnerabilities after updating
+  the transitive `nanoid` lock entry to 3.3.18.
+- Live database checks pass: schema/RLS across 34 tables and 16 migrations,
+  credits 16/16, payments 15/15 and durable data 12/12.
+- The credentialed ExpressPay sandbox probe is still blocked with provider
+  status 4 because this machine's outbound IP is not on the merchant allowlist.
+  Billing remains disabled until that probe and the real sandbox matrix run
+  from the allowlisted staging host.
+- The paid pilot is now described truthfully as one prepaid month per approved
+  payment with no automatic renewal. Public top-up and cancellation promises
+  were removed because neither belongs to this manual-renewal pilot.
+- Paid credits can only be granted by the verified payment transaction. The
+  free calendar-month refresher no longer grants a second paid allowance at a
+  month boundary; expired paid access falls back to Explorer and inconsistent
+  paid state fails closed.
+- Unexpected auth resolution, credit settlement and checkout-state persistence
+  failures now produce structured, redacted diagnostics with request context.
+- Historical snapshots below are retained as dated evidence. Identity notes
+  referring to the retired provider are superseded by Supabase Auth.
 
 ## Audit snapshot: 2026-08-10
 
@@ -36,8 +64,7 @@ external media and payment providers.
   `DECISIONS.md`. Whether the Hostinger runtime can reach IPv6 is still worth
   confirming, but it was never the cause and the session pooler is used
   regardless.
-- Clerk and the canonical application URL are absent locally, so sign-in,
-  webhook and tenant-isolation flows remain unverified.
+- Identity and tenant-isolation flows were not verified in that dated pass.
 - The local shell is Node 24.15.0 while the supported production runtime is
   Node 22.x (`engines` and `.nvmrc`). CI and Hostinger must use Node 22.
 - Credit enforcement now fails closed for authenticated work when the ledger is
@@ -55,13 +82,10 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
 - `npm test`: 194/194 pass. The suite has grown since the 2026-08-10 snapshot
   (169), including workspace-isolation, voice and credit cases.
 - `npm run lint` and `npm run build`: pass on Next.js 16.3.0.
-- `npm run prod:check`: READY. The required production environment is now present
-  locally — OpenRouter key, a credential-free HTTPS `NEXT_PUBLIC_APP_URL`, all
-  three Clerk keys (publishable, secret and webhook signing), `DATABASE_URL` and
-  explicitly set feature flags. Billing, the browser pilot and the external error
-  webhook are intentionally disabled and reported as warnings, not errors. This
-  supersedes the 2026-08-10 note that Clerk and the canonical URL were absent
-  locally; the keys' presence still does not constitute live verification.
+- `npm run prod:check`: READY for the configuration present in that dated pass.
+  Billing, the browser pilot and the external error webhook were intentionally
+  disabled and reported as warnings, not errors. Configuration presence did
+  not constitute deployed end-to-end verification.
 - Not re-run this pass: `npm audit --omit=dev`, `db:postgres:verify`,
   `credits:verify`, `data:verify` and the live domain/video-catalogue checks.
   Treat their last-known-good results as unchanged, not re-confirmed.
@@ -69,16 +93,11 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
   reads `/api/credits` and shows the available balance, the amount reserved while
   a run is in progress, the plan and the per-task cost guide, with a link to
   plans. It is wired into the signed-in app shell.
-- Source review of the identity and credit path found no required code changes.
-  Sign-in and sign-up delegate to Clerk with a guest fallback when keys are
-  absent; session state uses `UserButton`/`Show`; workspace and tenancy isolation
-  validate every identity value before it becomes a database scope and are
-  unit-tested. The credit ledger enforces double-entry writes, an atomic
+- The credit ledger enforces double-entry writes, an atomic
   `available_credits >= required` balance guard, a 15-minute reservation TTL that
   is reclaimed on the next touch, settlement capped at the reserved amount with
-  failures charging nothing, and a lazy monthly allowance that needs no
-  scheduler. Live signed-in, webhook-sync and tenant-isolation verification
-  remain open under Gate 1.
+  failures charging nothing. The 2026-08-14 audit supersedes the old allowance
+  description and records the current Supabase Auth identity boundary.
 
 ## Capability matrix
 
@@ -95,32 +114,31 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
 | Video generation | Implemented with quote/status/download flow | Compatible OpenRouter video model | Production generation and retention test pending | Unverified externally |
 | Voice recording and transcription | Implemented | Browser microphone and STT model | Physical mobile-browser test pending | Private pilot |
 | PDF and Word export | Implemented | None | Automated build passes; document QA suite pending | Pilot-ready |
-| Clerk sign-in and sign-up UI | Implemented | Clerk dev/prod keys, domain and strategies | Keys now present locally; end-to-end sign-in/sign-out/session-restore test pending | Conditional |
-| Google and email/password sign-in | Supported by Clerk UI | Enable both in Clerk; production Google OAuth credentials | End-to-end auth test pending | Blocked |
-| Last-used sign-in hint | Supported natively by Clerk | Enable for the existing Clerk instance | Visual test pending | Blocked |
-| Personal and organization tenancy | Implemented in application contracts | Clerk Organizations settings and keys | Cross-tenant integration tests pending | Private pilot |
-| Cloud conversations and projects | Implemented on Supabase Postgres | Clerk plus `DATABASE_URL` | Repository checks pass; live production-host and tenant-isolation verification pending | Private pilot |
+| Supabase sign-in and sign-up UI | Implemented | Supabase URL, publishable key, redirect allowlist and providers | Unit/config checks pass; deployed sign-up, recovery and session-restore test pending | Conditional |
+| Google and email/password sign-in | Supported by Supabase Auth | Enable providers and production Google OAuth credentials | Deployed end-to-end auth test pending | Conditional |
+| Personal tenancy | Implemented in application contracts | Supabase Auth and Postgres | Workspace-isolation unit tests pass; live cross-user test pending | Private pilot |
+| Organization tenancy | Feature-gated | Team-workspace flag plus reviewed membership lifecycle | Keep disabled for the individual paid pilot | Later pilot |
+| Cloud conversations and projects | Implemented on Supabase Postgres | Supabase Auth plus `DATABASE_URL` | Repository checks pass; live production-host and tenant-isolation verification pending | Private pilot |
 | Supabase Postgres data plane | Runtime repositories, migrations, RLS and pooler client implemented | Supabase project and connection strings | Credit and data verification pass; Hostinger connectivity pending | Pilot-ready |
 | Usage ledger and cost records | Schema and write contracts implemented | Durable database | Live reconciliation test pending | In progress |
 | Rate limiting | Identity-aware burst/day limits; per workspace when signed in, network address as an anonymous backstop | None | Still process-local, so limits reset on restart and do not coordinate across instances | Pilot-ready, not production-scale |
-| Anonymous access to expensive work | Agent, Studio, image and video require an identified workspace whenever Clerk is configured | Clerk keys | End-to-end test pending live keys | Implemented |
+| Anonymous access to expensive work | Agent, Studio, image and video require an identified workspace whenever Supabase Auth is configured | Supabase Auth settings | Unit tests pass; deployed test pending | Implemented |
 | Credit engine | Landed-cost conversion, per-feature reserve/floor/ceiling, settlement and plan economics implemented and unit tested | None | Verified | Ready |
 | Credit ledger and reservations | Reserve, settle, release, expiry and grant on Supabase Postgres; wired into chat, agent, image and video | `DATABASE_URL` | `npm run credits:verify` passes 11/11 against the live database, including ledger reconciliation | Pilot-ready |
-| Monthly allowance grants | Lazy renewal on first touch of a new period; unused allowance expires, purchased credits survive | None, no scheduler required | Covered by `npm run credits:verify` including a rollover case | Pilot-ready |
+| Allowance grants | Explorer refreshes lazily each calendar month; paid allowances come only from verified prepaid payments | None for Explorer; verified provider for paid access | Unit regressions pass; live expiry transition pending | Pilot-ready |
 | Credit interface | `/api/credits` returns balance, holds and cost table; `CreditBalance.tsx` displays balance, in-progress reservations, plan and cost guide in the signed-in shell | None | Component wired in; live signed-in visual check pending | Pilot-ready |
-| Subscriptions and credits | Catalog and ledger schema prepared | Database, payment provider and policies | No live entitlement activation | In progress |
+| Prepaid monthly access and credits | Verified payment activates one month and grants once; expiry falls back to Explorer | Database, payment provider and policies | Contract/unit tests pass; real sandbox activation pending | Private-pilot candidate |
 | ExpressPay hosted checkout | Provider-isolated adapter, durable attempts, return/notification routes, server-side query verification and idempotent activation implemented | Merchant sandbox key, public HTTPS callback URL and migrations `0006`/`0007` | 113 unit/contract tests and production build pass; real sandbox payment pending | Blocked intentionally |
 | Logs and request IDs | Structured redacted logs implemented | Host log retention | External alerting absent | Pilot-ready |
 | Customer Quality Loop | Feedback, opt-in evidence, receipts, rule-first triage, bounded AI evaluation and reviewer desk implemented | Database migration, reviewer IDs and optional alert webhook | 7 focused unit tests and responsive browser checks pass; live urgent alert still requires verification | Private pilot |
 | Error monitoring | Runtime logs only | Sentry or equivalent | Not configured | Missing |
-| Security headers | Hardened; Clerk-compatible CSP | Clerk domain DNS | Production header scan pending | Implemented |
+| Security headers | Hardened for Supabase Auth and hosted providers | Production domains | Local smoke checks pass; production header scan pending | Implemented |
 | Dependency security | Production dependency audit clean | Regular update process | `npm audit --omit=dev` passes | Ready |
 
 ## Architecture boundary
 
-- Clerk is the only identity and session authority.
+- Supabase Auth is the only identity and session authority.
 - Supabase will provide Postgres, private object storage and optional Realtime.
-- Supabase Auth must not become a second user identity system.
 - Next.js route handlers enforce product rules and server-side authorization.
 - OpenRouter remains behind the server; provider keys never enter the browser.
 - Long Agent, image and video work must move to a durable queue before scale.
@@ -130,14 +148,12 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
 
 ### Gate 1: identity
 
-- [ ] Add Clerk test keys locally and live keys to Hostinger.
-- [ ] Configure `aithreesixty.tech` as the production root and allow only the
-  required AI360 subdomains.
-- [ ] Enable Google plus verified email/password.
-- [ ] Enable the native last-used-method hint.
-- [ ] Configure the production Clerk webhook and replay a test event.
-- [ ] Pass sign-up, sign-in, password reset, sign-out and session restoration on
-  desktop and mobile.
+- [x] Implement Supabase Auth as the single account and session authority.
+- [ ] Add the production origin and `/auth/callback` to Supabase redirect URLs.
+- [ ] Enable Google plus verified email/password and configure production OAuth.
+- [ ] Pass sign-up, email confirmation, sign-in, password reset, Google sign-in,
+  sign-out and session restoration on desktop and mobile.
+- [ ] Pass a two-account isolation test against the deployed database.
 
 ### Gate 2: durable data
 
@@ -174,9 +190,9 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
   `src/lib/mysql.ts`, `database/schema.sql`, the MySQL migration script and the
   `mysql2` dependency are deleted. Verified with `npm run data:verify`: 12 of 12
   checks pass against the live database.
-- [x] Deliver the monthly allowance. Renewal is lazy: the first touch of a new
-  period expires unused allowance and grants the current plan's credits, so no
-  scheduled job can fail to run.
+- [x] Deliver the allowance policy. Explorer refreshes lazily on first touch of
+  a new calendar month. Paid pilot credits are granted only by a verified
+  payment and never refresh without another payment.
 - [ ] Add application, workspace and user spend caps.
 - [ ] Add provider timeouts, circuit breakers and failover metrics.
 
@@ -221,7 +237,7 @@ npm run prod:check
 These actions change external state, incur cost or depend on private credentials:
 
 1. Purchase/activate Supabase Pro and select the permanent project region.
-2. Add Clerk development and production credentials without sending secrets in chat.
+2. Configure the Supabase Auth production providers and redirect allowlist without sending secrets in chat.
 3. Configure the production Google OAuth consent screen and credentials.
 4. Approve an error-monitoring provider and its data-retention settings.
 5. Enable ExpressPay only after the complete sandbox matrix and server-side query reconciliation pass.
