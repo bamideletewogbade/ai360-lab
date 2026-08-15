@@ -1,5 +1,79 @@
 # Decision and incident log
 
+## 2026-08-15 · Incident · Media Studio showed fake assets instead of generating
+
+**Symptom.** In production, clicking Generate in Media Studio did not generate
+anything — it added a static placeholder image to the gallery and switched to
+the Asset Gallery tab. Reported as "it just navigates to the assets column".
+
+**Root cause.** `MediaStudio` was a demo shell, not a wired feature. It posted a
+body the real studio APIs do not accept (raw `prompt`/`aspectRatio`/`style` to
+routes that expect an approved creative direction with brand context), never
+checked `response.ok`, read a `data.url` field the APIs do not return, and fell
+back to static files (`/media-hero-art.jpg`, `/media-motion-frame.jpg`) so every
+attempt "succeeded" — then switched to the gallery tab, which is exactly the
+navigation the user saw. The production generation machinery (credit gates,
+provider loops, durable jobs, storage) was already working; the surface simply
+never called it correctly.
+
+**Fix.**
+
+- `/api/studio/image` and `/api/studio/video` now accept a raw-prompt mode
+  (a `prompt` field) that passes the person's own words through with only light
+  art-direction/execution guardrails, reusing the same credit gate, provider
+  loop, durable job and storage paths as the branded Studio flow. Branded mode
+  is unchanged.
+- Media Studio now calls those APIs honestly: it checks `response.ok`, reads
+  the real `image` / `downloadUrl` fields, and shows the actual error (sign-in
+  required, not enough credits with a top-up hint, provider failure) instead of
+  fabricating success.
+- Video follows the production quote-first pattern: click renders → it fetches
+  the live quote → shows the price in credits → the person confirms → submit →
+  poll every 20s → the finished clip appears in the gallery. Failed renders
+  return credits and say so.
+- Removed the unsupported 4:3 aspect ratio and relabeled clip durations to the
+  supported 4s/8s; demo gallery items are now labelled "Example" rather than
+  "Today".
+
+**Guardrail.** A client surface that ignores `response.ok` and falls back to
+static files is a demo, and demos must not live inside the paid product. Any
+surface that triggers paid work must surface the real error, and its request
+must be validated against the route it calls. The "navigates to assets" report
+was the visible symptom of a fabricated success path.
+
+**Verified.** The studio routes were already exercised live end to end for the
+branded flow (2026-08-07 run). The raw-prompt paths reuse the same machinery;
+re-run an image and a video generation from Media Studio in production before
+declaring this closed.
+
+## 2026-08-15 · Decision · The "need credits" moment offers both a top-up and a plan
+
+The insufficient-credits 402 in Media Studio used to show only a toast pointing
+at Settings. The moment a person hits the credits wall is exactly when they are
+willing to pay, so the surface now shows an inline panel with both ways to
+continue, side by side: the quick top-up bundles (GH₵50 → 40, GH₵100 → 90,
+GH₵200 → 185) for this one render, and the paid monthly plans (Everyday,
+Builder, Team) for regular use, each linking straight into its checkout.
+
+**Why both, and why in that order.** A top-up is the MoMo-sized answer to
+"I just need this one image or clip", and the overflow mechanic is useless to
+someone at zero credits without one. But a plan is the better deal per credit
+and the healthier relationship for us, so the panel is honest about it (top-ups
+cost more per credit — enforced by `tests/pricing-economics.test.ts`) and the
+plans are labelled as such. This mirrors the frontier pattern of offering the
+quick purchase and the subscription at the same friction point.
+
+**Implementation.** `/api/credits` now returns a compact public `plans` list
+(slug, name, price, included credits, featured — never internal economics), and
+Media Studio renders the panel on any 402 from image, video quote or video
+submit, keeping the video quote visible so the person can confirm again once
+topped up. Prices come from the API, never hardcoded in the component. The
+panel dismisses; the 402 toast remains as the lightweight companion message.
+
+**Revisit if.** The panel measurably cannibalises Everyday signups (top-ups
+should be the occasional convenience, not the default), or if analytics show
+people topping up when a plan would have served them better.
+
 ## 2026-08-15 · Decision · One-time credit top-ups are back on the table, and now shipped
 
 The 2026-08-08 decision deferred top-ups to prove one purchase shape first

@@ -13,6 +13,10 @@ type ImageRequest = {
   approved?: boolean
   projectId?: string
   intent?: unknown
+  /** Raw-prompt mode: generate straight from what the person typed, with no brand brief. */
+  prompt?: string
+  /** Art-direction line for raw-prompt mode, e.g. "Cinematic Photoreal". */
+  style?: string
   kind?: 'logo' | 'social' | 'flyer'
   businessName?: string
   brand?: {
@@ -48,7 +52,16 @@ function clean(value: unknown, max = 2_000) {
   return typeof value === 'string' ? value.replace(/\r\n?/g, '\n').trim().slice(0, max) : ''
 }
 
+const PROMPT_MODE_DIRECTION = '\n\nArt direction: modern, distinctive, premium but approachable, commercially usable, strong hierarchy, generous negative space. Avoid generic AI imagery, mockup frames, watermarks, visible third-party logos, trademarks and tiny illegible details.'
+
 function promptFor(body: ImageRequest) {
+  // Raw-prompt mode passes the person's own words through, with only a light
+  // art-direction suffix and their chosen style name appended.
+  const rawPrompt = clean(body.prompt, 5_000)
+  if (rawPrompt) {
+    const style = clean(body.style, 120)
+    return `${rawPrompt}${PROMPT_MODE_DIRECTION}${style ? ` Style: ${style}.` : ''}`
+  }
   const kind = body.kind === 'logo' ? 'logo concept' : body.kind === 'flyer' ? 'campaign flyer' : 'social media campaign graphic'
   const colors = body.brand?.colors
     ?.slice(0, 4)
@@ -134,7 +147,10 @@ export async function POST(request: Request) {
       requestId: log.requestId,
     }, { status: 409, headers: log.headers() })
   }
-  if (!['logo', 'social', 'flyer'].includes(body.kind || '') || !clean(body.businessName) || !clean(body.asset?.content)) {
+  // Raw-prompt mode needs only the person's words; the branded mode needs the
+  // approved creative direction.
+  const rawPrompt = clean(body.prompt, 5_000)
+  if (!rawPrompt && (!['logo', 'social', 'flyer'].includes(body.kind || '') || !clean(body.businessName) || !clean(body.asset?.content))) {
     log.finish(400, { outcome: 'incomplete_request' })
     return Response.json({ error: 'The approved asset is incomplete.', requestId: log.requestId }, {
       status: 400,
@@ -257,10 +273,10 @@ export async function POST(request: Request) {
       }
 
       await recordUsageEventSafe({
-        requestId: log.requestId, route: '/api/studio/image', feature: `image.${body.kind}`,
+        requestId: log.requestId, route: '/api/studio/image', feature: `image.${body.kind || 'social'}`,
         provider: 'openrouter', model, outputTokens: result.usage?.total_tokens,
         actualCostUsd: result.usage?.cost, latencyMs, outcome: 'success',
-        metadata: { kind: body.kind, attempt: attempt + 1, mediaType },
+        metadata: { kind: body.kind || 'social', promptMode: Boolean(rawPrompt), attempt: attempt + 1, mediaType },
       })
 
       log.info('studio.image.completed', {
@@ -301,9 +317,9 @@ export async function POST(request: Request) {
     outcome: 'all_providers_failed',
   })
   await recordUsageEventSafe({
-    requestId: log.requestId, route: '/api/studio/image', feature: `image.${body.kind}`,
+    requestId: log.requestId, route: '/api/studio/image', feature: `image.${body.kind || 'social'}`,
     provider: 'openrouter', model: models[0], latencyMs: Math.round(performance.now() - startedAt),
-    outcome: 'all_providers_failed', metadata: { attemptedModels: models },
+    outcome: 'all_providers_failed', metadata: { promptMode: Boolean(rawPrompt), attemptedModels: models },
   })
   await gate.settle('failure')
   if (durable && requester.context) {

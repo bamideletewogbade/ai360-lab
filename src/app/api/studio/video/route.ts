@@ -27,6 +27,8 @@ type VideoRequest = {
   intent?: unknown
   approved?: boolean
   acceptedCostUsd?: number
+  /** Raw-prompt mode: render straight from what the person typed, with no brand brief. */
+  prompt?: string
   businessName?: string
   brand?: { summary?: string; voice?: string; tagline?: string }
   campaign?: { name?: string; bigIdea?: string; callToAction?: string }
@@ -119,7 +121,15 @@ function readJob(token: string) {
   }
 }
 
+const PROMPT_MODE_EXECUTION = '\n\nExecution: one coherent moment with natural lighting and a strong first frame. No watermark, fake interface, visible third-party logos, trademarks or generated text. Leave clean visual space for editable captions to be added later.'
+
 function promptFor(body: VideoRequest, intent: MediaIntent) {
+  // Raw-prompt mode passes the person's own words through with the execution
+  // guardrails only, so a prompt like "drone over Accra at sunset" stays theirs.
+  const rawPrompt = clean(body.prompt, 5_000)
+  if (rawPrompt) {
+    return `${rawPrompt}${PROMPT_MODE_EXECUTION}${intent.audio === 'off' ? ' No audio.' : ` Use ${intent.audio} audio only.`}`
+  }
   return `Create a polished ${intent.durationSeconds}-second ${intent.aspectRatio} promotional video for ${clean(body.businessName, 120)}.
 
 Brand: ${clean(body.brand?.summary)}
@@ -349,7 +359,17 @@ export async function POST(request: Request) {
       }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
     }
 
-    if (body.action !== 'submit' || !body.approved || !clean(body.asset?.content) || !clean(body.businessName)) {
+    if (body.action !== 'submit' || !body.approved) {
+      log.finish(409, { outcome: 'approval_required' })
+      return Response.json({
+        error: 'Approve the video asset and accept the current price first.',
+        requestId: log.requestId,
+      }, { status: 409, headers: log.headers() })
+    }
+    // Raw-prompt mode needs only the person's words; the branded mode needs
+    // the approved scene plan.
+    const submitPrompt = clean(body.prompt, 5_000)
+    if (!submitPrompt && (!clean(body.asset?.content) || !clean(body.businessName))) {
       log.finish(409, { outcome: 'approval_required' })
       return Response.json({
         error: 'Approve the video asset and accept the current price first.',
