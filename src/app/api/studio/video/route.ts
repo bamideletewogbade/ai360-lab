@@ -294,7 +294,7 @@ export async function POST(request: Request) {
           const settlement = await settleReservation({
             context: requester.context,
             reservationId,
-            estimate: estimateCredits('video', { quotedUsd: durableJob?.quotedCostUsd }),
+            estimate: estimateCredits('video', { quotedUsd: durableJob?.quotedCostUsd ?? undefined }),
             measuredUsd: null,
             outcome: 'failure',
           })
