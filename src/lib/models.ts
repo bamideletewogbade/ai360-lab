@@ -52,6 +52,18 @@ export function isChatMode(value: unknown): value is ChatMode {
 }
 
 /**
+ * Modes priced well above the fast default, so selecting them explicitly stays
+ * metered even though plain chat is included with a plan.
+ *
+ * `gpt` is the same cheap model the automatic route uses, so picking it is not
+ * a premium choice. `gemini` is the default vision model and stays included;
+ * add it here if live data shows it being run at abusive volume.
+ */
+export function isPremiumChatMode(mode: ChatMode) {
+  return mode === 'claude' || mode === 'kimi'
+}
+
+/**
  * Reasoning budget.
  *
  * Some models reason by default and cannot have it switched off. Left uncapped,

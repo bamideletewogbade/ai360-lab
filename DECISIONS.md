@@ -1,5 +1,143 @@
 # Decision and incident log
 
+## 2026-08-15 · Decision · One-time credit top-ups are back on the table, and now shipped
+
+The 2026-08-08 decision deferred top-ups to prove one purchase shape first
+(renewal, reversal, refund). Monthly checkout is now live in production and a
+real purchase has succeeded, so the reason to defer no longer holds. A top-up
+reuses the exact ExpressPay hosted checkout, query verification and one-time
+manual payment — no new money-path risk.
+
+**Why it makes sense now.**
+
+- It completes the overflow mechanic: "1 credit per extra message" dead-ended
+  at zero credits (wait for tomorrow, or pay GH₵125 for a whole month). A
+  GH₵50/40-credit bundle is the natural MoMo-sized answer at the moment a
+  person is engaged.
+- It gives free Explorer users a paid on-ramp: today they cannot do any paid
+  work without committing to a full month.
+- It cannot cannibalize plans: every top-up costs more per credit than the
+  Everyday plan (GH₵1.25 / 1.11 / 1.08 vs GH₵1.04), enforced by
+  `tests/pricing-economics.test.ts`. Hoarding top-ups is a worse deal than
+  subscribing, so the economics self-correct.
+
+**Implementation.** Checkout accepts exactly one item — a plan or a top-up
+(`checkoutRequestSchema`); top-up attempts store `cadence = 'one_time'` with
+`metadata.itemType = 'topup'`; `applyVerifiedPayment` branches so a verified
+payment adds purchased credits (ledger `top_up` entry) and touches neither the
+subscription nor the monthly allowance; the catalogue is the source of truth
+for credits and price at activation, not the attempt metadata. No migration
+needed: `cadence` already allowed `one_time`, `metadata` is jsonb, and the
+ledger already had `top_up`. Settings shows a "Buy more credits" section
+(40/90/185), the checkout page shows a one-time review with an honest
+"a plan is better value" note, and receipts name the bundle.
+
+**Guardrails.** Top-ups never renew and never extend access; purchased credits
+are permanent (they survive the monthly allowance reset by construction). The
+same amount/currency/reference verification and idempotent activation apply as
+for plans. A top-up a person did not recognise is reconciled from the ledger
+like any other payment.
+
+**Revisit if.** Pilot data shows top-up volume cannibalising Everyday
+subscriptions despite the per-credit premium, or the bundles need rebalancing
+against what people actually buy.
+
+## 2026-08-15 · Decision · Past the daily cap, chat overflows at a flat 1 credit per message
+
+The "included chat" fair-use cap from the earlier decision today was a hard
+stop: pass it and you were blocked until the window reset, even if you were a
+paying user willing to pay per message. This decision makes the transition from
+free to paid seamless and closes the three leaks in the first shape.
+
+**What changed.**
+
+- **Metered chat bypasses the daily cap.** Live research, files and premium
+  models are already paid for by the credit gate, so the free-chat allowance
+  never limits them. Previously the cap ran before the gate and cut off paying
+  users doing paid work — the biggest fairness bug in the first shape.
+- **Signed-in users past the cap pay a flat 1 credit per extra message**
+  (`chat.overflow`, floor/reserve/ceiling all 1) instead of being blocked. A
+  typical turn costs ~GH₵0.01 against GH₵0.26 of credit value, and the cap
+  absorbs normal use, so overflow is rare and the margin is comfortable. An
+  unusually long turn is still capped at the 1-credit reservation; the ledger
+  keeps recording the real measured cost so overage stays visible.
+- **Anonymous callers stay hard-stopped** with a sign-in hint: they have no
+  credit account to overflow onto, so paying per message is not available to
+  them.
+- **The daily counter is durable.** `lab_chat_daily_counters` (migration
+  0017) is keyed by workspace/IP and UTC date, so a deploy cannot reset the
+  allowance and a second server instance cannot double it, and "resets at
+  midnight UTC" is now literally true. When the billing database is down, the
+  route falls back to the in-memory daily bucket so chat never fails; the
+  12/min burst limit still applies.
+- The guide and pricing copy now say "extra chat after your daily limit: 1
+  credit each", and the product-knowledge block tells the AI the caps and the
+  overflow price.
+
+**Economics.** The 10/60/120/150 caps bound free cost to ~GH₵3/18/36/45 per
+fully-used workspace per month (13%/10%/4% of plan revenue for the paid
+plans), and overflow billing converts post-cap usage into the highest-margin
+work in the product. Both directions stay profitable.
+
+**Guardrails.** Overflow is metered, never free — a user without credits gets
+the same 402 as any other paid feature. The minute bucket still bounds bursts.
+`AI360_RATE_CHAT_PER_DAY` remains an operator override.
+
+**Revisit if.** Pilot data shows overflow volume or long-turn costs that make
+the flat credit mispriced, or the caps themselves need rebalancing against
+observed median daily use.
+
+## 2026-08-15 · Decision · Everyday chat is included; credits meter the heavy work
+
+Everyday chat on the fast model (AI-Auto / GPT) no longer draws from the credit
+meter. Live web research, attached files, deliberately premium models (Claude
+Sonnet 5, Kimi K3), agent execution, images and video stay metered.
+
+**Why.** A typical chat turn costs ~GH₵0.01 landed, which converted to exactly
+one credit because of the one-credit floor — so pricing felt static ("every
+message costs 1 credit") regardless of the work done, and 120 Everyday credits
+read as only ~120 short messages. Frontier products converged on the opposite
+shape: Perplexity meters only its multi-step Computer, ChatGPT/Claude meter
+with soft caps, and Cursor bills actual tokens with premium-model multipliers.
+The measurement plumbing (per-request tokens and cost, measured settlement)
+already existed; the floor was doing the pricing.
+
+**Implementation.**
+
+- `FEATURE_WEIGHTS.chat` is `0/0/0` and the chat route skips the credit gate
+  for plain chat entirely. Cost is bounded by a plan-aware fair-use daily cap
+  (Explorer 10, Everyday 60, Builder 120, Team 150; anonymous halves to 10)
+  enforced by the existing rate limiter, with a "resets at midnight UTC"
+  message instead of a credit denial. **Superseded 2026-08-15:** the cap moved
+  to a durable Postgres counter, metered work bypasses it, and signed-in users
+  pay a flat 1 credit per extra message instead of being blocked — see the
+  newer decision above.
+- `chat.premium` (floor 1, reserve 4, ceiling 8) meters explicitly selected
+  premium models at measured cost × 2 (`PREMIUM_MODEL_MULTIPLIER`), the
+  Cursor/Copilot "premium models consume credits faster" pattern. The
+  settlement still records the real measured amount in the ledger.
+- Agent plan approval is now free: planning is one small chat turn, and
+  rejecting a plan should cost nothing. Execution keeps the agent reservation.
+  This supersedes the 2026-08-05 "plan approval costs one credit" decision;
+  its intent (rejecting a plan must not cost most of the allowance) is served
+  better by free.
+- The AI can now answer questions about AI360 itself: `src/lib/product-knowledge.ts`
+  appends a compact public-facts block (features, plans, prices, credits,
+  languages, payment, honest limits) to the chat and agent system prompts.
+  Public facts only; a test guards against leaking internal economics.
+- `CREDIT_GUIDE`, the pricing page and What you can make advertise "everyday
+  chat is included" instead of "1 credit".
+
+**Guardrails.** Plain chat remains bounded: rate limits plus per-plan daily
+caps, and the premium set is deliberately only `claude`/`kimi` — `gemini` stays
+included as the default vision model; add it to `isPremiumChatMode` if live
+data shows it being run at abusive volume. Heavy-feature floors are unchanged
+in this step; rebalancing them to measured cost is the next phase.
+
+**Revisit if.** Pilot data shows chat abuse beyond the caps, the premium
+multiplier looks mispriced against real Claude/Kimi usage, or the fair-use caps
+(10/60/120/150) turn out wrong against observed median daily use.
+
 ## 2026-08-14 · Decision · ExpressPay owns phone collection
 
 AI360's checkout form no longer asks for a phone number. The customer reviews the

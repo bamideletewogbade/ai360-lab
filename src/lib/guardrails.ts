@@ -61,7 +61,12 @@ function consume(key: string, limit: number, windowMs: number) {
   return { allowed: true, resetAt: current.resetAt }
 }
 
-function configuredLimit(key: string, fallback: number) {
+/**
+ * An environment override for a limit, when one is set. Callers that enforce
+ * their own buckets (the chat route's durable daily counter) reuse this so an
+ * operator can still tune a limit without touching code.
+ */
+export function configuredLimit(key: string, fallback: number) {
   const value = Number(process.env[key])
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
 }
@@ -82,10 +87,42 @@ export const EXPENSIVE_SCOPES: ReadonlySet<RateScope> = new Set<RateScope>([
 /** Anonymous callers keep a deliberately small share of any scope's allowance. */
 const ANONYMOUS_SHARE = 0.5
 
+function rateLimitedResponse(scope: RateScope, result: { resetAt: number }, identified: boolean) {
+  const retryAfter = Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1_000))
+  const error = scope === 'agent'
+    ? 'You have reached the current Agent research limit. Please try again later.'
+    : scope === 'chat'
+      ? 'You have reached today\'s chat limit. It resets at midnight UTC.'
+      : 'You have reached the current usage limit. Please try again later.'
+  return Response.json(
+    {
+      error,
+      ...(identified ? {} : { hint: 'Signing in gives you your own allowance instead of one shared with your network.' }),
+    },
+    {
+      status: 429,
+      headers: {
+        'Retry-After': String(retryAfter),
+        'X-RateLimit-Remaining': '0',
+        'Cache-Control': 'no-store',
+      },
+    },
+  )
+}
+
+/**
+ * Best-effort in-memory daily bucket, used only when the durable counter is
+ * unreachable so chat keeps working (bounded by the per-minute limit) during a
+ * billing-database outage instead of failing or running unbounded.
+ */
+export function consumeDailyBucketFallback(key: string, limit: number) {
+  return consume(`${key}`, limit, 86_400_000)
+}
+
 export function rateLimit(
   request: Request,
   scope: RateScope,
-  defaults: { minute: number; daily: number },
+  defaults: { minute: number; daily: number | null },
   requester?: Requester,
 ) {
   const subject = requester
@@ -93,29 +130,15 @@ export function rateLimit(
   const prefix = `AI360_RATE_${scope.toUpperCase()}`
   const scale = subject.identified ? 1 : ANONYMOUS_SHARE
   const minuteLimit = Math.max(1, Math.floor(configuredLimit(`${prefix}_PER_MINUTE`, defaults.minute) * scale))
-  const dailyLimit = Math.max(1, Math.floor(configuredLimit(`${prefix}_PER_DAY`, defaults.daily) * scale))
   const minute = consume(`${scope}:minute:${subject.key}`, minuteLimit, 60_000)
-  const daily = consume(`${scope}:day:${subject.key}`, dailyLimit, 86_400_000)
-  const result = !minute.allowed ? minute : daily
+  if (!minute.allowed) return rateLimitedResponse(scope, minute, subject.identified)
 
-  if (!result.allowed) {
-    const retryAfter = Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1_000))
-    return Response.json(
-      {
-        error: scope === 'agent'
-          ? 'You have reached the current Agent research limit. Please try again later.'
-          : 'You have reached the current usage limit. Please try again later.',
-        ...(subject.identified ? {} : { hint: 'Signing in gives you your own allowance instead of one shared with your network.' }),
-      },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(retryAfter),
-          'X-RateLimit-Remaining': '0',
-          'Cache-Control': 'no-store',
-        },
-      },
-    )
+  // `daily: null` means the caller enforces its own daily allowance (chat does:
+  // signed-in users overflow onto credits instead of being blocked).
+  if (defaults.daily !== null) {
+    const dailyLimit = Math.max(1, Math.floor(configuredLimit(`${prefix}_PER_DAY`, defaults.daily) * scale))
+    const daily = consume(`${scope}:day:${subject.key}`, dailyLimit, 86_400_000)
+    if (!daily.allowed) return rateLimitedResponse(scope, daily, subject.identified)
   }
   return null
 }

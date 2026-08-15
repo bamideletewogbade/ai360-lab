@@ -156,7 +156,7 @@ export function createExpressPayProvider(fetcher: typeof fetch = fetch): Payment
         currency: input.currency,
         amount: (input.amountMinor / 100).toFixed(2),
         'order-id': input.idempotencyKey,
-        'order-desc': `AI360 ${input.planSlug} monthly plan`.slice(0, 256),
+        'order-desc': (input.description ?? `AI360 ${input.planSlug} monthly plan`).slice(0, 256),
         'redirect-url': input.returnUrl,
         'post-url': input.webhookUrl,
       })

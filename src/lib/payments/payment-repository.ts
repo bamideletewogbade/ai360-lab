@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { TransactionSql } from 'postgres'
-import { BILLING_CATALOG_VERSION, findBillingPlan, type BillingPlan } from '@/lib/billing/catalog'
+import { BILLING_CATALOG_VERSION, CREDIT_TOP_UPS, findBillingPlan, type BillingPlan } from '@/lib/billing/catalog'
 import { currentBillingPeriod } from '@/lib/billing/credits'
 import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { scopedIdempotencyKey } from '@/lib/idempotency'
@@ -29,6 +29,8 @@ export type PaymentAttempt = {
   activatedAt: string | null
   lastCheckedAt: string | null
   createdAt: string
+  /** `itemType` distinguishes a monthly plan from a one-time top-up. */
+  metadata: Record<string, unknown> | null
 }
 
 type AttemptRow = {
@@ -48,6 +50,7 @@ type AttemptRow = {
   activated_at: Date | null
   last_checked_at: Date | null
   created_at: Date
+  metadata: Record<string, unknown> | null
 }
 
 function attemptFromRow(row: AttemptRow): PaymentAttempt {
@@ -68,6 +71,7 @@ function attemptFromRow(row: AttemptRow): PaymentAttempt {
     activatedAt: row.activated_at?.toISOString() ?? null,
     lastCheckedAt: row.last_checked_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
+    metadata: row.metadata,
   }
 }
 
@@ -99,18 +103,38 @@ export async function readBillingProfile(context: WorkspaceAuthContext) {
   }
 }
 
-export async function createPaymentAttempt(input: {
+/**
+ * What a payment attempt purchases. Plans buy a month of access and its
+ * allowance; top-ups buy permanent purchased credits and nothing else.
+ */
+export type PaymentItem = {
+  slug: string
+  cadence: 'monthly' | 'one_time'
+  amountMinor: number
+  itemType: 'plan' | 'topup'
+}
+
+async function insertPaymentAttempt(input: {
   context: WorkspaceAuthContext
-  plan: BillingPlan
+  item: PaymentItem
   paymentMethod: PaymentMethod
   idempotencyKey: string
-}) {
+}): Promise<{ attempt: PaymentAttempt; reused: boolean }> {
   if (!isPostgresConfigured()) throw new Error('AI360_POSTGRES_NOT_CONFIGURED')
   const sql = getPostgres()
   const id = `pay_${crypto.randomUUID().replaceAll('-', '')}`
-  const amountMinor = input.plan.monthlyPriceGhs * 100
   const legacyKey = input.idempotencyKey.slice(0, 160)
   const paymentKey = scopedIdempotencyKey('payment', input.context.workspace.key, legacyKey)
+  // Plans predate the itemType marker, so a missing marker means 'plan'.
+  const metadata = input.item.itemType === 'plan'
+    ? { catalogVersion: BILLING_CATALOG_VERSION }
+    : { itemType: 'topup', catalogVersion: BILLING_CATALOG_VERSION }
+  const matches = (row: AttemptRow) =>
+    row.plan_slug === input.item.slug
+    && Number(row.amount_minor) === input.item.amountMinor
+    && row.payment_method === input.paymentMethod
+    && row.cadence === input.item.cadence
+    && (row.metadata?.itemType ?? 'plan') === input.item.itemType
 
   return sql.begin(async (tx) => {
     await ensureBillingIdentity(tx, input.context)
@@ -121,11 +145,7 @@ export async function createPaymentAttempt(input: {
          and idempotency_key in (${paymentKey}, ${legacyKey})
        order by created_at desc limit 1`
     if (existing) {
-      if (
-        existing.plan_slug !== input.plan.slug ||
-        Number(existing.amount_minor) !== amountMinor ||
-        existing.payment_method !== input.paymentMethod
-      ) throw new Error('PAYMENT_IDEMPOTENCY_MISMATCH')
+      if (!matches(existing)) throw new Error('PAYMENT_IDEMPOTENCY_MISMATCH')
       return { attempt: attemptFromRow(existing), reused: true }
     }
 
@@ -135,9 +155,9 @@ export async function createPaymentAttempt(input: {
          cadence, payment_method, amount_minor, currency, status, metadata)
       values
         (${id}, ${input.context.workspace.key}, ${input.context.userId}, 'expresspay',
-         ${paymentKey}, ${input.plan.slug}, 'monthly',
-         ${input.paymentMethod}, ${amountMinor}, 'GHS', 'created',
-         ${tx.json({ catalogVersion: BILLING_CATALOG_VERSION })})
+         ${paymentKey}, ${input.item.slug}, ${input.item.cadence},
+         ${input.paymentMethod}, ${input.item.amountMinor}, 'GHS', 'created',
+         ${tx.json(metadata)})
       on conflict (idempotency_key) do nothing
       returning *`
     if (inserted[0]) return { attempt: attemptFromRow(inserted[0]), reused: false }
@@ -147,13 +167,48 @@ export async function createPaymentAttempt(input: {
        where idempotency_key = ${paymentKey}
          and workspace_key = ${input.context.workspace.key}`
     if (!concurrent) throw new Error('PAYMENT_IDEMPOTENCY_CONFLICT')
-    if (
-      concurrent.plan_slug !== input.plan.slug ||
-      Number(concurrent.amount_minor) !== amountMinor ||
-      concurrent.payment_method !== input.paymentMethod
-    ) throw new Error('PAYMENT_IDEMPOTENCY_MISMATCH')
+    if (!matches(concurrent)) throw new Error('PAYMENT_IDEMPOTENCY_MISMATCH')
     return { attempt: attemptFromRow(concurrent), reused: true }
   }) as Promise<{ attempt: PaymentAttempt; reused: boolean }>
+}
+
+export function createPaymentAttempt(input: {
+  context: WorkspaceAuthContext
+  plan: BillingPlan
+  paymentMethod: PaymentMethod
+  idempotencyKey: string
+}) {
+  return insertPaymentAttempt({
+    context: input.context,
+    item: {
+      slug: input.plan.slug,
+      cadence: 'monthly',
+      amountMinor: input.plan.monthlyPriceGhs * 100,
+      itemType: 'plan',
+    },
+    paymentMethod: input.paymentMethod,
+    idempotencyKey: input.idempotencyKey,
+  })
+}
+
+export function createTopUpPaymentAttempt(input: {
+  context: WorkspaceAuthContext
+  slug: string
+  amountMinor: number
+  paymentMethod: PaymentMethod
+  idempotencyKey: string
+}) {
+  return insertPaymentAttempt({
+    context: input.context,
+    item: {
+      slug: input.slug,
+      cadence: 'one_time',
+      amountMinor: input.amountMinor,
+      itemType: 'topup',
+    },
+    paymentMethod: input.paymentMethod,
+    idempotencyKey: input.idempotencyKey,
+  })
 }
 
 export async function markPaymentInitiating(id: string, workspaceKey: string) {
@@ -332,12 +387,15 @@ export async function readPaymentReceipt(orderId: string) {
      where a.id = ${orderId} and a.provider = 'expresspay'`
   if (!row?.email) return null
   const plan = findBillingPlan(row.plan_slug)
+  const topUp = CREDIT_TOP_UPS.find((item) => item.slug === row.plan_slug)
   return {
     email: row.email,
     name: row.display_name,
-    planName: plan?.name ?? row.plan_slug,
+    planName: topUp
+      ? `${topUp.credits} work credits`
+      : plan?.name ?? row.plan_slug,
     amountGhs: Number(row.amount_minor) / 100,
-    credits: plan?.includedCredits ?? 0,
+    credits: topUp?.credits ?? plan?.includedCredits ?? 0,
     orderId,
   }
 }
@@ -394,6 +452,46 @@ export async function applyVerifiedPayment(payment: VerifiedPayment): Promise<Ap
                last_checked_at = now(), updated_at = now()
          where id = ${attempt.id}`
       return { status, activated: false, duplicate: false, orderId: attempt.id }
+    }
+
+    // A verified top-up is a one-time credit purchase: it adds purchased
+    // credits and touches neither the subscription nor the monthly allowance.
+    // The catalogue is the source of truth for credits and price, not the
+    // attempt metadata, so a stale catalog version cannot grant a different
+    // amount than the person was shown.
+    if ((attempt.metadata?.itemType ?? 'plan') === 'topup') {
+      const topUp = CREDIT_TOP_UPS.find((item) => item.slug === attempt.plan_slug)
+      if (!topUp || Number(attempt.amount_minor) !== topUp.priceGhs * 100) {
+        await tx`
+          update public.lab_payment_attempts
+             set status = 'review', failure_code = 'unknown_topup',
+                 provider_status_text = ${payment.statusText}, last_checked_at = now(), updated_at = now()
+           where id = ${attempt.id}`
+        return { status: 'review', activated: false, duplicate: false, orderId: attempt.id }
+      }
+
+      await tx`
+        update public.lab_credit_accounts
+           set available_credits = available_credits + ${topUp.credits},
+               version = version + 1, updated_at = now()
+         where workspace_key = ${attempt.workspace_key}`
+      await tx`
+        insert into public.lab_credit_ledger
+          (workspace_key, entry_type, credits_delta, balance_after, source_type,
+           source_id, idempotency_key, metadata)
+        select ${attempt.workspace_key}, 'top_up', ${topUp.credits}, available_credits,
+               'topup_payment', ${attempt.id}, ${`payment-topup-grant:${attempt.id}`},
+               ${tx.json({ topup: topUp.slug, credits: topUp.credits, catalogVersion: BILLING_CATALOG_VERSION, amountMinor: payment.amountMinor })}
+          from public.lab_credit_accounts where workspace_key = ${attempt.workspace_key}
+        on conflict (idempotency_key) do nothing`
+
+      await tx`
+        update public.lab_payment_attempts
+           set status = 'approved', provider_transaction_id = ${payment.providerTransactionId},
+               provider_status_text = ${payment.statusText}, verified_at = now(), activated_at = now(),
+               last_checked_at = now(), updated_at = now()
+         where id = ${attempt.id} and activated_at is null`
+      return { status: 'approved', activated: true, duplicate: false, orderId: attempt.id }
     }
 
     const plan = findBillingPlan(attempt.plan_slug)

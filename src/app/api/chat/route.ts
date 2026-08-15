@@ -1,11 +1,17 @@
 ﻿import type { NextRequest } from 'next/server'
-import { isChatMode, providerPreferences, REASONING_BUDGET, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models'
-import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrails'
+import { isChatMode, isPremiumChatMode, providerPreferences, REASONING_BUDGET, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models'
+import {
+  configuredLimit, consumeDailyBucketFallback, rateLimit, rejectLargeRequest, resolveRequester,
+  type Requester,
+} from '@/lib/guardrails'
+import { consumeChatDailyCounter } from '@/lib/chat-daily-cap'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { citationSources, LIVE_INFORMATION_TOOLS } from '@/lib/live-tools'
 import { recordUsageEventSafe } from '@/lib/usage'
 import { openCreditGate } from '@/lib/billing/credit-gate'
 import { chatFeature } from '@/lib/billing/credits'
+import { readBalance } from '@/lib/billing/credit-repository'
+import { productKnowledgeBlock } from '@/lib/product-knowledge'
 import { DEFAULT_LANGUAGE, isLanguageCode, languageDirective, type LanguageCode } from '@/lib/languages'
 import { policyForConversation, prepareConversationContext, type ContextMessage } from '@/lib/context-engineering'
 import {
@@ -27,6 +33,33 @@ type ContentPart =
   | { type: 'file'; file: { filename: string; file_data: string } }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * Everyday chat is included with a plan, so its cost is bounded by a daily
+ * fair-use cap instead of a credit meter. The cap follows the plan, because a
+ * free Explorer workspace must not be able to chat like a paid one. Anonymous
+ * callers sit at the Explorer allowance: they cannot buy credits, so over the
+ * cap they are asked to sign in rather than overflow onto a balance.
+ */
+const CHAT_FAIR_USE_DAILY: Record<string, number> = {
+  explorer: 10,
+  everyday: 60,
+  builder: 120,
+  team: 150,
+}
+
+async function chatFairUseDaily(requester: Requester) {
+  const planLimit = !requester.context
+    ? CHAT_FAIR_USE_DAILY.explorer
+    : await readBalance(requester.context)
+        .then((balance) => CHAT_FAIR_USE_DAILY[balance?.plan ?? 'everyday'] ?? 60)
+        .catch(() => {
+          // The meter must never block chat because the billing database is
+          // slow or down; the conservative paid-plan default still bounds cost.
+          return 60
+        })
+  return configuredLimit('AI360_RATE_CHAT_PER_DAY', planLimit)
+}
 
 function toProviderMessage(message: Msg) {
   if (!message.attachments?.length || message.role !== 'user') {
@@ -82,7 +115,13 @@ export async function POST(req: NextRequest) {
     return responseWithRequestId(tooLarge, log.requestId)
   }
   const requester = await resolveRequester(req)
-  const limited = rateLimit(req, 'chat', { minute: 12, daily: 80 }, requester)
+  // The minute bucket is the only hard rate limit here. The daily allowance is
+  // decided once the request is classified below: signed-in users who pass it
+  // are metered at one credit per extra message instead of being blocked, and
+  // anonymous callers (who have no credit account to overflow onto) get a
+  // durable per-day hard stop. The counter is durable, so a deploy cannot
+  // reset the allowance.
+  const limited = rateLimit(req, 'chat', { minute: 12, daily: null }, requester)
   if (limited) {
     log.finish(limited.status, { outcome: 'rate_limited' })
     return responseWithRequestId(limited, log.requestId)
@@ -113,14 +152,45 @@ export async function POST(req: NextRequest) {
     aiConfigured: Boolean(key),
   })
 
-  // Preview mode costs nothing, so it is never charged.
-  const credit = key
-    ? await openCreditGate({
-        request: req,
-        requester,
-        feature: chatFeature({ liveResearch: policy.liveInformation, hasAttachment: policy.hasAttachments }),
-        requestId: log.requestId,
-      })
+  let feature = chatFeature({
+    liveResearch: policy.liveInformation,
+    hasAttachment: policy.hasAttachments,
+    premium: isPremiumChatMode(mode),
+  })
+  let overflow = false
+  if (feature === 'chat') {
+    // Plain chat is the only surface bounded by the daily fair-use allowance;
+    // metered chat (research, files, premium models) is already paid for by the
+    // credit gate below, so the free allowance never limits it.
+    const dailyLimit = await chatFairUseDaily(requester)
+    const used = await consumeChatDailyCounter(requester.key)
+    const overDaily = used !== null
+      ? used > dailyLimit
+      : !consumeDailyBucketFallback(requester.key, dailyLimit).allowed
+    if (overDaily) {
+      if (!requester.identified) {
+        // Anonymous callers have no credit account to overflow onto, so the
+        // durable cap is a hard stop and the path to paying is signing in.
+        log.finish(429, { outcome: 'daily_limit', dailyLimit })
+        return responseWithRequestId(Response.json(
+          {
+            error: 'You have reached today\'s chat limit. It resets at midnight UTC.',
+            hint: 'Sign in to keep chatting — included chat is free, and extra messages after the daily limit cost 1 credit each.',
+          },
+          { status: 429, headers: { 'Cache-Control': 'no-store' } },
+        ), log.requestId)
+      }
+      feature = 'chat.overflow'
+      overflow = true
+    }
+  }
+  log.info('chat.billing', { feature, overflow, metered: feature !== 'chat' })
+
+  // Plain chat on the fast model is included with a plan: no reservation, no
+  // charge, bounded only by the fair-use cap above. Live research, files and
+  // deliberately premium models stay metered. Preview mode costs nothing too.
+  const credit = key && feature !== 'chat'
+    ? await openCreditGate({ request: req, requester, feature, requestId: log.requestId })
     : { gate: undefined, denied: undefined }
   if (credit.denied) {
     log.finish(credit.denied.status, { outcome: 'credit_denied' })
@@ -168,7 +238,7 @@ export async function POST(req: NextRequest) {
             messages: [
               {
                 role: 'system',
-                content: `${SYSTEM_PROMPT}\n\n${languageDirective(language)}\n\n${policy.liveInformation
+                content: `${SYSTEM_PROMPT}\n\n${productKnowledgeBlock()}\n\n${languageDirective(language)}\n\n${policy.liveInformation
                   ? 'Live information tools are available for this request. Use them only where freshness or verification matters.'
                   : 'Live information tools are not enabled for this request. Do not claim that you searched or verified current information.'}`,
               },

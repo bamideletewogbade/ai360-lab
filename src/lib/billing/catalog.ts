@@ -78,12 +78,19 @@ export const CREDIT_TOP_UPS = [
   { slug: 'topup-200', priceGhs: 200, credits: 185 },
 ] as const
 
+/**
+ * Display-ready strings, so every renderer prints the value directly. The
+ * ranges must stay in step with `FEATURE_WEIGHTS`; `tests/credits.test.ts`
+ * enforces it.
+ */
 export const CREDIT_GUIDE = [
-  { task: 'Quick answer or writing help', credits: '1' },
-  { task: 'Current web research or file review', credits: '2' },
-  { task: 'Multi-step agent workflow', credits: '3 to 8' },
-  { task: 'Generated image', credits: '3 to 6' },
-  { task: 'Four-second promotional video', credits: '12 to 20' },
+  { task: 'Everyday chat on AI-Auto', credits: 'Included with your plan' },
+  { task: 'Extra chat beyond your daily limit', credits: '1 credit each' },
+  { task: 'Premium model chat (Claude, Kimi)', credits: '1 to 8 credits' },
+  { task: 'Current web research or file review', credits: '2 to 4 credits' },
+  { task: 'Multi-step agent workflow', credits: '3 to 8 credits' },
+  { task: 'Generated image', credits: '3 to 6 credits' },
+  { task: 'Four-second promotional video', credits: '12 to 20 credits' },
 ] as const
 
 export function findBillingPlan(slug: string) {

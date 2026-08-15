@@ -1,11 +1,12 @@
 import { checkoutRequestSchema } from '@/lib/billing/checkout-contract'
-import { findBillingPlan } from '@/lib/billing/catalog'
+import { CREDIT_TOP_UPS, findBillingPlan } from '@/lib/billing/catalog'
 import { getOptionalAuthContext } from '@/lib/auth'
 import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { createExpressPayProvider, ExpressPayError } from '@/lib/payments/expresspay'
 import {
   createPaymentAttempt,
+  createTopUpPaymentAttempt,
   markPaymentFailed,
   markPaymentInitiating,
   markPaymentReady,
@@ -86,11 +87,18 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Refresh the page and try again.' }, { status: 400, headers: log.headers() })
     }
 
-    const plan = findBillingPlan(parsed.data.plan)
-    if (!plan || plan.monthlyPriceGhs === 0 || plan.assisted) {
+    const plan = parsed.data.plan ? findBillingPlan(parsed.data.plan) : null
+    const topUp = parsed.data.topup ? CREDIT_TOP_UPS.find((item) => item.slug === parsed.data.topup) : null
+    if (!plan && !topUp) {
+      log.finish(400, { outcome: 'checkout_item_required' })
+      return Response.json({ error: 'Choose an available plan or credit top-up.' }, { status: 400, headers: log.headers() })
+    }
+    if (plan && (plan.monthlyPriceGhs === 0 || plan.assisted)) {
       log.finish(400, { outcome: 'paid_plan_required' })
       return Response.json({ error: 'Choose an available individual plan.' }, { status: 400, headers: log.headers() })
     }
+    const itemSlug = plan?.slug ?? topUp!.slug
+    const amountMinor = plan?.monthlyPriceGhs ?? topUp!.priceGhs * 100
 
     if (
       process.env.NEXT_PUBLIC_BILLING_ENABLED !== 'true' ||
@@ -101,13 +109,14 @@ export async function POST(request: Request) {
         outcome: 'billing_not_activated',
         databaseConfigured: isPostgresConfigured(),
         paymentProviderConfigured: isPaymentProviderConfigured(),
-        plan: plan.slug,
+        plan: itemSlug,
+        itemType: topUp ? 'topup' : 'plan',
       })
       return Response.json({
         error: 'Payments are not open yet.',
         status: 'pilot_waitlist',
-        plan: plan.slug,
-        amountGhs: plan.monthlyPriceGhs,
+        plan: itemSlug,
+        amountGhs: amountMinor / 100,
       }, { status: 503, headers: log.headers({ 'Cache-Control': 'no-store' }) })
     }
 
@@ -117,12 +126,20 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Add a verified email to your account before paying.' }, { status: 409, headers: log.headers() })
     }
 
-    const created = await createPaymentAttempt({
-      context,
-      plan,
-      paymentMethod: parsed.data.paymentMethod,
-      idempotencyKey,
-    })
+    const created = plan
+      ? await createPaymentAttempt({
+        context,
+        plan,
+        paymentMethod: parsed.data.paymentMethod,
+        idempotencyKey,
+      })
+      : await createTopUpPaymentAttempt({
+        context,
+        slug: topUp!.slug,
+        amountMinor,
+        paymentMethod: parsed.data.paymentMethod,
+        idempotencyKey,
+      })
     attempt = { id: created.attempt.id, workspaceKey: created.attempt.workspaceKey }
     if (created.reused) {
       if (created.attempt.checkoutUrl && created.attempt.status === 'pending') {
@@ -149,10 +166,11 @@ export async function POST(request: Request) {
       idempotencyKey: created.attempt.id,
       workspaceKey: context.workspace.key,
       ownerId: context.userId,
-      planSlug: plan.slug,
-      amountMinor: plan.monthlyPriceGhs * 100,
+      planSlug: itemSlug,
+      description: topUp ? `AI360 ${topUp.credits} work credits` : undefined,
+      amountMinor,
       currency: 'GHS',
-      cadence: 'monthly',
+      cadence: topUp ? 'one_time' : 'monthly',
       preferredMethod: parsed.data.paymentMethod,
       customer: profile,
       returnUrl: `${origin}/api/billing/expresspay/return`,
@@ -165,7 +183,7 @@ export async function POST(request: Request) {
       providerReference: session.providerReference,
       checkoutUrl: session.checkoutUrl,
     })
-    log.finish(201, { outcome: 'checkout_created', orderId: ready.id, plan: plan.slug })
+    log.finish(201, { outcome: 'checkout_created', orderId: ready.id, plan: itemSlug, itemType: topUp ? 'topup' : 'plan' })
     return Response.json({
       orderId: ready.id,
       checkoutUrl: ready.checkoutUrl,

@@ -12,6 +12,7 @@ import {
 import type { WorkspaceAuthContext } from '@/lib/workspace'
 import { providerErrorDetails } from '@/lib/observability'
 import { languageDirective, type LanguageCode } from '@/lib/languages'
+import { productKnowledgeBlock } from '@/lib/product-knowledge'
 
 /**
  * The agent runtime.
@@ -306,8 +307,11 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
   // Applied to the stages the person reads: the plan they approve and the
   // answer they receive. Research findings stay in whatever language the
   // sources are in, because translating them early loses accuracy.
+  // Product knowledge rides along so agent answers can speak accurately about
+  // AI360 itself when the goal is about the product.
   const speaks = languageDirective(input.language)
-  const voice = `${SYSTEM_VOICE}\n\n${speaks}`
+  const knowledge = productKnowledgeBlock()
+  const voice = `${SYSTEM_VOICE}\n\n${knowledge}\n\n${speaks}`
 
   // Stage 1: plan. No tools in scope. Skipped entirely when the person has
   // already approved a plan, so approving does not pay for planning twice.
@@ -392,7 +396,7 @@ export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {
     try {
       const text = await call({
         stage: `execute:${taskId}`,
-        system: `You are a researcher for AI360 Agent. Investigate exactly this objective and report what you found, with evidence.\n\nObjective: ${objective}\n\nUse your search and page-reading tools when current information matters. Cite what you used. Report findings only, not a final answer to the wider goal.\n\n${SYSTEM_VOICE}`,
+        system: `You are a researcher for AI360 Agent. Investigate exactly this objective and report what you found, with evidence.\n\nObjective: ${objective}\n\nUse your search and page-reading tools when current information matters. Cite what you used. Report findings only, not a final answer to the wider goal.\n\n${SYSTEM_VOICE}\n\n${knowledge}`,
         messages: input.messages,
         maxTokens: EXECUTE_TOKENS, withTools: true,
         model: executeModel, fallbacks: executeFallbacks,

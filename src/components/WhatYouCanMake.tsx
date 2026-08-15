@@ -11,9 +11,10 @@ import styles from '@/app/marketing.module.css'
 /**
  * Costs are read from the credit engine rather than written into the copy, so
  * a change to a feature weight cannot leave this page advertising an old price.
+ * Everyday chat is the one exception: it is included with a plan, not metered.
  */
 const COST = {
-  chat: `${FEATURE_WEIGHTS.chat.floor} credit`,
+  chat: 'Included with your plan',
   research: `${FEATURE_WEIGHTS['chat.research'].floor} credits`,
   document: `${FEATURE_WEIGHTS['chat.document'].floor} credits`,
   agent: `${FEATURE_WEIGHTS.agent.floor} to ${FEATURE_WEIGHTS.agent.ceiling} credits`,
@@ -250,8 +251,8 @@ export function WhatYouCanMake() {
         </div>
         <div className={styles.darkGrid}>
           <div className={styles.darkCell}>
-            <b>Everyday questions stay cheap</b>
-            <p>Writing help, explanations and short conversations use the least. That is deliberate, because it is most of what people need.</p>
+            <b>Everyday questions are included</b>
+            <p>Writing help, explanations and short conversations come with your plan, up to a fair daily limit. Past it, extra messages cost 1 credit each — so nobody is ever locked out mid-conversation.</p>
           </div>
           <div className={styles.darkCell}>
             <b>Research and files cost a little more</b>

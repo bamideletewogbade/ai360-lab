@@ -11,6 +11,7 @@ import {
   FEATURE_WEIGHTS,
   landedCostGhs,
   planEconomics,
+  PREMIUM_MODEL_MULTIPLIER,
   reservationTtlSeconds,
   settleCredits,
   usdBudgetForCredits,
@@ -115,7 +116,7 @@ test('successful work charges measured cost and releases the unused hold', () =>
 })
 
 test('a task can never charge more than the amount the person already saw reserved', () => {
-  const estimate = estimateCredits('chat')
+  const estimate = estimateCredits('chat.premium')
   const settlement = settleCredits({ estimate, measuredUsd: 50, outcome: 'success' })
   assert.equal(settlement.charged, estimate.reserve, 'the reservation is the hard ceiling')
   assert.equal(settlement.cappedByCeiling, true, 'absorbed overage must be visible to operations')
@@ -146,25 +147,60 @@ test('an idempotent replay cannot start paid provider work twice', async () => {
 
 test('chat is classified by what the request actually asks for', () => {
   assert.equal(chatFeature({}), 'chat')
+  assert.equal(chatFeature({ premium: true }), 'chat.premium')
   assert.equal(chatFeature({ hasAttachment: true }), 'chat.document')
   assert.equal(chatFeature({ liveResearch: true }), 'chat.research')
   assert.equal(chatFeature({ liveResearch: true, hasAttachment: true }), 'chat.research')
+  assert.equal(chatFeature({ premium: true, liveResearch: true }), 'chat.research', 'live research beats the premium flag')
   assert.ok(FEATURE_WEIGHTS['chat.research'].floor > FEATURE_WEIGHTS.chat.floor)
+  assert.equal(FEATURE_WEIGHTS['chat.overflow'].reserve, 1, 'overflow chat must never ask for more than one credit')
+})
+
+test('overflow chat after the daily limit is a flat one-credit metered turn', () => {
+  const estimate = estimateCredits('chat.overflow')
+  assert.equal(estimate.reserve, 1)
+  assert.equal(estimate.ceiling, 1)
+
+  const typical = settleCredits({ estimate, measuredUsd: 0.01, outcome: 'success' })
+  assert.equal(typical.charged, 1, 'an extra chat message is one credit, never free')
+  const cheap = settleCredits({ estimate, measuredUsd: 0.0001, outcome: 'success' })
+  assert.equal(cheap.charged, 1, 'the one-credit floor holds even for a very cheap turn')
+  const long = settleCredits({ estimate, measuredUsd: 0.4, outcome: 'success' })
+  assert.equal(long.charged, 1, 'the reservation caps an unusually long turn at one credit')
+  assert.equal(long.measuredUsd, 0.4, 'the ledger still records the real measured cost')
+
+  const failed = settleCredits({ estimate, measuredUsd: 0.01, outcome: 'failure' })
+  assert.equal(failed.charged, 0, 'failed overflow chat charges nothing')
+  assert.equal(failed.released, 1, 'and returns the whole reservation')
+})
+
+test('premium-model chat is metered above measured cost, unlike included everyday chat', () => {
+  const premium = settleCredits({ estimate: estimateCredits('chat.premium'), measuredUsd: 0.01, outcome: 'success' })
+  const included = settleCredits({ estimate: estimateCredits('chat'), measuredUsd: 0.01, outcome: 'success' })
+  assert.equal(included.charged, 0, 'plain chat on the fast model is included and charges nothing')
+  assert.ok(premium.charged > included.charged, 'a premium model turn must never be the same price as the included default')
+  assert.equal(premium.charged, creditsForUsd(0.01 * PREMIUM_MODEL_MULTIPLIER), 'the multiplier applies to measured cost before conversion')
+  assert.ok(premium.charged <= FEATURE_WEIGHTS['chat.premium'].reserve)
 })
 
 test('every published credit-guide figure is backed by a real feature weight', () => {
   const publishedCeilings: Record<string, number> = {
-    'Quick answer or writing help': FEATURE_WEIGHTS.chat.floor,
-    'Current web research or file review': FEATURE_WEIGHTS['chat.research'].floor,
+    'Extra chat beyond your daily limit': FEATURE_WEIGHTS['chat.overflow'].ceiling,
+    'Premium model chat (Claude, Kimi)': FEATURE_WEIGHTS['chat.premium'].ceiling,
+    'Current web research or file review': FEATURE_WEIGHTS['chat.research'].ceiling,
     'Multi-step agent workflow': FEATURE_WEIGHTS.agent.ceiling,
     'Generated image': FEATURE_WEIGHTS.image.ceiling,
     'Four-second promotional video': FEATURE_WEIGHTS.video.ceiling,
   }
 
   for (const item of CREDIT_GUIDE) {
+    if (item.credits === 'Included with your plan') {
+      assert.equal(item.task, 'Everyday chat on AI-Auto', 'only the everyday-chat row may advertise no credit cost')
+      continue
+    }
     const backing = publishedCeilings[item.task]
     assert.ok(backing !== undefined, `the pricing page advertises "${item.task}" with no feature weight behind it`)
-    const highest = Number(item.credits.split(' to ').pop())
+    const highest = Number(item.credits.split(' to ').pop()?.replace(/[^0-9]/g, '') ?? '')
     assert.equal(highest, backing, `"${item.task}" advertises ${highest} credits but the engine charges up to ${backing}`)
   }
 })

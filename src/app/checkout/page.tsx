@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-export default async function CheckoutPage({ searchParams }: { searchParams: Promise<{ plan?: string }> }) {
-  const { plan = '' } = await searchParams
-  return <CheckoutExperience planSlug={plan} />
+export default async function CheckoutPage({ searchParams }: { searchParams: Promise<{ plan?: string; topup?: string }> }) {
+  const { plan = '', topup = '' } = await searchParams
+  return <CheckoutExperience planSlug={plan} topupSlug={topup} />
 }

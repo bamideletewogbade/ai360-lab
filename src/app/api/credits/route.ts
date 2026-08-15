@@ -1,6 +1,6 @@
 import { getOptionalAuthContext } from '@/lib/auth'
 import { readBalance } from '@/lib/billing/credit-repository'
-import { CREDIT_GUIDE } from '@/lib/billing/catalog'
+import { CREDIT_GUIDE, CREDIT_TOP_UPS } from '@/lib/billing/catalog'
 import { FEATURE_WEIGHTS } from '@/lib/billing/credits'
 import { errorDetails, requestLogger } from '@/lib/observability'
 
@@ -40,6 +40,8 @@ export async function GET(request: Request) {
           .map(([feature, weight]) => [feature, { from: weight.floor, to: weight.ceiling }]),
       ),
       guide: CREDIT_GUIDE,
+      // One-time credit bundles, so the interface never has to hardcode prices.
+      topUps: CREDIT_TOP_UPS.map(({ slug, priceGhs, credits }) => ({ slug, priceGhs, credits })),
     }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
   } catch (error) {
     log.error('credits.read_failed', errorDetails(error))

@@ -85,8 +85,10 @@ export function currentBillingPeriod(now: Date = new Date()) {
 
 export type CreditFeature =
   | 'chat'
+  | 'chat.premium'
   | 'chat.research'
   | 'chat.document'
+  | 'chat.overflow'
   | 'agent'
   | 'image'
   | 'video'
@@ -100,9 +102,19 @@ export type CreditFeature =
  * requests still cover their overhead. `reserve` is held up front. `ceiling`
  * is the most a single task may ever charge, which is what makes the "no
  * surprise overage" promise on the pricing page enforceable.
+ *
+ * `chat` is deliberately all zeros: plain chat on the fast model is included
+ * with a plan and never draws from the credit meter, so the routes skip the
+ * credit gate for it entirely (fair-use daily caps bound its cost instead).
+ * `chat.overflow` is the same conversation once the daily allowance is spent:
+ * a flat one-credit metered turn, so a paid user is never blocked at the cap.
+ * Premium-model chat keeps metering so a deliberately expensive model is
+ * never the same price as the included default.
  */
 export const FEATURE_WEIGHTS: Record<CreditFeature, { floor: number; reserve: number; ceiling: number }> = {
-  chat: { floor: 1, reserve: 1, ceiling: 2 },
+  chat: { floor: 0, reserve: 0, ceiling: 0 },
+  'chat.premium': { floor: 1, reserve: 4, ceiling: 8 },
+  'chat.overflow': { floor: 1, reserve: 1, ceiling: 1 },
   'chat.research': { floor: 2, reserve: 2, ceiling: 4 },
   'chat.document': { floor: 2, reserve: 2, ceiling: 4 },
   agent: { floor: 3, reserve: 5, ceiling: 8 },
@@ -124,12 +136,21 @@ export function reservationTtlSeconds(feature: CreditFeature) {
 }
 
 /**
- * Chat is charged by what the request actually asks for, so a plain question
- * stays at one credit and a research or document request does not.
+ * Chat is charged by what the request actually asks for: a plain question on
+ * the fast model is included (`chat`), while live research, a file and a
+ * deliberately premium model each keep their own metered feature. The chat
+ * route promotes `chat` to `chat.overflow` once the daily fair-use allowance
+ * is spent, so this helper never has to know about the daily cap.
  */
-export function chatFeature(options: { liveResearch?: boolean; hasAttachment?: boolean }): CreditFeature {
+export function chatFeature(options: {
+  liveResearch?: boolean
+  hasAttachment?: boolean
+  /** The user deliberately picked a model priced well above the fast default. */
+  premium?: boolean
+}): CreditFeature {
   if (options.liveResearch) return 'chat.research'
   if (options.hasAttachment) return 'chat.document'
+  if (options.premium) return 'chat.premium'
   return 'chat'
 }
 
@@ -171,6 +192,16 @@ export type CreditSettlement = {
 }
 
 /**
+ * Premium-model chat is billed above its measured cost so choosing an
+ * expensive model is never the same price as the included fast default.
+ *
+ * This is the Cursor/Copilot "premium models consume credits faster" pattern
+ * adapted to a credit ledger: the multiplier applies to the measured provider
+ * cost before it is converted to credits.
+ */
+export const PREMIUM_MODEL_MULTIPLIER = 2
+
+/**
  * Convert a finished task into a charge.
  *
  * Failed work charges nothing and releases the whole reservation, which is what
@@ -198,7 +229,15 @@ export function settleCredits(input: {
   const measured = Number.isFinite(input.measuredUsd) && (input.measuredUsd as number) > 0
     ? (input.measuredUsd as number)
     : null
-  const fromMeasured = measured === null ? estimate.reserve : creditsForUsd(measured)
+  // The multiplier is pricing policy on top of the provider's real cost, so
+  // the settlement still records the actual measured amount while the charge
+  // reflects the premium price.
+  const priced = measured === null
+    ? null
+    : estimate.feature === 'chat.premium'
+      ? measured * PREMIUM_MODEL_MULTIPLIER
+      : measured
+  const fromMeasured = priced === null ? estimate.reserve : creditsForUsd(priced)
   const beforeCap = Math.max(weight.floor, fromMeasured)
   const charged = Math.min(beforeCap, estimate.reserve)
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { BILLING_CATALOG_VERSION, BILLING_PLANS, findBillingPlan } from '../src/lib/billing/catalog.ts'
+import { BILLING_CATALOG_VERSION, BILLING_PLANS, CREDIT_TOP_UPS, findBillingPlan } from '../src/lib/billing/catalog.ts'
 import { checkoutRequestSchema } from '../src/lib/billing/checkout-contract.ts'
 import { allowanceAction } from '../src/lib/billing/allowance-policy.ts'
 
@@ -23,6 +23,24 @@ test('the public pilot catalog is versioned and monthly only', () => {
   assert.equal(checkoutRequestSchema.safeParse({ plan: 'builder', cadence: 'monthly' }).success, true)
   assert.equal(checkoutRequestSchema.safeParse({ plan: 'builder', cadence: 'annual' }).success, false)
   assert.equal('phone' in checkoutRequestSchema.shape, false)
+})
+
+test('checkout accepts exactly one item: a monthly plan or a one-time top-up', () => {
+  assert.equal(checkoutRequestSchema.safeParse({ plan: 'builder', cadence: 'monthly' }).success, true)
+  assert.equal(checkoutRequestSchema.safeParse({ topup: 'topup-50' }).success, true)
+  assert.equal(checkoutRequestSchema.safeParse({ topup: 'topup-200', paymentMethod: 'card' }).success, true)
+  assert.equal(checkoutRequestSchema.safeParse({}).success, false, 'a checkout must name one item')
+  assert.equal(checkoutRequestSchema.safeParse({ plan: 'builder', topup: 'topup-50' }).success, false, 'a checkout cannot buy a plan and a top-up at once')
+  assert.equal(checkoutRequestSchema.safeParse({ plan: 'builder', cadence: 'annual' }).success, false)
+  assert.equal(checkoutRequestSchema.safeParse({ topup: 'topup-999' }).success, false, 'an unknown top-up slug is rejected')
+})
+
+test('top-up bundles stay fixed so a purchase can never be renamed silently', () => {
+  assert.deepEqual(CREDIT_TOP_UPS.map((topUp) => topUp.slug), ['topup-50', 'topup-100', 'topup-200'])
+  for (const topUp of CREDIT_TOP_UPS) {
+    assert.ok(topUp.priceGhs > 0, `${topUp.slug} must have a price`)
+    assert.ok(topUp.credits > 0, `${topUp.slug} must grant credits`)
+  }
 })
 
 test('payment repository exposes workspace subscription and payment history helpers', async () => {

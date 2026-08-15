@@ -1,11 +1,13 @@
 export type PaymentMethod = 'mobile_money' | 'card'
-export type PaymentCadence = 'monthly'
+export type PaymentCadence = 'monthly' | 'one_time'
 
 export type CreateCheckoutInput = {
   idempotencyKey: string
   workspaceKey: string
   ownerId: string
   planSlug: string
+  /** Human line for the provider's order description; defaults to the plan line. */
+  description?: string
   amountMinor: number
   currency: 'GHS'
   cadence: PaymentCadence

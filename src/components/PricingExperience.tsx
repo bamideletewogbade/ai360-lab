@@ -111,17 +111,17 @@ export function PricingExperience() {
         <div className={styles.creditIntro}>
           <p>Why work credits?</p>
           <h2>Simple for people.<br />Measured underneath.</h2>
-          <p>You should not have to calculate technical tokens. AI360 uses one understandable credit balance and shows an estimate before more demanding work begins.</p>
+          <p>You should not have to calculate technical tokens. Everyday chat is included with your plan, and heavier work draws from one understandable credit balance with an estimate shown before it runs.</p>
         </div>
         <div className={styles.creditRules}>
-          <article><span>01</span><b>Everyday work stays light</b><p>Writing, learning and short conversations use fewer credits.</p></article>
-          <article><span>02</span><b>Deep work uses more</b><p>Long research, premium models and large files consume more capacity.</p></article>
+          <article><span>01</span><b>Everyday chat is included</b><p>Writing, learning and short conversations come with your plan, up to a fair daily limit that resets at midnight UTC. Extra messages after that cost 1 credit each.</p></article>
+          <article><span>02</span><b>Deep work uses credits</b><p>Live research, premium models, agents, images and video draw from your balance.</p></article>
           <article><span>03</span><b>Media is confirmed first</b><p>Images and video show an estimate before generation begins.</p></article>
           <article><span>04</span><b>Failed work returns held credits</b><p>If a task cannot complete, unused reserved credits return to your balance.</p></article>
         </div>
         <div className={styles.creditGuide}>
           <div><b>What might work cost?</b><small>Shown before a task begins. Final charges follow measured work.</small></div>
-          {CREDIT_GUIDE.map((item) => <div key={item.task}><span>{item.task}</span><b>{item.credits} {item.credits === '1' ? 'credit' : 'credits'}</b></div>)}
+          {CREDIT_GUIDE.map((item) => <div key={item.task}><span>{item.task}</span><b>{item.credits}</b></div>)}
         </div>
       </section>
 
@@ -170,7 +170,8 @@ export function PricingExperience() {
           <details><summary>Can I stop or change my plan?<span>+</span></summary><p>Yes. There is nothing to cancel during the pilot because access does not renew automatically. You can choose a different plan when you make your next payment.</p></details>
           <details><summary>Can a student or programme receive a discount?<span>+</span></summary><p>Yes. Sponsored seats and verified education or community programmes should receive controlled allowances rather than a permanent blanket discount with no funding source.</p></details>
           <details><summary>Do the five free credits roll over?<span>+</span></summary><p>No. They reset on the first day of each month and unused free credits expire. This keeps the free tier generous enough to test real work without creating an open-ended cost.</p></details>
-          <details><summary>What happens when credits finish?<span>+</span></summary><p>You can wait until you choose another month of access or move to a larger plan. One-time top-ups are not part of the first pilot, and AI360 will not create a silent overage bill.</p></details>
+          <details><summary>What happens when credits finish?<span>+</span></summary><p>You can buy a one-time top-up of 40, 90 or 185 credits from your credit page whenever you need more. Top-ups cost more per credit than a plan, so a monthly plan is better value when you use AI360 regularly. AI360 will never create a silent overage bill.</p></details>
+          <details><summary>What counts toward the daily chat limit?<span>+</span></summary><p>Everyday chat is included up to a daily fair-use limit (Explorer 10, Everyday 60, Builder 120, Team 150) that resets at midnight UTC. Past the limit, extra messages cost 1 credit each — the price is shown before the message runs. Paid work like research, files and premium models never counts toward the free limit, because it already draws from your credits.</p></details>
         </div>
       </section>
 

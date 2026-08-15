@@ -175,13 +175,12 @@ export async function POST(request: Request) {
     aiConfigured: Boolean(key),
   })
 
-  // Planning is one small call, so it is charged as a chat turn rather than a
-  // full agent run. Rejecting a plan should cost one credit, not five.
-  const credit = key
-    ? await openCreditGate({
-        request, requester, requestId: log.requestId,
-        feature: planOnly ? 'chat' : 'agent',
-      })
+  // Planning is one small call, and everyday chat is included with a plan, so
+  // approving or rejecting a plan costs nothing. Only execution is metered, at
+  // the agent feature's reservation, which is what the person approves before
+  // any research runs.
+  const credit = key && !planOnly
+    ? await openCreditGate({ request, requester, requestId: log.requestId, feature: 'agent' })
     : { gate: undefined, denied: undefined }
   if (credit.denied) {
     log.finish(credit.denied.status, { outcome: 'credit_denied' })

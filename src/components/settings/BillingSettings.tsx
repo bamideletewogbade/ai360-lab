@@ -19,6 +19,7 @@ type CreditState = {
   allowance: number
   plan: string
   guide?: Array<{ task: string; credits: string }>
+  topUps?: Array<{ slug: string; priceGhs: number; credits: number }>
 }
 
 type SubscriptionState = {
@@ -113,6 +114,31 @@ export function BillingSettings() {
             ))}
           </ul>
         ) : null}
+      </section>
+
+      <section className={styles.card}>
+        <div className={styles.cardHead}>
+          <h2>Buy more credits</h2>
+          <p>One-time bundles for when the balance runs low. They do not renew and do not expire with the monthly allowance.</p>
+        </div>
+        {credits?.topUps?.length ? (
+          <div className={styles.topUpGrid}>
+            {credits.topUps.map((topUp) => (
+              <Link key={topUp.slug} href={`/checkout?topup=${topUp.slug}`} className={styles.topUpCard}>
+                <span><b>{topUp.credits.toLocaleString()}</b><small>work credits</small></span>
+                <strong>GH₵{topUp.priceGhs.toLocaleString()}</strong>
+                <em>Buy now <span aria-hidden="true">→</span></em>
+              </Link>
+            ))}
+          </div>
+        ) : loading ? (
+          <p className={styles.balanceHold}>Loading top-ups…</p>
+        ) : (
+          <p className={styles.notice}>
+            <Link href="/sign-in">Sign in</Link> to buy credits.
+          </p>
+        )}
+        <p className={styles.notice}>Top-ups cost more per credit than a plan. If you use AI360 regularly, <Link href="/pricing">a monthly plan is better value</Link>.</p>
       </section>
 
       <section className={styles.card}>

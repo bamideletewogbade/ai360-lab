@@ -196,6 +196,26 @@
 .statusActive { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; background: #e6f4ea; color: #137333; font-size: 12px; font-weight: 750; }
 .statusDot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
+.topUpGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.topUpCard {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--paper);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .16s ease, transform .16s ease;
+}
+.topUpCard:hover { border-color: var(--line-dark); transform: translateY(-1px); }
+.topUpCard span { display: flex; align-items: baseline; gap: 6px; }
+.topUpCard b { font-size: 20px; font-weight: 850; letter-spacing: -.02em; }
+.topUpCard small { color: var(--grey); font-size: 11.5px; }
+.topUpCard strong { font-size: 14px; font-weight: 800; }
+.topUpCard em { font-style: normal; color: var(--grey); font-size: 11.5px; font-weight: 700; }
+.topUpCard:hover em { color: var(--black); }
+
 .planGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; }
 .planMetric { display: grid; gap: 3px; }
 .planMetric span { color: var(--grey); font-size: 11.5px; }
