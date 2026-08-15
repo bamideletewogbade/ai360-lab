@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type MediaKind = 'image' | 'video'
 type StudioIconName = 'spark' | 'image' | 'video' | 'library' | 'workspace' | 'product' | 'city' | 'mark'
@@ -94,6 +94,31 @@ type VideoJob = {
   token: string
   jobId?: string
   status: string
+  /** Re-show the same prompt/duration in the gallery when a render finishes after a refresh. */
+  prompt: string
+  duration: string
+}
+
+/**
+ * The video render is durable on the server, so the browser keeps a copy of
+ * the job token. A refresh, a tab switch or a closed laptop must not orphan
+ * the render: on return the component re-hydrates from this key and resumes
+ * polling.
+ */
+const VIDEO_JOB_STORAGE = 'ai360:video-job'
+
+/** How many consecutive transient failures before polling pauses (the stored job is kept). */
+const MAX_CONSECUTIVE_ERRORS = 10
+
+function readStoredVideoJob(): VideoJob | null {
+  try {
+    const raw = window.sessionStorage.getItem(VIDEO_JOB_STORAGE)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as VideoJob
+    return parsed && typeof parsed.token === 'string' ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 /** What the "need credits" panel shows: both quick top-ups and monthly plans. */
@@ -165,6 +190,44 @@ export function MediaStudio() {
   const [videoQuote, setVideoQuote] = useState<VideoQuote | null>(null)
   const [videoJob, setVideoJob] = useState<VideoJob | null>(null)
   const [creditPanel, setCreditPanel] = useState<CreditPanelState | null>(null)
+
+  // Polling state lives in refs so a refresh-resumed poll never reads stale
+  // closures and duplicate timers cannot stack after a visibility change.
+  const pollTimerRef = useRef<number | null>(null)
+  const pollAttemptsRef = useRef(0)
+  const videoJobRef = useRef<VideoJob | null>(null)
+
+  /** Keep the rendered job in state, in a ref and in session storage together. */
+  const persistVideoJob = (job: VideoJob) => {
+    videoJobRef.current = job
+    setVideoJob(job)
+    try {
+      window.sessionStorage.setItem(VIDEO_JOB_STORAGE, JSON.stringify(job))
+    } catch {
+      // Private browsing: polling still works for this session.
+    }
+  }
+
+  /** Forget the job everywhere; the server-side durable job is unaffected. */
+  const clearVideoJob = () => {
+    videoJobRef.current = null
+    setVideoJob(null)
+    try {
+      window.sessionStorage.removeItem(VIDEO_JOB_STORAGE)
+    } catch {
+      // Nothing to clear.
+    }
+  }
+
+  /** 20s, 40s, 80s, then capped at 2 minutes between transient failures. */
+  const pollBackoff = (attempt: number) => Math.min(20_000 * 2 ** Math.min(attempt, 3), 120_000)
+
+  const scheduleVideoPoll = (job: VideoJob, delayMs: number) => {
+    if (pollTimerRef.current !== null) window.clearTimeout(pollTimerRef.current)
+    pollTimerRef.current = window.setTimeout(() => {
+      void pollVideo(job)
+    }, delayMs)
+  }
 
   const showToast = (message: string, isError: boolean) => {
     setToastNotice(message)
@@ -315,9 +378,16 @@ export function MediaStudio() {
         }
         throw new Error(mediaError(response.status, data) || 'The video could not be started.')
       }
-      setVideoJob({ token: data.token, jobId: data.jobId, status: data.status || 'pending' })
+      const job: VideoJob = {
+        token: data.token,
+        jobId: data.jobId,
+        status: data.status || 'pending',
+        prompt: prompt.trim(),
+        duration: videoDuration,
+      }
+      persistVideoJob(job)
       setToastNotice('')
-      window.setTimeout(() => pollVideo(data.token, data.jobId), 20_000)
+      scheduleVideoPoll(job, 20_000)
     } catch (cause) {
       showToast(cause instanceof Error ? cause.message : 'The video could not be started.', true)
     } finally {
@@ -325,46 +395,101 @@ export function MediaStudio() {
     }
   }
 
-  const pollVideo = async (token: string, jobId?: string) => {
+  const pollVideo = async (job: VideoJob) => {
     try {
       const response = await fetch('/api/studio/video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'status', token, jobId }),
+        body: JSON.stringify({ action: 'status', token: job.token, jobId: job.jobId }),
       })
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(mediaError(response.status, data) || 'Video status could not be checked.')
+      if (!response.ok) {
+        // The server can mark a job terminal inside an error response (for
+        // example when the provider lost the job and the hold was refunded).
+        if (data.status === 'failed' || data.status === 'cancelled' || data.status === 'expired') {
+          clearVideoJob()
+          showToast(data.error || 'This video job is no longer available. Your credits were returned.', true)
+          return
+        }
+        // A 5xx is transient (provider hiccup, delivery retry) — back off and
+        // keep the job. A 4xx means the job itself is gone, which is terminal.
+        if (response.status >= 500) {
+          pollAttemptsRef.current += 1
+          if (pollAttemptsRef.current > MAX_CONSECUTIVE_ERRORS) {
+            showToast('The video service is unreachable right now. Your render is still safe — reopen the studio to resume it, or your credits will be released automatically if it never completes.', true)
+            return
+          }
+          scheduleVideoPoll(job, pollBackoff(pollAttemptsRef.current))
+          return
+        }
+        clearVideoJob()
+        showToast(data.error || 'This video job is no longer available. Your credits were returned.', true)
+        return
+      }
 
+      pollAttemptsRef.current = 0
       const status = data.status || 'pending'
       if (status === 'completed' && data.downloadUrl) {
         const newItem: MediaItem = {
           id: `media-${Date.now()}`,
           kind: 'video',
-          prompt: prompt.trim(),
+          prompt: job.prompt,
           aspectRatio: '16:9',
-          styleName: `${videoDuration} Motion Clip`,
+          styleName: `${job.duration} Motion Clip`,
           url: data.downloadUrl,
           createdAt: 'Just now',
         }
         setGallery((prev) => [newItem, ...prev])
-        setVideoJob(null)
+        clearVideoJob()
         setPrompt('')
         setTab('gallery')
         showToast('Motion video rendered. Find it in the gallery.', false)
         return
       }
-      if (status === 'failed') {
-        setVideoJob(null)
+      // failed, cancelled and expired are all terminal: the server already
+      // refunded the hold, so tell the person rather than polling forever.
+      if (status === 'failed' || status === 'cancelled' || status === 'expired') {
+        clearVideoJob()
         showToast(data.error || 'The video render failed. Your credits were returned.', true)
         return
       }
-      setVideoJob({ token, jobId: data.jobId || jobId, status })
-      window.setTimeout(() => pollVideo(token, data.jobId || jobId), 20_000)
-    } catch (cause) {
-      setVideoJob(null)
-      showToast(cause instanceof Error ? cause.message : 'Video status could not be checked.', true)
+      const next = { ...job, jobId: data.jobId || job.jobId, status }
+      persistVideoJob(next)
+      scheduleVideoPoll(next, 20_000)
+    } catch {
+      // Network failure (offline, timeout): keep the job and retry with backoff.
+      pollAttemptsRef.current += 1
+      if (pollAttemptsRef.current > MAX_CONSECUTIVE_ERRORS) {
+        showToast('We lost contact with the video service. Your render is still safe — reopen the studio to resume it, or your credits will be released automatically if it never completes.', true)
+        return
+      }
+      scheduleVideoPoll(job, pollBackoff(pollAttemptsRef.current))
     }
   }
+
+  // Re-hydrate a render that was in flight when the page refreshed or the
+  // browser tab was closed, and poll immediately when the tab becomes visible
+  // again (mobile browsers throttle timers in background tabs). The handlers
+  // are intentionally stable — they read the latest job from refs, so the
+  // mount-time closure never goes stale.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const stored = readStoredVideoJob()
+    if (stored) {
+      persistVideoJob(stored)
+      scheduleVideoPoll(stored, 0)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && videoJobRef.current) {
+        scheduleVideoPoll(videoJobRef.current, 0)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      if (pollTimerRef.current !== null) window.clearTimeout(pollTimerRef.current)
+    }
+  }, [])
 
   const busy = generating || Boolean(videoJob)
 

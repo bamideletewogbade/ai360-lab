@@ -1,5 +1,71 @@
 # Decision and incident log
 
+## 2026-08-15 · Incident · Video render charged credits without delivering a clip
+
+**Symptom.** In production, a video render took credits (the balance dropped)
+but never produced a clip — twice, on the same test account. Image generation
+worked; video did not. Reported as "video took user credits while the action was
+not completed".
+
+**What actually happens today.** Video is a hold-and-settle flow, not a charge
+at click time: submitting reserves credits (video holds are sized from the
+quoted provider price, up to the reserve) and the render is charged or refunded
+only when a status poll sees the job reach a terminal state. So "credits taken"
+means the hold moved out of `available`, and it stays out until one of these
+happens: a poll settles it (charge or refund), the reservation's 2-hour TTL
+expires and the next balance read reclaims it, or the job is marked failed.
+
+**Root causes found in review.**
+
+1. **Settlement ran before delivery.** The `status` handler settled the
+   reservation as soon as the provider reported `completed` — and only then
+   downloaded the file and persisted it. A download or storage failure after
+   that point left the person charged with no clip, and the client showed a
+   generic error and stopped.
+2. **The client gave up on any transient error.** One failed poll (network
+   blip, provider 502, throttled timer in a background tab) permanently stopped
+   polling, orphaning the job until the TTL reclaimed the hold.
+3. **Refresh/navigation orphaned the job.** `token`/`jobId` lived only in
+   component state; a refresh killed the poll chain with no way to resume it.
+4. **Unrecognised terminal statuses.** The provider can also report `cancelled`
+   and `expired`; both are terminal but were treated as "keep polling". A 404
+   from the provider's status endpoint (job lost) was likewise returned as a
+   transient 502 the client retried forever.
+
+**Fix.**
+
+- **Settle only after delivery.** A `completed` clip is charged only once the
+  file has actually downloaded and been persisted to storage. If delivery
+  fails, the job stays `running` and the next poll retries it; the reservation
+  TTL remains the backstop. Failed renders refund the whole hold.
+- **Client polling is resilient.** Transient failures (5xx, network) retry with
+  exponential backoff capped at 2 minutes instead of giving up; terminal
+  statuses (`failed`/`cancelled`/`expired`, including in an error body) stop
+  and refund. The job survives refresh — token, job id, prompt and duration are
+  kept in session storage and re-hydrated on mount, and a `visibilitychange`
+  poll resumes immediately when the tab returns (mobile browsers throttle
+  timers in background tabs).
+- **Server reconciliation.** `cancelled` and `expired` are now terminal
+  failures that refund. A provider 404 (job lost) is treated as terminal
+  too — the durable job is marked failed and the hold is refunded with a clear
+  message instead of being retried forever.
+- **Manual credits for testing.** `scripts/grant-credits.mjs` grants credits to
+  a named account for non-payment testing, idempotently, as an `adjustment`
+  ledger entry that never touches the monthly allowance.
+
+**Guardrail.** A hold is a promise, not a charge. Work that finishes in a later
+request must charge only after the deliverable is actually stored, and a client
+that polls must never be allowed to lose the job on a transient error. Where a
+provider can end a job without `completed`, every such status is terminal and
+refunds.
+
+**To confirm in prod.** Re-run a full video render (quote → confirm → wait for
+poll) and verify the clip lands in the gallery and the balance settles to the
+measured cost; then deliberately close the tab mid-render, reopen the studio
+and confirm the render resumes. The 2026-08-15 run that consumed credits
+without output should also be checked in `lab_credit_reservations`/ledger for
+that workspace — if the 2-hour TTL passed, the hold was already reclaimed.
+
 ## 2026-08-15 · Incident · Media Studio showed fake assets instead of generating
 
 **Symptom.** In production, clicking Generate in Media Studio did not generate

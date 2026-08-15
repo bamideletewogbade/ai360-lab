@@ -148,7 +148,10 @@ Execution: one coherent moment with ${intent.motion} camera movement, natural li
 
 function providerStatus(status?: string) {
   return status === 'completed' ? 'completed' as const
-    : status === 'failed' ? 'failed' as const
+    // `cancelled` and `expired` are terminal failures: the provider is not
+    // going to render the clip, so the person must not pay for work that
+    // never happened.
+    : status === 'failed' || status === 'cancelled' || status === 'expired' ? 'failed' as const
       : status === 'in_progress' || status === 'processing' ? 'running' as const
         : 'submitted' as const
 }
@@ -275,6 +278,37 @@ export async function POST(request: Request) {
       })
       if (!response.ok) {
         const failure = await providerErrorDetails(response)
+        // A 404 means the provider no longer knows this job — it is gone for
+        // good, not temporarily unreachable. Returning a 502 would make the
+        // client retry forever against a dead job, so treat it as a terminal
+        // failure: mark the durable job failed and refund the whole hold.
+        if (response.status === 404 && reservationId && requester.context) {
+          log.warn('studio.video.job_lost', { ...failure })
+          await updateMediaJobResult({
+            context: requester.context,
+            jobId: durableJob?.id ?? '',
+            status: 'failed',
+            errorCode: 'provider_job_lost',
+            errorMessage: 'The video provider no longer has this job.',
+          }).catch(() => undefined)
+          const settlement = await settleReservation({
+            context: requester.context,
+            reservationId,
+            estimate: estimateCredits('video', { quotedUsd: durableJob?.quotedCostUsd }),
+            measuredUsd: null,
+            outcome: 'failure',
+          })
+          log.info('studio.video.job_lost_settled', {
+            settled: settlement.ok,
+            released: settlement.ok ? settlement.released : undefined,
+          })
+          log.finish(502, { outcome: 'job_lost_refunded' })
+          return Response.json({
+            error: 'The video provider lost this render. Your credits were returned — please try again.',
+            status: 'failed',
+            requestId: log.requestId,
+          }, { status: 502, headers: log.headers() })
+        }
         log.warn('studio.video.status_failed', { ...failure })
         log.finish(502, { outcome: 'provider_error' })
         return Response.json({ error: 'Video status could not be checked.', requestId: log.requestId }, {
@@ -295,8 +329,64 @@ export async function POST(request: Request) {
 
       // The render finished in a later request than the one that reserved the
       // credits, so this is where a video is finally charged or refunded.
-      const finished = result.status === 'completed' || result.status === 'failed'
-      if (finished && reservationId && requester.context) {
+      //
+      // Ordering matters: a `completed` clip is only worth charging for once
+      // it has actually landed in storage. If the download or persist fails,
+      // the job stays `running` so the next poll retries the delivery, and the
+      // hold is left untouched (the reservation TTL reclaims it if the file
+      // never arrives). `cancelled` and `expired` are terminal failures and
+      // refund the whole hold.
+      const terminal = result.status === 'completed'
+        || result.status === 'failed'
+        || result.status === 'cancelled'
+        || result.status === 'expired'
+      const failedTerminal = terminal && result.status !== 'completed'
+
+      let durableAssetId = durableJob?.outputAssetId || null
+      let deliveryFailed = false
+      if (durableJob && requester.context) {
+        if (result.status === 'completed' && !durableAssetId) {
+          try {
+            const file = await fetchProviderVideo(id)
+            const stored = await persistGeneratedMedia({
+              context: requester.context,
+              jobId: durableJob.id,
+              projectId: durableJob.projectId,
+              bytes: file.bytes,
+              mimeType: file.mimeType,
+              metadata: {
+                model: durableJob.model || 'unknown',
+                duration: durableJob.intent.durationSeconds || 4,
+                aspectRatio: durableJob.intent.aspectRatio,
+                qualityTier: durableJob.intent.qualityTier,
+              },
+            })
+            durableAssetId = stored.assetId
+          } catch (downloadError) {
+            deliveryFailed = true
+            log.error('studio.video.persist_failed', { ...errorDetails(downloadError) })
+            await updateMediaJobResult({
+              context: requester.context,
+              jobId: durableJob.id,
+              status: 'running',
+              errorCode: 'delivery_retry',
+              errorMessage: 'The finished clip could not be saved yet; the next poll retries delivery.',
+            }).catch(() => undefined)
+          }
+        }
+        if (!deliveryFailed) {
+          await updateMediaJobResult({
+            context: requester.context,
+            jobId: durableJob.id,
+            status: providerStatus(result.status),
+            actualCostUsd: result.usage?.cost,
+            errorCode: failedTerminal ? 'provider_failed' : null,
+            errorMessage: clean(result.error, 500) || null,
+          })
+        }
+      }
+
+      if (terminal && !deliveryFailed && reservationId && requester.context) {
         const settlement = await settleReservation({
           context: requester.context,
           reservationId,
@@ -312,34 +402,14 @@ export async function POST(request: Request) {
         })
       }
 
-      let durableAssetId = durableJob?.outputAssetId || null
-      if (durableJob && requester.context) {
-        const nextStatus = providerStatus(result.status)
-        await updateMediaJobResult({
-          context: requester.context,
-          jobId: durableJob.id,
-          status: nextStatus,
-          actualCostUsd: result.usage?.cost,
-          errorCode: nextStatus === 'failed' ? 'provider_failed' : null,
-          errorMessage: clean(result.error, 500) || null,
-        })
-        if (nextStatus === 'completed' && !durableAssetId) {
-          const file = await fetchProviderVideo(id)
-          const stored = await persistGeneratedMedia({
-            context: requester.context,
-            jobId: durableJob.id,
-            projectId: durableJob.projectId,
-            bytes: file.bytes,
-            mimeType: file.mimeType,
-            metadata: {
-              model: durableJob.model || 'unknown',
-              duration: durableJob.intent.durationSeconds || 4,
-              aspectRatio: durableJob.intent.aspectRatio,
-              qualityTier: durableJob.intent.qualityTier,
-            },
-          })
-          durableAssetId = stored.assetId
-        }
+      if (deliveryFailed) {
+        log.finish(502, { outcome: 'delivery_retry' })
+        return Response.json({
+          error: 'Your video is ready but could not be saved yet. We will retry automatically — it will appear in the gallery shortly.',
+          status: 'delivery_retry',
+          jobId: durableJob?.id,
+          requestId: log.requestId,
+        }, { status: 502, headers: log.headers({ 'Cache-Control': 'no-store' }) })
       }
 
       log.info('studio.video.status', { status: result.status, costUsd: result.usage?.cost })
