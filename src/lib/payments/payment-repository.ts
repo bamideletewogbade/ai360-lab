@@ -41,6 +41,7 @@ type AttemptRow = {
   provider_reference: string | null
   provider_transaction_id: string | null
   plan_slug: string
+  cadence: string
   payment_method: string
   amount_minor: string
   currency: string
