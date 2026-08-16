@@ -29,9 +29,28 @@ export function resolveDeploymentId(env = process.env, readGitCommit = () => {
   return `build-${Date.now().toString(36)}`
 }
 
+// The Sentry wizard stores the source-map upload token in
+// .env.sentry-build-plugin (gitignored). withSentryConfig reads
+// SENTRY_AUTH_TOKEN from the environment at build time, so load that file
+// when the token isn't already set. Without it the build still succeeds and
+// simply skips source-map upload.
+function loadSentryBuildEnv(env, root) {
+  if (env.SENTRY_AUTH_TOKEN) return
+  try {
+    const raw = readFileSync(resolve(root, '.env.sentry-build-plugin'), 'utf8')
+    for (const line of raw.split('\n')) {
+      const match = line.trim().match(/^([A-Z0-9_]+)=(.*)$/)
+      if (match && !env[match[1]]) env[match[1]] = match[2].replace(/^["']|["']$/g, '')
+    }
+  } catch {
+    // No token file — source maps are skipped, the build still succeeds.
+  }
+}
+
 export function runBuild(env = process.env) {
   const deploymentId = resolveDeploymentId(env)
   const root = resolve(import.meta.dirname, '..')
+  loadSentryBuildEnv(env, root)
   writeFileSync(resolve(root, '.deployment-id'), `${deploymentId}\n`, 'utf8')
   console.log(`Building deployment ${deploymentId}`)
 

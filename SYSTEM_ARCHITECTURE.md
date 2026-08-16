@@ -2,7 +2,7 @@
 
 The recovery and evaluated-routing design, including rollout gates, is maintained in [RECOVERABLE_EXECUTION_ARCHITECTURE.md](./RECOVERABLE_EXECUTION_ARCHITECTURE.md).
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-15
 
 ## Operating principle
 
@@ -25,15 +25,15 @@ The smallest useful part is not the smallest possible file. It is the smallest
 unit with one reason to change, a clear input/output contract and a focused way
 to verify it.
 
-| Part | Owns | Must not own |
-| --- | --- | --- |
-| Content registry | Product language, labels, links and outcome definitions | Rendering state or provider calls |
-| UI section | One visible user idea and its interactions | Cross-page policy or data persistence |
-| Route handler | HTTP validation, identity, limits and response translation | Provider-specific business logic or SQL orchestration |
-| Application service | One complete use case and its policy sequence | Framework request/response objects |
-| Provider adapter | Authentication, request shape, timeout and provider response normalization | Product pricing or workspace authorization |
-| Repository | One durable aggregate and its atomic invariants | UI language or provider behavior |
-| Pure policy module | Routing, pricing, permissions or state transition decisions | I/O of any kind |
+| Part                | Owns                                                                       | Must not own                                          |
+| ------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Content registry    | Product language, labels, links and outcome definitions                    | Rendering state or provider calls                     |
+| UI section          | One visible user idea and its interactions                                 | Cross-page policy or data persistence                 |
+| Route handler       | HTTP validation, identity, limits and response translation                 | Provider-specific business logic or SQL orchestration |
+| Application service | One complete use case and its policy sequence                              | Framework request/response objects                    |
+| Provider adapter    | Authentication, request shape, timeout and provider response normalization | Product pricing or workspace authorization            |
+| Repository          | One durable aggregate and its atomic invariants                            | UI language or provider behavior                      |
+| Pure policy module  | Routing, pricing, permissions or state transition decisions                | I/O of any kind                                       |
 
 Optimize in that same order of scope:
 
@@ -59,7 +59,7 @@ the existing route contracts and be completed one boundary at a time.
 ```mermaid
 flowchart LR
   U["People and teams"] --> X["Landing, onboarding and workspace UI"]
-  X --> I["Clerk identity and organization context"]
+  X --> I["Supabase Auth identity and workspace context"]
   X --> A["Next.js API and policy layer"]
   A --> O["Coordinator and specialist runtime"]
   O --> M["Model gateway and routing"]
@@ -80,42 +80,42 @@ flowchart LR
 
 ## Layer-by-layer architecture
 
-| Layer | Why it exists | Current foundation | Target and scale trigger |
-| --- | --- | --- | --- |
-| Product experience | Turn goals into completed work for technical and non-technical people | Landing, Chat, Agent, Studio, pricing, responsive UI | Instrument funnel and accessibility; split bundles only when users cannot find the right workflow |
-| Identity and tenancy | Give every private record and cost a trusted owner | Clerk users, personal workspace and optional Organizations | Add tenant-isolation tests before team launch; upgrade Clerk only when security or B2B limits require it |
-| API and policy | Keep secrets, entitlements and ownership decisions on the server | Next.js routes, request IDs, validation and readiness checks | Extract services only when independent scaling or deployment cadence is measured, not anticipated |
-| Agent runtime | Make multi-step work durable, bounded and explainable | Research uses a fixed plan/execute/verify pipeline with durable boundaries. Create uses registry-defined stages, real parallel specialists, deterministic evaluation and one bounded correction pass | Persist Create pack runs and events so a project can recover after disconnection; add a queue and worker so work survives process restart |
-| Model gateway | Balance quality, latency and cost without vendor lock-in | OpenRouter model selection and usage logging | Route by capability and provider health; add model eval gates before changing defaults |
-| Tools and retrieval | Ground answers and execute useful work | Web research, uploads, voice, image, video, exports and a disabled read-only browser pilot with isolated execution | Publish and evaluate the browser worker before model routing; add interaction only after the read-only exit gate passes |
-| Data | Preserve truth, ownership, state and billing evidence | Supabase Postgres is the only data plane, with RLS, indexes and runtime repositories | Verify production-host connectivity and tenant isolation; partition only after table and query metrics justify it |
-| Asset storage | Store large private files outside relational tables | Private Supabase storage adapter, browser evidence hashes, authenticated streaming and expiry cleanup | Add lifecycle monitoring and separate hot and archival retention when measured storage cost warrants it |
-| Billing and payments | Convert variable AI cost into understandable access | Versioned plans, durable payment attempts, hosted ExpressPay checkout, query-verified activation, subscriptions and an append-only ledger | Pass the sandbox matrix, add scheduled reconciliation and enable production credentials only after operational approval |
-| Observability and evaluation | Detect failures and prove that changes improve outcomes | Request, token, cost and latency logging | Central tracing, alerts, product analytics and representative eval suite before public scale |
-| Customer quality | Turn feedback into evidence, accountable decisions and regression tests | Opt-in evidence, rule-first severity, bounded AI evaluation, private receipts and a human Quality Desk | Measure acknowledgement and verification time; add durable alert delivery and benchmark execution before public scale |
-| Security and governance | Protect people, organizations, prompts and money | CSP, RLS, server ownership checks and approval boundaries | Threat modelling, dependency scanning, incident playbook, data retention and external security review |
-| Platform and delivery | Release safely and recover quickly | Hostinger Node deployment, health/readiness and preflight | Staging, automated migrations, rollback and load tests; move jobs to workers before long runs threaten web capacity |
+| Layer                        | Why it exists                                                           | Current foundation                                                                                                                                                                                   | Target and scale trigger                                                                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Product experience           | Turn goals into completed work for technical and non-technical people   | Landing, Chat, Agent, Studio, pricing, responsive UI                                                                                                                                                 | Instrument funnel and accessibility; split bundles only when users cannot find the right workflow                                         |
+| Identity and tenancy         | Give every private record and cost a trusted owner                      | Supabase Auth users, personal workspace and optional Organizations                                                                                                                                   | Add tenant-isolation tests before team launch; upgrade Supabase Auth only when security or B2B limits require it                          |
+| API and policy               | Keep secrets, entitlements and ownership decisions on the server        | Next.js routes, request IDs, validation and readiness checks                                                                                                                                         | Extract services only when independent scaling or deployment cadence is measured, not anticipated                                         |
+| Agent runtime                | Make multi-step work durable, bounded and explainable                   | Research uses a fixed plan/execute/verify pipeline with durable boundaries. Create uses registry-defined stages, real parallel specialists, deterministic evaluation and one bounded correction pass | Persist Create pack runs and events so a project can recover after disconnection; add a queue and worker so work survives process restart |
+| Model gateway                | Balance quality, latency and cost without vendor lock-in                | OpenRouter model selection and usage logging                                                                                                                                                         | Route by capability and provider health; add model eval gates before changing defaults                                                    |
+| Tools and retrieval          | Ground answers and execute useful work                                  | Web research, uploads, voice, image, video, exports and a disabled read-only browser pilot with isolated execution                                                                                   | Publish and evaluate the browser worker before model routing; add interaction only after the read-only exit gate passes                   |
+| Data                         | Preserve truth, ownership, state and billing evidence                   | Supabase Postgres is the only data plane, with RLS, indexes and runtime repositories                                                                                                                 | Verify production-host connectivity and tenant isolation; partition only after table and query metrics justify it                         |
+| Asset storage                | Store large private files outside relational tables                     | Private Supabase storage adapter, browser evidence hashes, authenticated streaming and expiry cleanup                                                                                                | Add lifecycle monitoring and separate hot and archival retention when measured storage cost warrants it                                   |
+| Billing and payments         | Convert variable AI cost into understandable access                     | Versioned plans, durable payment attempts, hosted ExpressPay checkout, query-verified activation, manual prepaid renewals, one-time top-ups and an append-only ledger                                | Prove the live failure paths (delayed notification, reversal, refund) and add scheduled reconciliation before automatic renewal           |
+| Observability and evaluation | Detect failures and prove that changes improve outcomes                 | Request, token, cost and latency logging                                                                                                                                                             | Central tracing, alerts, product analytics and representative eval suite before public scale                                              |
+| Customer quality             | Turn feedback into evidence, accountable decisions and regression tests | Opt-in evidence, rule-first severity, bounded AI evaluation, private receipts and a human Quality Desk                                                                                               | Measure acknowledgement and verification time; add durable alert delivery and benchmark execution before public scale                     |
+| Security and governance      | Protect people, organizations, prompts and money                        | CSP, RLS, server ownership checks and approval boundaries                                                                                                                                            | Threat modelling, dependency scanning, incident playbook, data retention and external security review                                     |
+| Platform and delivery        | Release safely and recover quickly                                      | Hostinger Node deployment, health/readiness and preflight                                                                                                                                            | Staging, automated migrations, rollback and load tests; move jobs to workers before long runs threaten web capacity                       |
 
 ## Initial quality budgets
 
 These are engineering targets for the pilot. Measure from Ghanaian mobile and
 broadband networks, not only from a developer laptop.
 
-| Quality | Pilot target | Measurement |
-| --- | --- | --- |
-| Landing performance | LCP under 2.5 seconds at p75; CLS under 0.1 | Real-user web vitals |
-| Non-AI API latency | p95 under 500 ms | Server route traces |
-| Fast-chat feedback | Visible sending state under 100 ms; first streamed content p95 under 4 seconds | Client and provider timing |
-| Agent feedback | Durable run created and first meaningful status within 2 seconds | Agent event timestamps |
-| Database | Common indexed reads p95 under 100 ms inside the backend region | Query telemetry and `pg_stat_statements` |
-| Availability | 99.9% monthly for core signed-in workspace after launch | External uptime and readiness checks |
-| Provider-call accounting | 100% of paid calls have request ID, owner, outcome and actual or estimated cost | Usage reconciliation |
-| Job reliability | At least 95% completion excluding user cancellation and safety refusal | Durable run states |
-| Tenant isolation | Zero known cross-workspace reads or writes | Automated isolation suite and audit logs |
-| Billing correctness | Zero duplicate grants; every ledger mutation idempotent | Payment and ledger reconciliation |
-| Recovery | Pilot RPO 24 hours and RTO 4 hours, improved after restore rehearsal | Backup and restore test |
-| Accessibility | WCAG 2.2 AA contrast, keyboard flow and 200% text zoom for core journeys | Automated and manual review |
-| Quality response | S0 acknowledgement under 15 minutes during staffed pilot hours; all other reports under one business day | Quality event timestamps and reviewer queue |
+| Quality                  | Pilot target                                                                                             | Measurement                                 |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Landing performance      | LCP under 2.5 seconds at p75; CLS under 0.1                                                              | Real-user web vitals                        |
+| Non-AI API latency       | p95 under 500 ms                                                                                         | Server route traces                         |
+| Fast-chat feedback       | Visible sending state under 100 ms; first streamed content p95 under 4 seconds                           | Client and provider timing                  |
+| Agent feedback           | Durable run created and first meaningful status within 2 seconds                                         | Agent event timestamps                      |
+| Database                 | Common indexed reads p95 under 100 ms inside the backend region                                          | Query telemetry and `pg_stat_statements`    |
+| Availability             | 99.9% monthly for core signed-in workspace after launch                                                  | External uptime and readiness checks        |
+| Provider-call accounting | 100% of paid calls have request ID, owner, outcome and actual or estimated cost                          | Usage reconciliation                        |
+| Job reliability          | At least 95% completion excluding user cancellation and safety refusal                                   | Durable run states                          |
+| Tenant isolation         | Zero known cross-workspace reads or writes                                                               | Automated isolation suite and audit logs    |
+| Billing correctness      | Zero duplicate grants; every ledger mutation idempotent                                                  | Payment and ledger reconciliation           |
+| Recovery                 | Pilot RPO 24 hours and RTO 4 hours, improved after restore rehearsal                                     | Backup and restore test                     |
+| Accessibility            | WCAG 2.2 AA contrast, keyboard flow and 200% text zoom for core journeys                                 | Automated and manual review                 |
+| Quality response         | S0 acknowledgement under 15 minutes during staffed pilot hours; all other reports under one business day | Quality event timestamps and reviewer queue |
 
 ## Quality Loop
 
@@ -138,7 +138,7 @@ reviewer authorization.
 
 ## Data boundaries
 
-- Clerk is the identity and session authority.
+- Supabase Auth is the identity and session authority.
 - Supabase Postgres is the durable application truth.
 - Supabase Storage holds private binaries; Postgres holds metadata and ownership.
 - ExpressPay confirms money movement; AI360 owns plans, entitlements and the
@@ -172,6 +172,7 @@ reviewer authorization.
   restore evidence.
 - Before each phase gate: threat model, load test, tenant isolation and rollback
   rehearsal proportional to the change.
+
 # Voice and language subsystem
 
 The production voice boundary is a provider-neutral cascade: capture, binary upload, spoken-language context, transcription routing, human transcript review, AI reasoning, and optional tested speech output. Spoken language and answer language are separate product settings. Provider adapters, evaluation gates, privacy rules and the staged roadmap are defined in `VOICE_LANGUAGE_ARCHITECTURE.md`.

@@ -1,5 +1,104 @@
 # Decision and incident log
 
+## 2026-08-16 · Decision · Observability: Sentry for errors/traces, Axiom for logs
+
+**Why.** Logs were readable only in Hostinger's runtime viewer — no field
+search, no retention, no alerting — and client-side browser errors were
+invisible entirely (the stuck-video 502s were only caught when a screenshot was
+shared). The structured JSON logging, request IDs and redaction were already
+right; the missing pieces were a searchable log store, error tracking with
+stack traces, browser capture and alerting.
+
+**What.** Two SaaS destinations on free tiers, both fed from the existing
+pipeline so nothing changes at call sites:
+
+- **Sentry** (`@sentry/nextjs` 10.70.0): server init in `sentry.server.config.ts`
+  registered via Next 16 `instrumentation.ts` (`register` +
+  `onRequestError = Sentry.captureRequestError` for unhandled errors); browser
+  init in `instrumentation-client.ts` (errors + performance traces, **no
+  session replay**). Every `log.error(...)` is bridged to a Sentry issue with
+  the same requestId/route/event via `src/lib/error-tracking.ts`, so handled
+  failures (provider 502s, settlement mismatches) are traceable too.
+- **Axiom** (`src/lib/log-sink.ts`): batched, fire-and-forget NDJSON shipping of
+  the same structured lines — console output remains the source of truth and is
+  always written.
+
+**Privacy.** Non-negotiable and enforced twice: fields are scrubbed by the
+existing `safeValue` before they reach Axiom/Sentry, and Sentry's `beforeSend`
+(`src/lib/sentry-redact.ts`) drops prompt/content/payment/authorization-shaped
+fields and scrubs secrets again. `sendDefaultPii: false`,
+`dataCollection: { userInfo: false, httpBodies: [] }`, session replay off.
+
+**Guardrails.** Telemetry never blocks a request and never throws (the sink
+drops a batch rather than fail the app; Sentry is inert without a DSN). Both
+destinations are additive — unset env vars mean the app behaves exactly as
+before. Source-map upload and the Sentry tunnel are deferred until the
+DSN/token provisioning step.
+
+**Revisit if.** Free-tier volume is exhausted (Sentry ~5K errors/mo) — add
+sampling or alert only on spikes; if a second service appears, move the
+video/payment lifecycles onto a shared traceId before adopting OpenTelemetry.
+
+**Next step.** Provision a Sentry project + Axiom dataset, put the env vars in
+Hostinger, then verify one browser error, one server 5xx and one Axiom log line
+appear.
+
+## 2026-08-16 · Incident · A stuck video render locked the whole studio
+
+**Symptom.** In production, a video render never completed: the studio showed
+"Rendering your motion video…" indefinitely, the render button stuck on
+"Rendering…", and — the worse part — **no other media action worked**, not even
+image generation. The browser console showed repeated
+`POST /api/studio/video 502`.
+
+**Root causes.**
+
+1. **One job locked everything (the blocking bug).** `busy = generating ||
+Boolean(videoJob)` disabled the image button, the gallery and every other
+   studio action whenever a video job existed — while the banner said "You can
+   keep working". The copy was a lie the code enforced.
+2. **Polling give-up left a dead job behind.** After `MAX_CONSECUTIVE_ERRORS`
+   transient failures, the poll stopped scheduling without clearing the job, so
+   the lock and the "Rendering…" banner persisted forever even though nothing
+   was being watched anymore.
+3. **The 502s themselves were provider-side** (the status poll to OpenRouter
+   failing); the exact provider response was only visible in logs
+   (`studio.video.status_failed`), not in the UI.
+
+**Fix.**
+
+- **A video render never locks the studio.** Only the video render button is
+  gated by an in-flight job; images, the gallery and tab switching stay fully
+  usable. The banner now says what is true: "Images and the rest of the studio
+  stay fully usable while it renders."
+- **Polling never strands a render.** After a long failure streak the job is
+  kept and polling slows to one check every five minutes (instead of giving
+  up), with a single honest notice that credits are safe; the 2-hour
+  reservation TTL remains the backstop. A "Stop waiting" button lets the
+  person give up watching without touching the durable server job.
+- **The gallery is the person's real media.** `/api/studio/media?recent=1`
+  returns the most recent completed jobs with stored outputs, and Media Studio
+  loads them on mount, so a finished clip survives a refresh or appears after
+  the studio was closed. Demo items stay behind real work as inspiration.
+- **Delivery is more resilient.** If the provider's `/content?index=0`
+  download fails, the status handler now falls back to the signed URLs the
+  provider returns on completion before declaring delivery failed.
+- **Diagnosable 502s.** The video route now includes the provider's message in
+  502 bodies (visible in the long-outage notice and in logs).
+- **8s disabled.** The 8-second option is commented out while 4-second render
+  reliability is validated end to end in production.
+
+**Guardrail.** A background render is a promise, not a lock: a client surface
+must never disable unrelated work because one job is pending, and a poll loop
+that gives up must clear the state it owns. If a render is stuck, the person
+should be able to keep working, know their credits are safe, and stop watching
+when they want.
+
+**To confirm in prod.** Re-run a 4s render and verify the clip lands in the
+gallery while image generation works at the same time; check
+`studio.video.status_failed` logs (now carrying the provider message) to see
+what the 502 was actually saying; then re-enable 8s once a few 4s renders pass.
+
 ## 2026-08-15 · Incident · Video render charged credits without delivering a clip
 
 **Symptom.** In production, a video render took credits (the balance dropped)
@@ -204,8 +303,7 @@ free to paid seamless and closes the three leaks in the first shape.
 - **Anonymous callers stay hard-stopped** with a sign-in hint: they have no
   credit account to overflow onto, so paying per message is not available to
   them.
-- **The daily counter is durable.** `lab_chat_daily_counters` (migration
-  0017) is keyed by workspace/IP and UTC date, so a deploy cannot reset the
+- **The daily counter is durable.** `lab_chat_daily_counters` (migration 0017) is keyed by workspace/IP and UTC date, so a deploy cannot reset the
   allowance and a second server instance cannot double it, and "resets at
   midnight UTC" is now literally true. When the billing database is down, the
   route falls back to the in-memory daily bucket so chat never fails; the
@@ -315,6 +413,7 @@ leaked reasoning as content, and ignored the reasoning token cap. The primary
 price per turn, so as a fallback it was neither cheaper nor more reliable.
 
 **Fixes.**
+
 1. Removed `sort: 'price'`. The `models` array is already ordered primary-first,
    so honouring that order serves the intended model instead of the cheapest.
 2. Removed the `preferred_max_latency` and `preferred_min_throughput` hints from
@@ -508,12 +607,12 @@ its AI provider." Live. Agent research and Studio research were affected too.
 **Cause.** OpenRouter's server-side tools cannot be combined with provider
 routing constraints. Probed against the live API:
 
-| Sent alongside tools | Result |
-| --- | --- |
-| no provider block | 200 |
-| `preferred_max_latency` | 200 |
-| `require_parameters` | 404, matches no provider |
-| `sort`, `allow_fallbacks`, `preferred_min_throughput`, `max_price` | 500 each |
+| Sent alongside tools                                               | Result                   |
+| ------------------------------------------------------------------ | ------------------------ |
+| no provider block                                                  | 200                      |
+| `preferred_max_latency`                                            | 200                      |
+| `require_parameters`                                               | 404, matches no provider |
+| `sort`, `allow_fallbacks`, `preferred_min_throughput`, `max_price` | 500 each                 |
 
 Chat attaches tools on every request and also sent the full provider block.
 
@@ -573,10 +672,10 @@ animation over a single long request would be a lie about what the product does.
 
 **Verified end to end, 7 August 2026.**
 
-| Pack | Specialists | Time | Cost | Of reserved budget |
-| --- | --- | ---: | ---: | ---: |
-| Name and domain | Namer, then Domains | 22s | $0.0098 | 19% |
-| Marketing pack | Researcher, Campaign, then Copywriter and Calendar together | 43s | $0.0544 | 39% |
+| Pack            | Specialists                                                 | Time |    Cost | Of reserved budget |
+| --------------- | ----------------------------------------------------------- | ---: | ------: | -----------------: |
+| Name and domain | Namer, then Domains                                         |  22s | $0.0098 |                19% |
+| Marketing pack  | Researcher, Campaign, then Copywriter and Calendar together |  43s | $0.0544 |                39% |
 
 The naming pack checked sixteen domains and reported them honestly: `.com`
 candidates taken, every `.com.gh` returned as cannot confirm rather than guessed.
@@ -647,14 +746,14 @@ no figure, because it would be quoted with confidence.
 
 ## 2026-08-07 · Verified · Full product run against live providers
 
-| Path | Time | Cost | Result |
-| --- | ---: | ---: | --- |
-| Chat | 7.4s | negligible | answers |
-| Chat in Twi | - | negligible | replied in Twi to an English question |
-| Research agent | 17.4s | $0.0063 | 67 streamed chunks, 4 sources |
-| Image | 15.1s | $0.0026 | 1.6 MB image returned |
-| Video quote | instant | - | $0.12 quoted before anything ran |
-| Video generation | 79s | $0.1200 | clip completed, download ready |
+| Path             |    Time |       Cost | Result                                |
+| ---------------- | ------: | ---------: | ------------------------------------- |
+| Chat             |    7.4s | negligible | answers                               |
+| Chat in Twi      |       - | negligible | replied in Twi to an English question |
+| Research agent   |   17.4s |    $0.0063 | 67 streamed chunks, 4 sources         |
+| Image            |   15.1s |    $0.0026 | 1.6 MB image returned                 |
+| Video quote      | instant |          - | $0.12 quoted before anything ran      |
+| Video generation |     79s |    $0.1200 | clip completed, download ready        |
 
 Seven of seven passed. `openai/gpt-image-1-mini` works despite being absent from
 the default models listing, so it is not the broken default it first appeared.
@@ -671,14 +770,14 @@ already exists and needs one specific thing.
 `src/lib/studio/packs.ts` is now a registry. A pack declares the specialists it
 runs and what each produces, so adding an outcome is data rather than a rewrite.
 
-| Pack | For | Credits |
-| --- | --- | ---: |
-| Brand and launch | No brand yet | 8 |
-| Marketing pack | Brand exists, needs a push | 8 |
-| Ads generator | About to spend on ads | 5 |
-| Name and domain | Stuck on what to call it | 3 |
-| Pitch pack | Approaching a funder or big customer | 7 |
-| Content calendar | Runs out of things to say | 5 |
+| Pack             | For                                  | Credits |
+| ---------------- | ------------------------------------ | ------: |
+| Brand and launch | No brand yet                         |       8 |
+| Marketing pack   | Brand exists, needs a push           |       8 |
+| Ads generator    | About to spend on ads                |       5 |
+| Name and domain  | Stuck on what to call it             |       3 |
+| Pitch pack       | Approaching a funder or big customer |       7 |
+| Content calendar | Runs out of things to say            |       5 |
 
 **Costs come from the same weights the rest of the product bills**, and are
 capped at the agent ceiling. A pack is one piece of work to the person paying,
@@ -738,12 +837,12 @@ The range published on the pricing page is safe.
 
 **Providers price clips four different ways**, verified live:
 
-| Shape | Example | Handled |
-| --- | --- | --- |
-| `duration_seconds_*`, dollars per second | Veo, Kling, MiniMax | yes |
-| `cents_per_second_output` plus a minimum per generation | Runway | yes |
-| `video_tokens`, dollars per generated token | Seedance, Sora, Grok | **excluded** |
-| nothing usable published | several | excluded |
+| Shape                                                   | Example              | Handled      |
+| ------------------------------------------------------- | -------------------- | ------------ |
+| `duration_seconds_*`, dollars per second                | Veo, Kling, MiniMax  | yes          |
+| `cents_per_second_output` plus a minimum per generation | Runway               | yes          |
+| `video_tokens`, dollars per generated token             | Seedance, Sora, Grok | **excluded** |
+| nothing usable published                                | several              | excluded     |
 
 **Token-priced models are deliberately excluded.** Their cost depends on the
 clip that comes out, not the one requested, so they cannot be quoted before
@@ -773,7 +872,7 @@ abandoned and the reserved credits sat stranded until the hold expired.
 
 **What changed.**
 
-- The stream is now only a *view* of the run. Writing to a closed connection is
+- The stream is now only a _view_ of the run. Writing to a closed connection is
   ignored and the work carries on. Verified by aborting mid run: the log shows
   `agent.client_disconnected`, then `execute:task_1` and `synthesise` completing
   anyway, then `outcome=success`.
@@ -811,7 +910,7 @@ including that another workspace cannot read a run even knowing its id.
 English. Three of three attempts. Twi, Ewe and Pidgin worked.
 
 **Cause.** The directive said "if they write to you in a different language,
-reply in the one they wrote in". English *is* a different language, so an
+reply in the one they wrote in". English _is_ a different language, so an
 English question read as permission to answer in English. The rule sounded
 correct and quietly cancelled the whole feature.
 
@@ -842,7 +941,7 @@ can do that a general assistant will not do for Ghana.
 
 - Selecting a language is optional. Writing in Twi with English selected still
   returns Twi. The setting exists for people who find typing Twi slow.
-- Borrowing English words inside a local sentence is instructed as *correct*.
+- Borrowing English words inside a local sentence is instructed as _correct_.
   Accra speaks that way, and inventing an unfamiliar word for "invoice" would
   serve people worse.
 - Research findings stay in the source language. Only the plan and the final
@@ -850,7 +949,7 @@ can do that a general assistant will not do for Ghana.
 - Ga and Ewe carry extra guidance to keep sentences short and concrete, because
   model support for them is thinner than for Twi.
 
-**Not established.** That the output is *good*. The checks prove the system
+**Not established.** That the output is _good_. The checks prove the system
 produces the language, not that a Ga speaker would find it natural. Native
 speaker review is required before this is described as finished.
 
@@ -880,7 +979,7 @@ environment.
 - Conversation sync stays client-authoritative: anything the client stops
   sending is deleted. Messages now cascade from the conversation rather than
   being deleted by hand.
-- Project saves stay last-write-wins *only when genuinely newer*, so a stale
+- Project saves stay last-write-wins _only when genuinely newer_, so a stale
   copy arriving late from a second device cannot overwrite fresher work.
 - Usage events stay idempotent on request ID and route.
 - Webhook receipts stay the idempotency guard for Clerk replays.
@@ -1001,6 +1100,7 @@ and the 25% cost target.
 **Superseded 2026-08-08.** Builder and Team exceeded the 25% target at full
 utilisation (34.7% and 40.4%). The research-calibrated v3 catalog reduced those
 shares to 29.7% and 30.3%; see the newer decision above.
+
 ## 2026-08-09 · Decision · Browser evidence is private, short-lived and outside the request process
 
 Read-only visual navigation runs in an isolated Browserbase Function. Next.js

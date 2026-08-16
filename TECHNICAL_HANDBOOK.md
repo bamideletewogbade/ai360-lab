@@ -4,7 +4,7 @@ For unfinished brief recovery, shared intent routing, African connectivity const
 
 For the layer-by-layer path from a person’s words to a checked result, read [CONTEXT_ENGINEERING.md](./CONTEXT_ENGINEERING.md).
 
-Last reviewed: 2026-08-14
+Last reviewed: 2026-08-15
 
 This is the canonical entry point for engineers and operators picking up AI360
 Lab. It explains what the product is, how the system is divided, how work moves
@@ -20,17 +20,20 @@ production mode inside the Lab.
 
 Use these names consistently:
 
-| Meaning | Canonical name |
-| --- | --- |
-| Organization and brand | AI360 |
-| Product | AI360 |
-| Creative workspace | AI360 Studio |
+| Meaning                | Canonical name |
+| ---------------------- | -------------- |
+| Organization and brand | AI360          |
+| Product                | AI360          |
+| Creative workspace     | AI360 Studio   |
 
-The current release state is **private pilot candidate**. Public pages and guest
-workflows run. The code contains signed-in persistence, credits, agent and
-Studio workflows, but production launch remains gated by live identity checks,
-runtime database connectivity, durable background work, shared rate limiting,
-monitoring and verified payment-provider behavior. The exact checklist lives in
+The current release state is a **live private pilot with verified prepaid
+payments**. Paid checkout is enabled in production: a real ExpressPay Mobile
+Money purchase was verified end to end on 2026-08-14, one-time top-ups shipped
+on 2026-08-15, and Media Studio image generation is verified in production
+with video reliability fixes deployed pending a final render retest.
+Unrestricted public launch remains gated by shared rate limiting, durable
+background replay, external monitoring and the unproven payment failure paths
+(delayed notification, reversal, refund). The exact checklist lives in
 [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md).
 
 When documents disagree, use this authority order:
@@ -118,16 +121,16 @@ Update these when a new public page or materially different capability ships.
 
 ## 5. Composable architecture
 
-| Layer | Owns | Primary locations |
-| --- | --- | --- |
-| Brand and product content | Canonical names, public links, plan and outcome definitions | `src/lib/brand.ts`, registries under `src/lib` |
-| UI components | One visible idea, responsive behavior and local interaction | `src/components`, `src/app/*` pages and CSS modules |
-| Route handlers | HTTP parsing, authorization, rate limits and response translation | `src/app/api` |
-| Application services | Complete use cases and workflow policy | `src/lib/agent`, `src/lib/studio`, `src/lib/billing` |
-| Quality policy | Consent, deterministic urgency, bounded AI evaluation and human decisions | `src/lib/quality`, `src/app/api/feedback`, `src/app/api/quality` |
-| Provider adapters | Provider request shape, timeout, failover and normalization | `src/lib/models.ts`, `src/lib/live-tools.ts`, media modules |
-| Repositories | Durable aggregates and atomic invariants | `src/lib/workspace-db.ts`, agent and billing stores |
-| Infrastructure | Database pool, configuration, logs and deployment checks | `src/lib/postgres.ts`, `runtime-config.ts`, `observability.ts`, `scripts` |
+| Layer                     | Owns                                                                      | Primary locations                                                         |
+| ------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Brand and product content | Canonical names, public links, plan and outcome definitions               | `src/lib/brand.ts`, registries under `src/lib`                            |
+| UI components             | One visible idea, responsive behavior and local interaction               | `src/components`, `src/app/*` pages and CSS modules                       |
+| Route handlers            | HTTP parsing, authorization, rate limits and response translation         | `src/app/api`                                                             |
+| Application services      | Complete use cases and workflow policy                                    | `src/lib/agent`, `src/lib/studio`, `src/lib/billing`                      |
+| Quality policy            | Consent, deterministic urgency, bounded AI evaluation and human decisions | `src/lib/quality`, `src/app/api/feedback`, `src/app/api/quality`          |
+| Provider adapters         | Provider request shape, timeout, failover and normalization               | `src/lib/models.ts`, `src/lib/live-tools.ts`, media modules               |
+| Repositories              | Durable aggregates and atomic invariants                                  | `src/lib/workspace-db.ts`, agent and billing stores                       |
+| Infrastructure            | Database pool, configuration, logs and deployment checks                  | `src/lib/postgres.ts`, `runtime-config.ts`, `observability.ts`, `scripts` |
 
 A component should have one reason to change, an explicit contract and a focused
 verification path. Route handlers must not absorb provider policy or SQL
@@ -197,12 +200,29 @@ same deadline and reserved budget. `src/lib/studio-project-model.ts` normalizes
 the final sections into durable, reviewable and versioned deliverables. Existing
 campaign projects remain readable through the older project fields.
 
-Image and video production require asset approval and a provider-cost
-confirmation. The UI collects a provider-neutral `MediaIntent`: purpose,
-channel, shape, quality tier, resolution, length, movement, audio policy and
-references. Customers choose outcomes and cost, never model names. The server
-validates the exact capability combination against the live catalogue and
-routes only within the selected quality tier.
+Image and video production require a provider-cost confirmation and, in the
+branded Studio flow, asset approval. The UI collects a provider-neutral
+`MediaIntent`: purpose, channel, shape, quality tier, resolution, length,
+movement, audio policy and references. Customers choose outcomes and cost,
+never model names. The server validates the exact capability combination
+against the live catalogue and routes only within the selected quality tier.
+
+Media Studio generates directly from the person's own words:
+`/api/studio/image` and `/api/studio/video` accept a raw `prompt` (with only
+light art-direction and execution guardrails) and reuse the same credit gate,
+provider loop, durable job and storage paths as the branded flow. Images
+generate immediately against the reserve and settle measured cost. Videos
+follow the quote-first pattern — the client fetches the live quote, shows the
+price in credits, the person confirms, and only then does provider work start.
+
+Video holds are sized from the quoted provider price up to the reserve. A
+`completed` job is charged only after the file has actually downloaded and been
+persisted to storage; a delivery failure keeps the job running for the next
+poll to retry, and `failed`, `cancelled`, `expired` and provider 404 are all
+terminal states that refund the hold. The client keeps the job in session
+storage, re-hydrates it on mount, retries transient poll failures with
+exponential backoff and resumes immediately when the tab regains visibility, so
+a refresh or a dropped mobile connection cannot orphan a paid render.
 
 `lab_media_jobs` is the durable boundary for provider work. It stores the
 approved intent, project and deliverable identity, quote, credit reservation,
@@ -226,10 +246,24 @@ recover their final result.
 
 ### Credits
 
+Everyday chat is included: plain chat carries a zero credit weight and is
+bounded by per-plan fair-use daily caps (Explorer 10, Everyday 60, Builder 120,
+Team 150; anonymous halves to 10) counted in a durable Postgres table keyed by
+workspace or IP and UTC date (migration 0017), so a deploy or a second server
+instance cannot reset or double the allowance. Past the cap, signed-in users
+overflow at a flat 1 credit per message; anonymous callers are hard-stopped
+with a sign-in hint. Metered work — live research, files, premium models (a 2×
+multiplier on measured cost), agent execution, images and video — always goes
+through the credit gate and never counts against the free-chat cap.
+
 Paid work reserves a conservative amount before the provider call, then settles
 actual cost or releases the hold. Ledger operations are idempotent and live in
 Supabase Postgres. Monthly plan allowance is granted lazily on first touch of a
-new period; purchased credits survive allowance rollover.
+new period; purchased credits — from a plan or a top-up — are permanent and
+survive allowance rollover. When a render hits the credits wall, Media Studio
+shows an inline panel with both ways forward: the one-time top-up bundles
+(GH₵50 → 40, GH₵100 → 90, GH₵200 → 185 credits) and the monthly plans, each
+priced from the catalogue API.
 
 ### Customer Quality Loop
 
@@ -265,6 +299,13 @@ Supabase Postgres is the only application database. The ordered migrations are:
 8. `0008_recoverable_project_drafts.sql`
 9. `0009_browser_action_foundation.sql`
 10. `0010_browser_artifact_retention.sql`
+11. `0011_media_generation.sql`
+12. `0012_project_knowledge.sql`
+13. `0013_workspace_onboarding.sql`
+14. `0014_onboarding_per_member.sql`
+15. `0015_credit_release_integrity.sql`
+16. `0016_supabase_auth.sql`
+17. `0017_chat_daily_cap.sql`
 
 Use `DATABASE_URL` for the Hostinger runtime and `DIRECT_URL` for migrations.
 The Hostinger runtime should use the Supabase shared session pooler on port
@@ -277,8 +318,11 @@ Provider boundaries:
 - Supabase Postgres: durable application truth
 - Supabase Storage: intended private binary storage with signed access
 - OpenRouter: model and media gateway
-- ExpressPay hosted-checkout adapter: implemented but deliberately disabled
-  until sandbox checkout, delayed notification and Query reconciliation pass
+- ExpressPay hosted checkout: live for the manual prepaid pilot with
+  server-side Query verification before activation; a real Mobile Money
+  purchase was verified end to end in production on 2026-08-14. Delayed-
+  notification, reversal and refund paths still need live proof before
+  automatic renewal
 - Browserbase Functions: isolated read-only visual page execution for the
   closed browser pilot
 
@@ -290,16 +334,17 @@ keys.
 
 `.env.example` is the complete configuration template. Important groups are:
 
-| Group | Required for |
-| --- | --- |
-| `OPENROUTER_*` | live chat, research, agent and Studio provider work |
-| `DATABASE_URL`, `DIRECT_URL`, `DATABASE_*` | persistence, migrations and credits |
-| `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_*` | signed-in identity and private asset storage when connected |
-| `NEXT_PUBLIC_BILLING_ENABLED`, payment secrets | verified checkout only |
-| `AI360_RATE_*` | pilot request limits |
-| `AI360_QUALITY_*` | reviewer access, urgent alert delivery and isolated quality evaluation |
-| `AI360_BROWSER_*`, `BROWSERBASE_*` | closed read-only browser pilot, allowlists and evidence cleanup |
-| search verification tokens | search-console ownership verification |
+| Group                                                                  | Required for                                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `OPENROUTER_*`                                                         | live chat, research, agent and Studio provider work                      |
+| `DATABASE_URL`, `DIRECT_URL`, `DATABASE_*`                             | persistence, migrations and credits                                      |
+| `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_*`                                 | signed-in identity and private asset storage when connected              |
+| `NEXT_PUBLIC_BILLING_ENABLED`, payment secrets                         | verified checkout only                                                   |
+| `AI360_RATE_*`                                                         | pilot request limits                                                     |
+| `AI360_QUALITY_*`                                                      | reviewer access, urgent alert delivery and isolated quality evaluation   |
+| `AI360_BROWSER_*`, `BROWSERBASE_*`                                     | closed read-only browser pilot, allowlists and evidence cleanup          |
+| `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `AXIOM_TOKEN`, `AXIOM_DATASET` | error tracking and log shipping; both are optional and inert when absent |
+| search verification tokens                                             | search-console ownership verification                                    |
 
 Treat `NEXT_PUBLIC_APP_URL` as the canonical public deployment origin.
 Production is `https://ai360.africa`. Local auth callbacks derive their return
@@ -331,11 +376,28 @@ so a missed delayed notification does not permanently strand Mobile Money.
 
 The first paid pilot is prepaid and manual: each approved payment buys one
 month, and AI360 stores no reusable card or wallet token. The payment
-transaction is the only path that grants a paid allowance. The lazy calendar
-refresh applies only to Explorer; it must never create paid credits at a month
-boundary. Expired paid access is treated as Explorer on the next credit touch.
-Top-up checkout and automatic renewal are intentionally not advertised until
-their purchase, reversal and customer-control paths exist end to end.
+transaction is the only path that grants a paid allowance. A top-up is the same
+flow with a one-time item: the verified payment appends permanent purchased
+credits and touches neither the subscription nor the monthly allowance. The
+lazy calendar refresh applies only to Explorer; it must never create paid
+credits at a month boundary. Expired paid access is treated as Explorer on the
+next credit touch. Automatic renewal remains intentionally not advertised until
+its purchase, reversal and customer-control paths exist end to end.
+
+### Observability
+
+Structured JSON lines always go to the console, and to Axiom (search, retention,
+alerts) when `AXIOM_TOKEN`/`AXIOM_DATASET` are set — `src/lib/log-sink.ts`
+batches and ships them fire-and-forget; telemetry never blocks a request and
+never throws. Sentry captures unhandled server errors (Next.js `onRequestError`)
+plus browser errors and traces (`@sentry/nextjs`, initialized in
+`src/instrumentation.ts`, `src/instrumentation-client.ts` and
+`src/sentry.server.config.ts`). Every `log.error(...)` is bridged to a Sentry
+issue carrying the same requestId/route/event name. Privacy is enforced twice:
+`observability.ts` scrubs fields before they are written, and
+`src/lib/sentry-redact.ts` drops prompt/content/payment/authorization-shaped
+data in Sentry's `beforeSend`. Session replay is off. Without a DSN the SDK is
+inert; an unset environment changes nothing.
 
 ## 9. Verification and release
 
@@ -394,7 +456,9 @@ database connection or reversing an application release.
 - Use request IDs and structured redacted logs for diagnosis.
 - Add a migration; do not edit an applied production migration.
 - Use signed URLs and lifecycle rules before moving private assets to Storage.
-- Do not enable billing before verified webhooks, retries, reversals, refunds
+- The manual prepaid path (one verified purchase per activation, idempotent
+  grants) is live; do not add automatic renewal, subscriptions or
+  customer-facing refunds until verified webhooks, retries, reversals, refunds
   and ledger reconciliation pass.
 - Do not launch unrestricted long-running work before durable queue replay and
   cancellation exist.
@@ -430,6 +494,7 @@ information, exploit details, generic maintenance or future work as shipped.
 - Read the newest entries in `DECISIONS.md` before changing model routing,
   credits, media pricing or orchestration.
 - Never infer production readiness from a polished screen or a green build.
+
 # Voice and language foundation (2026-08-09)
 
 AI360 no longer treats voice as a base64 field attached directly to one provider. The browser sends binary multipart audio to a validated route, which delegates to a `TranscriptionProvider`. This preserves the reviewed-transcript safety gate while allowing Ghana-specific ASR, streaming transcription and tested TTS to be added without rewriting chat or tools. Read `VOICE_LANGUAGE_ARCHITECTURE.md` for the decision record, privacy rules, evaluation gates and research sources.

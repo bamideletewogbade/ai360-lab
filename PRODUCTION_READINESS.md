@@ -1,6 +1,6 @@
 # AI360 production readiness
 
-Last reviewed: 2026-08-14
+Last reviewed: 2026-08-15
 
 This document is the release truth for AI360. A feature is only marked
 ready when its code, configuration, external service and failure path have been
@@ -8,15 +8,78 @@ verified. A polished screen alone is not considered production-ready.
 
 ## Executive status
 
-**Current release state: private pilot candidate, not yet ready for unrestricted public use.**
+**Current release state: live private pilot with verified prepaid payments, not yet ready for unrestricted public use.**
 
 The product experience is functional in guest and signed-in modes and the core
 AI routes are implemented. Supabase Auth and Postgres are the identity and data
-planes. The product is suitable for a small, staffed private pilot after the
-payment sandbox matrix and deployed release checks pass. Unrestricted public
-launch remains blocked by distributed cost controls, durable background replay,
-external monitoring, backup restoration, load testing and production-provider
-verification.
+planes. Paid checkout is enabled in production: a real ExpressPay Mobile Money
+purchase was verified end to end on 2026-08-14, one-time top-ups shipped on
+2026-08-15, and Media Studio image generation is verified in production with
+video reliability fixes deployed pending a final render retest. Unrestricted
+public launch remains blocked by shared rate limiting, durable background
+replay, external monitoring, backup restoration, load testing and the unproven
+payment failure paths (delayed notification, reversal, refund).
+
+## Audit snapshot: 2026-08-16
+
+- Media Studio no longer locks on a video render: only the video render button
+  is gated by an in-flight job; polling never strands a job (slow background
+  retry + honest notice + Stop waiting); the gallery loads the real recent
+  media (`/api/studio/media?recent=1`); 8s clips disabled pending 4s
+  validation. Recorded in `DECISIONS.md`.
+- Observability wired: Sentry (server + browser errors, traces, warn/error
+  structured logs via `Sentry.logger`) and Axiom (structured log shipping)
+  via Next.js 16 instrumentation; console and the Postgres usage ledger remain
+  the source of truth. DSN and source-map token provisioned; live verification
+  pending a first event via `/sentry-example-page` in the running app.
+- `npm test && npm run lint && npm run build` still to be re-run here (no
+  toolchain on this machine); the operator's production build gate remains the
+  checkpoint.
+
+## Audit snapshot: 2026-08-15
+
+Scope: pricing restructure (included chat, fair-use caps, overflow), one-time
+top-ups, Media Studio live generation and video credit reliability. Code
+changes are complete; this machine cannot run the toolchain, so
+`npm test && npm run lint && npm run build` were hand-reviewed rather than
+executed here — the operator's production build did catch and confirm a fix for
+the `AttemptRow.cadence` type error. Live verification results below come from
+operator production testing.
+
+- Payments: the first real paid checkout (Everyday, GH₵125) is verified end to
+  end in production; the 2026-08-14 checkout fixes (public-origin redirect,
+  phone removed from the AI360 form) are deployed. ExpressPay is no longer
+  "blocked": live billing is on for the manual prepaid pilot, and the sandbox
+  probe blocked by the merchant allowlist is superseded by a real verified
+  purchase. The delayed-notification, reversal and refund paths remain unproven
+  live.
+- Top-ups shipped: one-time bundles GH₵50 → 40, GH₵100 → 90 and GH₵200 → 185
+  credits reuse the exact ExpressPay hosted checkout, server-side Query
+  verification and idempotent activation path. Purchased credits are permanent
+  and survive the monthly allowance rollover. A real top-up purchase is still
+  to be made; the plan purchase path it shares is verified.
+- Pricing restructure shipped: everyday chat is included (zero credit weight),
+  bounded by per-plan daily fair-use caps (Explorer 10, Everyday 60, Builder
+  120, Team 150; anonymous halves to 10) counted durably in
+  `lab_chat_daily_counters` (migration 0017). Past the cap, signed-in users
+  overflow at 1 credit per message; anonymous callers are hard-stopped.
+  Premium models meter at measured cost × 2; metered work bypasses the
+  free-chat cap. Agent plan approval is now free.
+- Media Studio is live: `/api/studio/image` and `/api/studio/video` accept a
+  raw prompt, and Media Studio now drives them honestly (real errors, real
+  URLs, quote → confirm → poll for video) instead of showing placeholder
+  assets. Image generation was verified in production by the operator on
+  2026-08-15.
+- Video reliability fixes landed: settlement only after download and persist,
+  `cancelled`/`expired`/provider-404 treated as terminal refunds, resilient
+  client polling with exponential backoff, and session-storage re-hydration so
+  a refresh resumes the render. A production re-test of a full video render is
+  pending.
+- The "need credits" moment in Media Studio now offers both quick top-ups and
+  monthly plans inline, priced from the catalogue API (never hardcoded).
+- Migrations: 17 applied (through `0017_chat_daily_cap.sql`). The `npm test`
+  count of 251/251 from the 2026-08-14 snapshot predates today's changes and
+  must be re-run before the next release.
 
 ## Audit snapshot: 2026-08-14
 
@@ -101,39 +164,41 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
 
 ## Capability matrix
 
-| Capability | Code | External configuration | Verification | Release status |
-| --- | --- | --- | --- | --- |
-| Landing, onboarding and pricing | Implemented | None | Responsive build checks pass | Ready |
-| Guest workspace and local recovery | Implemented | None | Unit and browser checks pass | Pilot-ready |
-| Chat and model routing | Implemented | OpenRouter key | Live key still required per environment | Conditional |
-| Web research and citations | Implemented | Search/tool provider path | Representative-task evals pending | Pilot-ready |
-| Agent runtime | Plan, execute, synthesise, verify and revise pipeline with per-run cost and time ceilings; runs, tasks, events and artifacts persisted to Postgres | OpenRouter key | Parsing and context handling unit tested; live end-to-end run still pending a key | Pilot-ready |
-| Agent resume after crash | Checkpoints written at every boundary | Durable queue and worker | A run still dies with its web request; state survives but nothing replays it | Missing |
-| Studio workflows | Implemented | OpenRouter key | Durable background execution pending | Private pilot |
-| Image generation | Implemented with model failover | Compatible OpenRouter models | Production generation test pending | Unverified externally |
-| Video generation | Implemented with quote/status/download flow | Compatible OpenRouter video model | Production generation and retention test pending | Unverified externally |
-| Voice recording and transcription | Implemented | Browser microphone and STT model | Physical mobile-browser test pending | Private pilot |
-| PDF and Word export | Implemented | None | Automated build passes; document QA suite pending | Pilot-ready |
-| Supabase sign-in and sign-up UI | Implemented | Supabase URL, publishable key, redirect allowlist and providers | Unit/config checks pass; deployed sign-up, recovery and session-restore test pending | Conditional |
-| Google and email/password sign-in | Supported by Supabase Auth | Enable providers and production Google OAuth credentials | Deployed end-to-end auth test pending | Conditional |
-| Personal tenancy | Implemented in application contracts | Supabase Auth and Postgres | Workspace-isolation unit tests pass; live cross-user test pending | Private pilot |
-| Organization tenancy | Feature-gated | Team-workspace flag plus reviewed membership lifecycle | Keep disabled for the individual paid pilot | Later pilot |
-| Cloud conversations and projects | Implemented on Supabase Postgres | Supabase Auth plus `DATABASE_URL` | Repository checks pass; live production-host and tenant-isolation verification pending | Private pilot |
-| Supabase Postgres data plane | Runtime repositories, migrations, RLS and pooler client implemented | Supabase project and connection strings | Credit and data verification pass; Hostinger connectivity pending | Pilot-ready |
-| Usage ledger and cost records | Schema and write contracts implemented | Durable database | Live reconciliation test pending | In progress |
-| Rate limiting | Identity-aware burst/day limits; per workspace when signed in, network address as an anonymous backstop | None | Still process-local, so limits reset on restart and do not coordinate across instances | Pilot-ready, not production-scale |
-| Anonymous access to expensive work | Agent, Studio, image and video require an identified workspace whenever Supabase Auth is configured | Supabase Auth settings | Unit tests pass; deployed test pending | Implemented |
-| Credit engine | Landed-cost conversion, per-feature reserve/floor/ceiling, settlement and plan economics implemented and unit tested | None | Verified | Ready |
-| Credit ledger and reservations | Reserve, settle, release, expiry and grant on Supabase Postgres; wired into chat, agent, image and video | `DATABASE_URL` | `npm run credits:verify` passes 11/11 against the live database, including ledger reconciliation | Pilot-ready |
-| Allowance grants | Explorer refreshes lazily each calendar month; paid allowances come only from verified prepaid payments | None for Explorer; verified provider for paid access | Unit regressions pass; live expiry transition pending | Pilot-ready |
-| Credit interface | `/api/credits` returns balance, holds and cost table; `CreditBalance.tsx` displays balance, in-progress reservations, plan and cost guide in the signed-in shell | None | Component wired in; live signed-in visual check pending | Pilot-ready |
-| Prepaid monthly access and credits | Verified payment activates one month and grants once; expiry falls back to Explorer | Database, payment provider and policies | Contract/unit tests pass; real sandbox activation pending | Private-pilot candidate |
-| ExpressPay hosted checkout | Provider-isolated adapter, durable attempts, return/notification routes, server-side query verification and idempotent activation implemented | Merchant sandbox key, public HTTPS callback URL and migrations `0006`/`0007` | 113 unit/contract tests and production build pass; real sandbox payment pending | Blocked intentionally |
-| Logs and request IDs | Structured redacted logs implemented | Host log retention | External alerting absent | Pilot-ready |
-| Customer Quality Loop | Feedback, opt-in evidence, receipts, rule-first triage, bounded AI evaluation and reviewer desk implemented | Database migration, reviewer IDs and optional alert webhook | 7 focused unit tests and responsive browser checks pass; live urgent alert still requires verification | Private pilot |
-| Error monitoring | Runtime logs only | Sentry or equivalent | Not configured | Missing |
-| Security headers | Hardened for Supabase Auth and hosted providers | Production domains | Local smoke checks pass; production header scan pending | Implemented |
-| Dependency security | Production dependency audit clean | Regular update process | `npm audit --omit=dev` passes | Ready |
+| Capability                         | Code                                                                                                                                                                                                               | External configuration                                                                                 | Verification                                                                                                                                   | Release status                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Landing, onboarding and pricing    | Implemented                                                                                                                                                                                                        | None                                                                                                   | Responsive build checks pass                                                                                                                   | Ready                                |
+| Guest workspace and local recovery | Implemented                                                                                                                                                                                                        | None                                                                                                   | Unit and browser checks pass                                                                                                                   | Pilot-ready                          |
+| Chat and model routing             | Implemented                                                                                                                                                                                                        | OpenRouter key                                                                                         | Live key still required per environment                                                                                                        | Conditional                          |
+| Web research and citations         | Implemented                                                                                                                                                                                                        | Search/tool provider path                                                                              | Representative-task evals pending                                                                                                              | Pilot-ready                          |
+| Agent runtime                      | Plan, execute, synthesise, verify and revise pipeline with per-run cost and time ceilings; runs, tasks, events and artifacts persisted to Postgres                                                                 | OpenRouter key                                                                                         | Parsing and context handling unit tested; live end-to-end run still pending a key                                                              | Pilot-ready                          |
+| Agent resume after crash           | Checkpoints written at every boundary                                                                                                                                                                              | Durable queue and worker                                                                               | A run still dies with its web request; state survives but nothing replays it                                                                   | Missing                              |
+| Studio workflows                   | Implemented                                                                                                                                                                                                        | OpenRouter key                                                                                         | Durable background execution pending                                                                                                           | Private pilot                        |
+| Image generation                   | Implemented with model failover; Media Studio raw-prompt mode live                                                                                                                                                 | Compatible OpenRouter models                                                                           | Verified in production (operator, 2026-08-15)                                                                                                  | Live                                 |
+| Video generation                   | Quote → confirm → submit → poll → gallery; charge only after delivery; terminal-status refunds; resilient polling                                                                                                  | Compatible OpenRouter video model                                                                      | Reliability fixes landed; production re-test pending                                                                                           | In progress                          |
+| Voice recording and transcription  | Implemented                                                                                                                                                                                                        | Browser microphone and STT model                                                                       | Physical mobile-browser test pending                                                                                                           | Private pilot                        |
+| PDF and Word export                | Implemented                                                                                                                                                                                                        | None                                                                                                   | Automated build passes; document QA suite pending                                                                                              | Pilot-ready                          |
+| Supabase sign-in and sign-up UI    | Implemented                                                                                                                                                                                                        | Supabase URL, publishable key, redirect allowlist and providers                                        | Unit/config checks pass; deployed sign-up, recovery and session-restore test pending                                                           | Conditional                          |
+| Google and email/password sign-in  | Supported by Supabase Auth                                                                                                                                                                                         | Enable providers and production Google OAuth credentials                                               | Deployed end-to-end auth test pending                                                                                                          | Conditional                          |
+| Personal tenancy                   | Implemented in application contracts                                                                                                                                                                               | Supabase Auth and Postgres                                                                             | Workspace-isolation unit tests pass; live cross-user test pending                                                                              | Private pilot                        |
+| Organization tenancy               | Feature-gated                                                                                                                                                                                                      | Team-workspace flag plus reviewed membership lifecycle                                                 | Keep disabled for the individual paid pilot                                                                                                    | Later pilot                          |
+| Cloud conversations and projects   | Implemented on Supabase Postgres                                                                                                                                                                                   | Supabase Auth plus `DATABASE_URL`                                                                      | Repository checks pass; live production-host and tenant-isolation verification pending                                                         | Private pilot                        |
+| Supabase Postgres data plane       | Runtime repositories, migrations, RLS and pooler client implemented                                                                                                                                                | Supabase project and connection strings                                                                | Credit and data verification pass; Hostinger connectivity pending                                                                              | Pilot-ready                          |
+| Usage ledger and cost records      | Schema and write contracts implemented                                                                                                                                                                             | Durable database                                                                                       | Live reconciliation test pending                                                                                                               | In progress                          |
+| Rate limiting                      | Identity-aware burst/day limits; per workspace when signed in, network address as an anonymous backstop                                                                                                            | None                                                                                                   | Still process-local, so limits reset on restart and do not coordinate across instances                                                         | Pilot-ready, not production-scale    |
+| Anonymous access to expensive work | Agent, Studio, image and video require an identified workspace whenever Supabase Auth is configured                                                                                                                | Supabase Auth settings                                                                                 | Unit tests pass; deployed test pending                                                                                                         | Implemented                          |
+| Credit engine                      | Landed-cost conversion, per-feature reserve/floor/ceiling, settlement and plan economics implemented and unit tested                                                                                               | None                                                                                                   | Verified                                                                                                                                       | Ready                                |
+| Credit ledger and reservations     | Reserve, settle, release, expiry and grant on Supabase Postgres; wired into chat, agent, image and video, plus chat fair-use counters and overflow metering                                                        | `DATABASE_URL`                                                                                         | `npm run credits:verify` passes 16/16 against the live database, including ledger reconciliation                                               | Pilot-ready                          |
+| Allowance grants                   | Explorer refreshes lazily each calendar month; paid allowances come only from verified prepaid payments; top-up credits are permanent purchased credits                                                            | None for Explorer; verified provider for paid access                                                   | Unit regressions pass; live expiry transition pending                                                                                          | Pilot-ready                          |
+| Credit interface                   | `/api/credits` returns balance, holds, cost table and the compact public plan list; `CreditBalance.tsx` shows balance, reservations, plan and cost guide; Media Studio shows an inline top-up-or-plan panel on 402 | None                                                                                                   | Wired in; Media Studio panel live, signed-in visual check of balance pending                                                                   | Pilot-ready                          |
+| Chat fair-use caps and overflow    | Everyday chat included up to per-plan daily caps (10/60/120/150; anonymous halves); durable UTC-day counters; signed-in overflow at 1 credit per message; metered work bypasses caps                               | Migration 0017                                                                                         | Unit tests updated; live post-cap behaviour re-test pending                                                                                    | Live                                 |
+| One-time credit top-ups            | GH₵50 → 40, GH₵100 → 90, GH₵200 → 185 credits through the same verified checkout; permanent purchased credits, never renew                                                                                         | Merchant live key and public callback URL                                                              | Shipped 2026-08-15; shares the verified plan checkout — a real top-up purchase still to be made                                                | Live in code, first purchase pending |
+| Prepaid monthly access and credits | Verified payment activates one month and grants once; expiry falls back to Explorer                                                                                                                                | Database, payment provider and policies                                                                | Real production purchase verified end to end (2026-08-14)                                                                                      | Live in pilot                        |
+| ExpressPay hosted checkout         | Provider-isolated adapter, durable attempts, return/notification routes, server-side query verification and idempotent activation; one-item checkout (plan or top-up)                                              | Merchant live key, public HTTPS callback URL and migrations `0006`/`0007`                              | Real Mobile Money purchase verified end to end in production (2026-08-14); delayed-notification, reversal and refund paths still unproven live | Live (prepaid pilot)                 |
+| Logs and request IDs               | Structured redacted logs implemented                                                                                                                                                                               | Host log retention                                                                                     | External alerting absent                                                                                                                       | Pilot-ready                          |
+| Customer Quality Loop              | Feedback, opt-in evidence, receipts, rule-first triage, bounded AI evaluation and reviewer desk implemented                                                                                                        | Database migration, reviewer IDs and optional alert webhook                                            | 7 focused unit tests and responsive browser checks pass; live urgent alert still requires verification                                         | Private pilot                        |
+| Error monitoring                   | Sentry (server + browser errors, traces, warn/error logs) and Axiom (structured log shipping) wired through Next.js instrumentation; console and `lab_usage_events` remain                                            | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` (provisioned), `SENTRY_AUTH_TOKEN` for source maps, and `AXIOM_TOKEN` / `AXIOM_DATASET` in the hosting environment | DSN provisioned; live verification pending a first event via `/sentry-example-page`                                                            | Configured, verify live              |
+| Security headers                   | Hardened for Supabase Auth and hosted providers                                                                                                                                                                    | Production domains                                                                                     | Local smoke checks pass; production header scan pending                                                                                        | Implemented                          |
+| Dependency security                | Production dependency audit clean                                                                                                                                                                                  | Regular update process                                                                                 | `npm audit --omit=dev` passes                                                                                                                  | Ready                                |
 
 ## Architecture boundary
 
@@ -152,7 +217,7 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
 - [ ] Add the production origin and `/auth/callback` to Supabase redirect URLs.
 - [ ] Enable Google plus verified email/password and configure production OAuth.
 - [ ] Pass sign-up, email confirmation, sign-in, password reset, Google sign-in,
-  sign-out and session restoration on desktop and mobile.
+      sign-out and session restoration on desktop and mobile.
 - [ ] Pass a two-account isolation test against the deployed database.
 
 ### Gate 2: durable data
@@ -160,18 +225,18 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
 - [x] Create the Supabase production project in the approved region.
 - [ ] Keep the project spend cap enabled and enforce MFA for administrators.
 - [ ] Rotate the database password used during initial setup.
-- [x] Apply `database/postgres/0001_initial.sql` and `0002_runtime_foundation.sql`
-  using the direct migration URL. Verified with `npm run db:postgres:verify`:
-  22 tables, row-level security on every one, zero grants to the anon role.
+- [x] Apply the migration sequence through `0017_chat_daily_cap.sql` using the
+      direct migration URL. Verified with `npm run db:postgres:verify`: RLS on
+      every table and zero grants to the anon role.
 - [x] Percent-encode reserved characters in the database password. The password
-  contains a literal `@` and must be written as `%40` in any connection URL.
+      contains a literal `@` and must be written as `%40` in any connection URL.
 - [x] Connect through Supabase's shared session pooler (port 5432). Verified
-  locally; the same URL must be set on Hostinger.
+      locally; the same URL must be set on Hostinger.
 - [ ] Use the transaction pooler (port 6543) only if the API moves to a
-  serverless or short-lived runtime.
+      serverless or short-lived runtime.
 - [x] Replace MySQL-specific repositories; Postgres is the only data plane.
 - [x] Confirm there were no authenticated MySQL records to migrate before the
-  cutover, as recorded in `DECISIONS.md`.
+      cutover, as recorded in `DECISIONS.md`.
 - [ ] Pass personal and organization tenant-isolation tests.
 - [ ] Confirm daily backups and perform a documented restore rehearsal.
 
@@ -179,42 +244,44 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
 
 - [ ] Replace process-memory daily quotas with a shared atomic limiter.
 - [x] Limit by workspace rather than network address, so shared connections do
-  not throttle genuine users, with a reduced anonymous allowance as a backstop.
+      not throttle genuine users, with a reduced anonymous allowance as a backstop.
 - [x] Require a signed-in workspace for expensive Agent, Studio, image and video
-  work whenever identity is configured.
+      work whenever identity is configured.
 - [x] Define the credit engine: landed cost, per-feature reserve and ceiling,
-  settlement rules and plan economics (`src/lib/billing/credits.ts`).
+      settlement rules and plan economics (`src/lib/billing/credits.ts`).
 - [x] Persist credit accounts and reservations, then reserve before expensive
-  work and settle actual cost afterward. Credits live in Supabase Postgres only.
+      work and settle actual cost afterward. Credits live in Supabase Postgres only.
 - [x] Port every remaining route from MySQL and remove the second data plane.
-  `src/lib/mysql.ts`, `database/schema.sql`, the MySQL migration script and the
-  `mysql2` dependency are deleted. Verified with `npm run data:verify`: 12 of 12
-  checks pass against the live database.
+      `src/lib/mysql.ts`, `database/schema.sql`, the MySQL migration script and the
+      `mysql2` dependency are deleted. Verified with `npm run data:verify`: 12 of 12
+      checks pass against the live database.
 - [x] Deliver the allowance policy. Explorer refreshes lazily on first touch of
-  a new calendar month. Paid pilot credits are granted only by a verified
-  payment and never refresh without another payment.
+      a new calendar month. Paid pilot credits are granted only by a verified
+      payment and never refresh without another payment.
 - [ ] Add application, workspace and user spend caps.
 - [ ] Add provider timeouts, circuit breakers and failover metrics.
 
 ### Gate 4: operations
 
-- [ ] Add Sentry or an equivalent error destination and alert on sustained 5xx.
+- [ ] Add Sentry or an equivalent error destination and alert on sustained 5xx. (In progress: Sentry + Axiom are wired and the DSN is provisioned; email alerts to configure once a first event is verified live.)
 - [ ] Add product analytics with consent-aware event collection.
 - [ ] Create a durable queue for long-running work and cancellation.
 - [ ] Store private uploads and generated assets in Supabase Storage with signed URLs.
 - [ ] Run a production-like load test and inspect slow queries.
 - [ ] Publish incident, retention, deletion, refund and support procedures.
-- [ ] Apply `0006_quality_loop.sql`, assign at least two quality reviewers and test an S0 alert end to end.
+- [ ] Confirm the quality-loop migration (`0006`) is applied, assign at least two quality reviewers and test an S0 alert end to end.
 - [ ] Set staffed review hours and measure urgent acknowledgement and fix-verification time.
 
 ### Gate 5: payments
 
 - [x] Select ExpressPay's hosted Merchant API so payment credentials stay on the provider page.
+- [x] Complete one real Mobile Money purchase end to end in production (2026-08-14: Everyday plan, server-side query verified, credits granted exactly once).
+- [ ] Complete one real top-up purchase end to end in production.
 - [ ] Complete one sandbox card and one sandbox Mobile Money payment, including delayed notification and duplicate-callback checks.
 - [ ] Confirm post-url retry behavior with merchant support; verify every notification through Query and replay it to prove idempotency.
 - [ ] Test success, delay, abandonment, duplicate, reversal and refund paths.
 - [ ] Reconcile payment, subscription and credit-ledger records.
-- [ ] Enable billing only after all previous gates pass.
+- [ ] Keep checkout on the verified prepaid path; do not enable automatic renewal until all previous gates pass.
 
 ## Operator commands
 
@@ -240,4 +307,4 @@ These actions change external state, incur cost or depend on private credentials
 2. Configure the Supabase Auth production providers and redirect allowlist without sending secrets in chat.
 3. Configure the production Google OAuth consent screen and credentials.
 4. Approve an error-monitoring provider and its data-retention settings.
-5. Enable ExpressPay only after the complete sandbox matrix and server-side query reconciliation pass.
+5. Keep ExpressPay checkout on the verified prepaid path and prove the live failure paths (delayed notification, reversal, refund) before enabling automatic renewal.

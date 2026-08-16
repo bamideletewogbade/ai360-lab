@@ -1,6 +1,13 @@
 # AI360 implementation roadmap
 
-Last updated: 2026-08-04
+Last updated: 2026-08-16
+
+> **Superseded sections.** Identity moved from Clerk to **Supabase Auth** on
+> 2026-08-14 (Clerk is retired), so the Clerk-specific checklists below are
+> historical. Billing is **live in production** for the manual prepaid pilot
+> (ExpressPay Mobile Money purchase verified 2026-08-14; one-time top-ups
+> shipped 2026-08-15). Current release truth is `PRODUCTION_READINESS.md`;
+> pricing decisions are in `DECISIONS.md`.
 
 This is the living delivery checklist for shared AI360 identity, organization-ready workspaces, durable projects, and bounded multi-agent execution. Update the checkboxes and status table as work is completed.
 
@@ -27,10 +34,11 @@ AI360 should help an individual or team move from an outcome to a reviewed deliv
 - [x] Use bounded orchestration before attempting a large swarm.
 - [x] Require human approval before paid media generation or external side effects.
 - [x] Measure an agent by the completed outcome, not by a convincing final message.
-- [x] Keep Clerk as the only identity authority and use Supabase for Postgres,
-  Storage and optional Realtime.
+- [x] ~~Keep Clerk as the only identity authority and use Supabase for Postgres,
+      Storage and optional Realtime.~~ **Superseded 2026-08-14:** Supabase Auth is
+      the only identity and session authority; Clerk is retired.
 - [x] Migrate from MySQL through repository cutover and reconciliation instead
-  of switching the production connection string in one step.
+      of switching the production connection string in one step.
 
 ## Current baseline
 
@@ -49,13 +57,14 @@ AI360 should help an individual or team move from an outcome to a reviewed deliv
 - [x] Provider-neutral payment, subscription, webhook and credit-ledger schema.
 - [x] Safe hosted-checkout boundary that remains closed until ExpressPay is verified.
 - [x] Clerk-compatible CSP, restricted authorized parties and production
-  liveness/readiness endpoints.
+      liveness/readiness endpoints.
 - [x] Supabase Postgres schema, RLS policies, indexes and migration runner prepared.
 - [x] Supabase runtime migration prepared for private assets, agent runs,
-  specialist tasks, events, artifacts, approvals and credit reservation state.
+      specialist tasks, events, artifacts, approvals and credit reservation state.
 - [x] Layer-by-layer non-functional quality budgets documented.
 - [x] Production dependency audit has no known production vulnerabilities.
-- [ ] Production Clerk keys configured.
+- [x] ~~Production Clerk keys configured.~~ **Superseded 2026-08-14:** Supabase
+      Auth is live in production; Clerk keys are not used.
 - [ ] Production MySQL connection configured for the transition period.
 - [ ] Supabase project created and application data routes migrated to Postgres.
 - [ ] Studio projects synchronized across devices.
@@ -64,15 +73,15 @@ AI360 should help an individual or team move from an outcome to a reviewed deliv
 
 ## Delivery status
 
-| Phase | Outcome | Status | Gate |
-| --- | --- | --- | --- |
-| 0 | Decisions and baseline | Complete | Architecture approved |
-| 1 | Shared identity and tenant isolation | Blocked on credentials | Cross-site sign-in and isolation tests pass |
-| 2 | Durable projects, assets and usage | In progress | Work survives browser and server restarts |
-| 3 | Coordinator and specialist runtime | Planned | Three-agent pilot beats single-agent baseline |
-| 4 | Live agent-room experience | Planned | UI reflects real persisted events |
-| 5 | Evals, security and cost controls | Planned | Release thresholds pass |
-| 6 | Pilot rollout and subscriptions | Planned | Reliable usage and entitlement data exists |
+| Phase | Outcome                              | Status                 | Gate                                          |
+| ----- | ------------------------------------ | ---------------------- | --------------------------------------------- |
+| 0     | Decisions and baseline               | Complete               | Architecture approved                         |
+| 1     | Shared identity and tenant isolation | Blocked on credentials | Cross-site sign-in and isolation tests pass   |
+| 2     | Durable projects, assets and usage   | In progress            | Work survives browser and server restarts     |
+| 3     | Coordinator and specialist runtime   | Planned                | Three-agent pilot beats single-agent baseline |
+| 4     | Live agent-room experience           | Planned                | UI reflects real persisted events             |
+| 5     | Evals, security and cost controls    | Planned                | Release thresholds pass                       |
+| 6     | Pilot rollout and subscriptions      | Planned                | Reliable usage and entitlement data exists    |
 
 ## Phase 1: Shared identity and organization-ready tenancy
 
@@ -80,13 +89,17 @@ Why: every conversation, campaign, generated file, agent run and cost must have 
 
 ### Clerk dashboard, user-owned actions
 
-- [ ] Confirm both sites use the same Clerk production application and instance.
-- [ ] Set Organization membership to **optional**.
-- [ ] Keep automatic first-Organization creation disabled.
-- [ ] Keep public user-created Organizations disabled during the pilot.
-- [ ] Keep the internal AI360 Organization at a limited membership size.
-- [ ] Confirm `aithreesixty.tech` and `ai360.africa` are accepted production origins/domains.
-- [ ] Add the existing Clerk production keys to Hostinger environment variables. Never paste secret keys into source control or chat.
+> **Superseded 2026-08-14.** Identity is now Supabase Auth (Clerk retired). The
+> equivalent Supabase items live in `PRODUCTION_READINESS.md` Gate 1 (auth
+> providers, redirect allowlist, sign-in tests).
+
+- [x] ~~Confirm both sites use the same Clerk production application and instance.~~ Superseded
+- [x] ~~Set Organization membership to optional.~~ Superseded
+- [x] ~~Keep automatic first-Organization creation disabled.~~ Superseded
+- [x] ~~Keep public user-created Organizations disabled during the pilot.~~ Superseded
+- [x] ~~Keep the internal AI360 Organization at a limited membership size.~~ Superseded
+- [x] ~~Confirm `aithreesixty.tech` and `ai360.africa` are accepted production origins/domains.~~ Superseded — production origins verified in Supabase
+- [x] ~~Add the existing Clerk production keys to Hostinger environment variables.~~ Superseded
 
 ### Application work
 
@@ -238,10 +251,10 @@ Why: subscriptions should be based on measured cost and reliable entitlements, n
 - [x] Select hybrid billing: personal subscriptions plus organization workspaces.
 - [x] Define a centralized plan and feature catalog in code.
 - [x] Define payment attempts, subscriptions, replay-safe webhook receipts and an append-only credit ledger.
-- [ ] Calibrate included credits and top-ups using observed provider cost and completion data.
-- [ ] Implement plan and feature entitlement checks at every paid server boundary.
-- [ ] Add credit reservations for expensive media jobs.
-- [ ] Reconcile reserved and actual provider cost after completion or failure.
+- [x] Calibrate included credits and top-ups using observed provider cost and completion data. **Initial calibration shipped 2026-08-15** — everyday chat included with fair-use caps (10/60/120/150), overflow at 1 credit/message, premium models at 2×, top-up bundles GH₵50/100/200; rebalance after cohort data
+- [x] Implement plan and feature entitlement checks at every paid server boundary. **Done** — the credit gate enforces plan economics on chat, agent, image, video and Studio packs
+- [x] Add credit reservations for expensive media jobs. **Done** — video holds sized from the quoted provider price, 2-hour TTL
+- [x] Reconcile reserved and actual provider cost after completion or failure. **Done** — measured settlement on terminal status, refunds on failure
 - [ ] Add spend caps at user, organization and application levels.
 - [ ] Publish clear retention, privacy, cancellation and refund rules before charging.
 
@@ -251,12 +264,13 @@ Why: ExpressPay is the selected Ghana payment edge. AI360 uses its hosted
 Merchant API so sensitive payment credentials stay with the provider, and
 activates access only after a server-side Query matches the stored order.
 
-- [ ] Enter sandbox and production merchant credentials directly in each deployment environment.
+- [x] Enter sandbox and production merchant credentials directly in each deployment environment. **Done** — live ExpressPay credentials are in the production environment
 - [ ] Confirm Mobile Money networks, cards, settlement schedule, transaction fees and refund fees.
 - [x] Use manual monthly renewal; do not store or request a reusable card or wallet token.
 - [x] Implement the documented submit, hosted payment, return, post-url and Query endpoints.
 - [x] Make AI360 order IDs and credit grants idempotent and provider references unique.
-- [ ] Test successful, abandoned, delayed, duplicate, reversed and refunded payments.
+- [x] Test successful payments. **Done** — real Mobile Money purchase (Everyday, GH₵125) verified end to end in production 2026-08-14
+- [ ] Test abandoned, delayed, duplicate, reversed and refunded payments. **Still pending live proof**
 - [x] Activate an entitlement only after a Query verifies token, order, amount and currency.
 - [ ] Keep a second Ghana-capable provider as an adapter-level fallback if ExpressPay reliability or feature coverage fails the pilot gate.
 
@@ -270,37 +284,42 @@ The first code slice should be small enough to verify independently:
 - [x] Namespace browser conversation storage by the active personal or organization workspace.
 - [x] Add unit tests for personal, organization and cross-workspace scope resolution.
 - [ ] Add tenant-isolation integration tests.
-- [ ] Configure Clerk production settings and Hostinger variables.
+- [x] ~~Configure Clerk production settings and Hostinger variables.~~ Superseded — Supabase Auth configuration is live in production
 - [ ] Run cross-site sign-in, personal workspace and organization workspace tests.
 
 Only after this passes should Studio persistence and the coordinator runtime be built on top of it.
 
 ## Inputs required from the project owner
 
-- [ ] Confirm Organization membership is set to optional in Clerk.
-- [ ] Confirm whether the Organization in the screenshot should be named `AI360 Internal`.
-- [ ] Add production Clerk keys directly to Hostinger.
-- [ ] Keep the dedicated Hostinger MySQL credentials available until the
-  Supabase migration and reconciliation pass.
+- [x] ~~Confirm Organization membership is set to optional in Clerk.~~ Superseded — identity is Supabase Auth
+- [x] ~~Confirm whether the Organization in the screenshot should be named `AI360 Internal`.~~ Superseded
+- [x] ~~Add production Clerk keys directly to Hostinger.~~ Superseded
+- [x] Keep the dedicated Hostinger MySQL credentials available until the
+      Supabase migration and reconciliation pass. **Done — MySQL fully retired
+      2026-08-05; Postgres is the only data plane.**
 - [ ] Create the Supabase project, select its region and add connection strings
-  directly to local/Hostinger environment settings.
+      directly to local/Hostinger environment settings.
 - [ ] Approve the first three specialist roles: Researcher, Strategist and Verifier.
 
 ## Change log
 
-| Date | Decision or milestone | Evidence |
-| --- | --- | --- |
-| 2026-08-01 | Shared Clerk application selected | Existing learners need one identity across the main site and Lab |
-| 2026-08-01 | Optional Organization membership selected | AI360 serves both individuals and teams |
-| 2026-08-01 | Bounded coordinator selected | Better cost control, observability and evaluation than an immediate large swarm |
-| 2026-08-01 | First specialist team selected | Researcher, Strategist and Verifier cover evidence, decisions and quality control |
-| 2026-08-01 | Workspace ownership foundation implemented | Server-derived personal and organization keys now scope conversation persistence |
-| 2026-08-08 | Research-calibrated monthly pilot pricing adopted | GH₵0 Explorer, GH₵125 Everyday, GH₵350 Builder and GH₵1,200 assisted Team balance accessible entry with safer upper-plan economics; annual purchasing waits for proven renewal and refund operations |
-| 2026-08-08 | ExpressPay hosted Merchant API selected behind an adapter | Mobile Money should lead checkout, payment credentials remain on the provider page, and AI360 retains provider-neutral billing and entitlement records |
-| 2026-08-04 | Clerk + Supabase production boundary selected | Clerk owns identity; portable Postgres, RLS and Storage provide the durable data plane |
-| 2026-08-04 | Production preflight and readiness endpoint added | Releases must expose missing dependencies instead of silently degrading |
-| 2026-08-04 | Layer-first quality budgets adopted | Performance, latency, accessibility, security and cost are acceptance criteria for every feature |
-| 2026-08-04 | Supabase runtime foundation prepared | Assets, durable agents and credit reservations now have an indexed, tenant-scoped schema before feature expansion |
+| Date       | Decision or milestone                                                                                                                                           | Evidence                                                                                                                                                                                                  |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-01 | Shared Clerk application selected                                                                                                                               | Existing learners need one identity across the main site and Lab                                                                                                                                          |
+| 2026-08-01 | Optional Organization membership selected                                                                                                                       | AI360 serves both individuals and teams                                                                                                                                                                   |
+| 2026-08-01 | Bounded coordinator selected                                                                                                                                    | Better cost control, observability and evaluation than an immediate large swarm                                                                                                                           |
+| 2026-08-01 | First specialist team selected                                                                                                                                  | Researcher, Strategist and Verifier cover evidence, decisions and quality control                                                                                                                         |
+| 2026-08-01 | Workspace ownership foundation implemented                                                                                                                      | Server-derived personal and organization keys now scope conversation persistence                                                                                                                          |
+| 2026-08-16 | Observability wired                                                                                                                                             | Sentry (server + browser errors, traces) and Axiom (structured log shipping) via Next 16 instrumentation; console and the Postgres usage ledger remain the source of truth; see `DECISIONS.md` 2026-08-16 |
+| 2026-08-16 | Video render reliability: studio never locks for a background render, polling never strands a job, real recent-media gallery, 8s disabled pending 4s validation | `MediaStudio` unlock, slow-retry polling, `/api/studio/media?recent=1`; see `DECISIONS.md` 2026-08-16                                                                                                     |
+| 2026-08-15 | Pricing by work done, top-ups and Media Studio shipped                                                                                                          | Everyday chat included with durable fair-use caps and 1-credit overflow; top-up bundles GH₵50→40/100→90/200→185; Media Studio generates real assets; image verified in production                         |
+| 2026-08-14 | Supabase Auth cutover and first live payment                                                                                                                    | Clerk retired; paid checkout live for the manual prepaid pilot; real ExpressPay Mobile Money purchase verified end to end                                                                                 |
+| 2026-08-08 | Research-calibrated monthly pilot pricing adopted                                                                                                               | GH₵0 Explorer, GH₵125 Everyday, GH₵350 Builder and GH₵1,200 assisted Team balance accessible entry with safer upper-plan economics; annual purchasing waits for proven renewal and refund operations      |
+| 2026-08-08 | ExpressPay hosted Merchant API selected behind an adapter                                                                                                       | Mobile Money should lead checkout, payment credentials remain on the provider page, and AI360 retains provider-neutral billing and entitlement records                                                    |
+| 2026-08-04 | Clerk + Supabase production boundary selected                                                                                                                   | Clerk owns identity; portable Postgres, RLS and Storage provide the durable data plane                                                                                                                    |
+| 2026-08-04 | Production preflight and readiness endpoint added                                                                                                               | Releases must expose missing dependencies instead of silently degrading                                                                                                                                   |
+| 2026-08-04 | Layer-first quality budgets adopted                                                                                                                             | Performance, latency, accessibility, security and cost are acceptance criteria for every feature                                                                                                          |
+| 2026-08-04 | Supabase runtime foundation prepared                                                                                                                            | Assets, durable agents and credit reservations now have an indexed, tenant-scoped schema before feature expansion                                                                                         |
 
 ## Definition of done
 

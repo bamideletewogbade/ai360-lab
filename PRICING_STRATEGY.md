@@ -1,6 +1,6 @@
 # AI360 pricing strategy
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-15
 
 This is the internal commercial rationale behind the public pricing page. The
 public page should stay clear and customer-centred; provider costs, margins and
@@ -10,12 +10,12 @@ payment architecture belong here.
 
 Keep the four-tier pilot catalog while measuring real usage:
 
-| Plan | Monthly price | Included credits | Primary job |
-| --- | ---: | ---: | --- |
-| Explorer | GH₵0 | 5 | Experience one useful outcome without a card |
-| Everyday | GH₵125 | 120 | Weekly learning, writing, research and career work |
-| Builder | GH₵350 | 400 | Recurring agent, campaign and creative production |
-| Team | GH₵1,200 | 1,400 | Five-person shared work with controls, reporting and assisted onboarding |
+| Plan     | Monthly price | Included credits | Primary job                                                              |
+| -------- | ------------: | ---------------: | ------------------------------------------------------------------------ |
+| Explorer |          GH₵0 |                5 | Experience one useful outcome without a card                             |
+| Everyday |        GH₵125 |              120 | Weekly learning, writing, research and career work                       |
+| Builder  |        GH₵350 |              400 | Recurring agent, campaign and creative production                        |
+| Team     |      GH₵1,200 |            1,400 | Five-person shared work with controls, reporting and assisted onboarding |
 
 These prices are a pilot hypothesis, not a permanent promise. Do not change the
 catalog from competitor screenshots or intuition alone. Reprice after at least
@@ -69,14 +69,44 @@ monthly cohorts.
 
 ## Why each pricing mechanism exists
 
-| Mechanism | Why | Guardrail |
-| --- | --- | --- |
-| Five free monthly credits | Removes payment friction and proves value | Reset monthly; no rollover or expensive video on the free grant |
-| Subscription allowance | Predictable revenue and predictable customer capacity | No silent individual overage |
-| One-time top-ups | Supports irregular Ghanaian cash flow and project bursts | Paid credits expire only after a clearly published period |
-| Monthly-only pilot | Makes the first commitment smaller and exposes renewal failures early | Add annual purchasing only after renewal, reversal and refund operations pass |
-| Team pool | Fits schools, NGOs, programmes and businesses | Per-member caps, roles and auditable use |
-| Sponsored seats | Extends access to learners and communities | A named sponsor funds a bounded allowance |
+| Mechanism                 | Why                                                                   | Guardrail                                                                                                                                                |
+| ------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Five free monthly credits | Removes payment friction and proves value                             | Reset monthly; no rollover or expensive video on the free grant                                                                                          |
+| Subscription allowance    | Predictable revenue and predictable customer capacity                 | No silent individual overage                                                                                                                             |
+| One-time top-ups          | Supports irregular Ghanaian cash flow and project bursts              | Purchased credits are permanent; bundles are priced above the Everyday per-credit rate (GH₵1.25 / 1.11 / 1.08 vs GH₵1.04) so hoarding never beats a plan |
+| Included everyday chat    | Removes per-message friction for normal use                           | Per-plan daily fair-use caps with durable counters; overflow meters at 1 credit per message                                                              |
+| Monthly-only pilot        | Makes the first commitment smaller and exposes renewal failures early | Add annual purchasing only after renewal, reversal and refund operations pass                                                                            |
+| Team pool                 | Fits schools, NGOs, programmes and businesses                         | Per-member caps, roles and auditable use                                                                                                                 |
+| Sponsored seats           | Extends access to learners and communities                            | A named sponsor funds a bounded allowance                                                                                                                |
+
+## 2026-08-15 update — pricing by work done
+
+The static "every message costs 1 credit" shape is gone. Pricing now matches
+the work actually done, following the frontier pattern (Perplexity meters only
+multi-step work, ChatGPT/Claude use soft caps, Cursor bills tokens with
+premium-model multipliers):
+
+- **Everyday chat is included.** Plain chat on the fast model carries a zero
+  credit weight (`FEATURE_WEIGHTS.chat = 0/0/0`) and is bounded by per-plan
+  daily fair-use caps — Explorer 10, Everyday 60, Builder 120, Team 150,
+  anonymous halves to 10. The counter is durable (migration 0017,
+  `lab_chat_daily_counters`, keyed by workspace or IP and UTC date), so a
+  deploy cannot reset the allowance and the cap literally resets at midnight
+  UTC.
+- **Overflow meters past the cap.** Signed-in users pay a flat 1 credit per
+  extra message instead of being blocked; anonymous callers are hard-stopped
+  with a sign-in hint. A typical turn costs ~GH₵0.01 landed against GH₵0.26 of
+  credit value, so overflow is the highest-margin work in the product; the
+  ledger still records the real measured cost so long turns stay visible.
+- **Heavy work stays metered and bypasses the cap.** Live research, files,
+  premium models, agent execution, images and video always go through the
+  credit gate. Premium models meter at measured cost × 2
+  (`PREMIUM_MODEL_MULTIPLIER`, only `claude`/`kimi` today).
+- **Top-ups shipped.** GH₵50 → 40, GH₵100 → 90 and GH₵200 → 185 credits use
+  the verified ExpressPay path; credits are permanent. Top-up volume is a
+  pilot metric — if it cannibalises Everyday, rebalance.
+- **Cap cost of the free tier.** Fully-used caps cost at most ~GH₵3/18/36/45
+  per workspace per month (13%/10%/4% of Everyday/Builder/Team revenue).
 
 ## Unit economics gate
 
@@ -118,12 +148,12 @@ before launch.
 
 Measured at full utilisation of the included allowance:
 
-| Plan | Cost at full use | Share of revenue | Within 25% target |
-| --- | ---: | ---: | --- |
-| Explorer | GH₵1.30 | acquisition cost | n/a |
-| Everyday | GH₵31.20 | 25.0% | yes |
-| Builder | GH₵104.00 | 29.7% | **no** |
-| Team | GH₵364.00 | 30.3% | **no** |
+| Plan     | Cost at full use | Share of revenue | Within 25% target |
+| -------- | ---------------: | ---------------: | ----------------- |
+| Explorer |          GH₵1.30 | acquisition cost | n/a               |
+| Everyday |         GH₵31.20 |            25.0% | yes               |
+| Builder  |        GH₵104.00 |            29.7% | **no**            |
+| Team     |        GH₵364.00 |            30.3% | **no**            |
 
 Builder and Team remain outside the 25% target at full utilisation, but the
 research-calibrated prices narrow both breaches to roughly 30% while preserving
@@ -175,16 +205,16 @@ contract. Before enabling checkout:
 
 ## Pilot measurement plan
 
-| Metric | Decision it informs | First signal |
-| --- | --- | --- |
-| Visitor to free activation | Is the offer understandable? | Completes one useful task |
-| Free to paid conversion | Is five credits enough to prove value? | Plan purchase within 30 days |
-| Paid credit utilization | Are allowances credible? | Median and p90 by plan |
-| Contribution margin | Are prices sustainable? | Cohort revenue minus measured variable cost |
-| Renewal and failed renewal | Does the payment cadence fit? | Monthly cohort by payment rail |
-| Top-up rate | Are plans too small or appropriately flexible? | Top-ups per active subscriber |
-| Outcome completion | Are credits buying value, not activity? | Finished and exported deliverable |
-| Sponsored-seat use | Does access funding create real outcomes? | Active sponsored learners and completion |
+| Metric                     | Decision it informs                            | First signal                                |
+| -------------------------- | ---------------------------------------------- | ------------------------------------------- |
+| Visitor to free activation | Is the offer understandable?                   | Completes one useful task                   |
+| Free to paid conversion    | Is five credits enough to prove value?         | Plan purchase within 30 days                |
+| Paid credit utilization    | Are allowances credible?                       | Median and p90 by plan                      |
+| Contribution margin        | Are prices sustainable?                        | Cohort revenue minus measured variable cost |
+| Renewal and failed renewal | Does the payment cadence fit?                  | Monthly cohort by payment rail              |
+| Top-up rate                | Are plans too small or appropriately flexible? | Top-ups per active subscriber               |
+| Outcome completion         | Are credits buying value, not activity?        | Finished and exported deliverable           |
+| Sponsored-seat use         | Does access funding create real outcomes?      | Active sponsored learners and completion    |
 
 Run price and packaging experiments on new cohorts only. Never silently reduce
 an existing subscriber's paid allowance.
