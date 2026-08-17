@@ -35,10 +35,25 @@ import {
   readMediaJob,
   updateMediaJobResult,
 } from "@/lib/media/job-repository";
-import { persistGeneratedMedia } from "@/lib/media/storage";
+import {
+  MediaStorageNotConfiguredError,
+  persistGeneratedMedia,
+} from "@/lib/media/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/**
+ * How long a finished clip may keep failing delivery before the job is
+ * declared failed and the hold returned.
+ *
+ * Retrying is right for a passing storage or network fault, but a render that
+ * still cannot be saved half an hour after the provider finished is not going
+ * to save itself, and leaving it `running` shows the person "Rendering…"
+ * forever for work that will never arrive. The reservation TTL is two hours, so
+ * this settles well inside it.
+ */
+const DELIVERY_DEADLINE_MS = 30 * 60 * 1_000;
 
 type VideoRequest = {
   action?: "quote" | "submit" | "status";
@@ -428,10 +443,15 @@ export async function POST(request: Request) {
             }),
             measuredUsd: null,
             outcome: "failure",
+          }).catch((settlementError) => {
+            log.error("studio.video.settle_failed", {
+              ...errorDetails(settlementError),
+            });
+            return null;
           });
           log.info("studio.video.job_lost_settled", {
-            settled: settlement.ok,
-            released: settlement.ok ? settlement.released : undefined,
+            settled: settlement?.ok ?? false,
+            released: settlement?.ok ? settlement.released : undefined,
           });
           log.finish(502, { outcome: "job_lost_refunded" });
           return Response.json(
@@ -464,17 +484,6 @@ export async function POST(request: Request) {
         usage?: { cost?: number };
         unsigned_urls?: string[];
       };
-      await recordUsageEventSafe({
-        requestId: log.requestId,
-        route: "/api/studio/video",
-        feature: "video.status",
-        provider: "openrouter",
-        model: durableJob?.model || undefined,
-        actualCostUsd: result.usage?.cost,
-        latencyMs: Math.round(performance.now() - requestStartedAt),
-        outcome: result.status || "status",
-      });
-
       // The render finished in a later request than the one that reserved the
       // credits, so this is where a video is finally charged or refunded.
       //
@@ -491,8 +500,28 @@ export async function POST(request: Request) {
         result.status === "expired";
       const failedTerminal = terminal && result.status !== "completed";
 
+      // The provider reports the job's whole cost on every poll, so recording
+      // it each time counted one clip dozens of times over: 150 polls of three
+      // renders read as $47.80 of spend against about $0.96 of real cost — and
+      // that is the number a pricing decision gets made from. Only a terminal
+      // status carries the cost, and only the first one to see it.
+      if (terminal && durableJob?.actualCostUsd == null) {
+        await recordUsageEventSafe({
+          requestId: log.requestId,
+          route: "/api/studio/video",
+          feature: "video.status",
+          provider: "openrouter",
+          model: durableJob?.model || undefined,
+          actualCostUsd: result.usage?.cost,
+          latencyMs: Math.round(performance.now() - requestStartedAt),
+          outcome: result.status || "status",
+        });
+      }
+
       let durableAssetId = durableJob?.outputAssetId || null;
       let deliveryFailed = false;
+      /** Delivery that retrying cannot fix: settle it now rather than poll on. */
+      let deliveryPermanent = false;
       if (durableJob && requester.context) {
         if (result.status === "completed" && !durableAssetId) {
           try {
@@ -513,16 +542,33 @@ export async function POST(request: Request) {
             durableAssetId = stored.assetId;
           } catch (downloadError) {
             deliveryFailed = true;
+            // An unset storage configuration cannot be retried into working,
+            // and a clip that has failed delivery past the deadline is not
+            // coming back either. Both are terminal, and both record the real
+            // reason on the job: a generic retry note hid this failure in
+            // production until the provider job had to be inspected by hand.
+            const reason =
+              downloadError instanceof Error
+                ? downloadError.message
+                : "The finished clip could not be saved.";
+            deliveryPermanent =
+              downloadError instanceof MediaStorageNotConfiguredError ||
+              Date.now() - Date.parse(durableJob.createdAt) >
+                DELIVERY_DEADLINE_MS;
             log.error("studio.video.persist_failed", {
+              permanent: deliveryPermanent,
               ...errorDetails(downloadError),
             });
             await updateMediaJobResult({
               context: requester.context,
               jobId: durableJob.id,
-              status: "running",
-              errorCode: "delivery_retry",
-              errorMessage:
-                "The finished clip could not be saved yet; the next poll retries delivery.",
+              status: deliveryPermanent ? "failed" : "running",
+              errorCode: deliveryPermanent
+                ? "delivery_failed"
+                : "delivery_retry",
+              errorMessage: deliveryPermanent
+                ? reason
+                : `The finished clip could not be saved yet; the next poll retries delivery. (${reason})`,
             }).catch(() => undefined);
           }
         }
@@ -538,22 +584,54 @@ export async function POST(request: Request) {
         }
       }
 
-      if (terminal && !deliveryFailed && reservationId && requester.context) {
+      const settleNow = deliveryPermanent || (terminal && !deliveryFailed);
+      if (settleNow && reservationId && requester.context) {
+        // A settlement fault must not break the poll it happens to run in.
+        // Throwing here used to turn every later poll into a 500 the client
+        // retried forever, so a delivered clip could still read as "Rendering…".
         const settlement = await settleReservation({
           context: requester.context,
           reservationId,
           estimate: estimateCredits("video", {
             quotedUsd: durableJob?.quotedCostUsd ?? result.usage?.cost,
           }),
-          measuredUsd: result.usage?.cost,
-          outcome: result.status === "completed" ? "success" : "failure",
+          measuredUsd: deliveryPermanent ? null : result.usage?.cost,
+          outcome:
+            !deliveryPermanent && result.status === "completed"
+              ? "success"
+              : "failure",
+        }).catch((settlementError) => {
+          log.error("studio.video.settle_failed", {
+            ...errorDetails(settlementError),
+          });
+          return null;
         });
         log.info("studio.video.settled", {
-          status: result.status,
-          settled: settlement.ok,
-          charged: settlement.ok ? settlement.charged : undefined,
-          released: settlement.ok ? settlement.released : undefined,
+          status: deliveryPermanent ? "delivery_failed" : result.status,
+          settled: settlement?.ok ?? false,
+          charged: settlement?.ok ? settlement.charged : undefined,
+          released: settlement?.ok ? settlement.released : undefined,
         });
+      }
+
+      // The clip cannot be delivered and will not be charged. Ending the job
+      // here is what stops the studio showing an endless "Rendering…" for work
+      // the person is never going to receive.
+      if (deliveryPermanent) {
+        log.finish(502, { outcome: "delivery_failed" });
+        return Response.json(
+          {
+            error:
+              "This render finished but could not be saved, so it was not charged. Your credits were returned — please try again.",
+            status: "failed",
+            jobId: durableJob?.id,
+            requestId: log.requestId,
+          },
+          {
+            status: 502,
+            headers: log.headers({ "Cache-Control": "no-store" }),
+          },
+        );
       }
 
       if (deliveryFailed) {

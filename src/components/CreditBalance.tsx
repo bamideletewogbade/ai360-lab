@@ -20,6 +20,9 @@ export function CreditBalance({ signedIn, busy }: { signedIn: boolean; busy: boo
   const [reserved, setReserved] = useState(0)
   const [plan, setPlan] = useState('')
   const [guide, setGuide] = useState<CreditGuide>([])
+  // Balance at or below which the pill turns amber and offers a top-up. Same
+  // threshold as the low-credit email, so both surfaces agree.
+  const [lowThreshold, setLowThreshold] = useState(5)
   const [changed, setChanged] = useState(false)
   const [open, setOpen] = useState(false)
   const previous = useRef<number | null>(null)
@@ -39,6 +42,7 @@ export function CreditBalance({ signedIn, busy }: { signedIn: boolean; busy: boo
         setAvailable(data.available)
         setReserved(typeof data.reserved === 'number' ? data.reserved : 0)
         setPlan(typeof data.plan === 'string' ? data.plan : '')
+        if (typeof data.lowThreshold === 'number') setLowThreshold(data.lowThreshold)
         if (Array.isArray(data.guide)) setGuide(data.guide)
       })
       .catch(() => { /* the balance is a nicety, never a blocker */ })
@@ -83,12 +87,16 @@ export function CreditBalance({ signedIn, busy }: { signedIn: boolean; busy: boo
   if (!signedIn || available === null) return null
 
   const holding = busy && reserved > 0
+  // A calm nudge before the wall, not a panic: at or below the threshold the
+  // pill turns amber and the popover suggests a top-up, so nobody is surprised
+  // by a 402 mid-task.
+  const low = available <= lowThreshold
 
   return (
     <span className="credit-balance-wrap">
       <button
         type="button"
-        className={`credit-balance${busy ? ' working' : ''}${changed ? ' changed' : ''}`}
+        className={`credit-balance${busy ? ' working' : ''}${changed ? ' changed' : ''}${low ? ' low' : ''}`}
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -96,7 +104,7 @@ export function CreditBalance({ signedIn, busy }: { signedIn: boolean; busy: boo
       >
         <i className="credit-dot" aria-hidden="true" />
         <b>{available}</b>
-        <small>{holding ? `using ${reserved}…` : busy ? 'using…' : 'credits'}</small>
+        <small>{holding ? `using ${reserved}…` : busy ? 'using…' : low ? 'left, add soon' : 'credits'}</small>
       </button>
 
       {open ? (
@@ -105,6 +113,7 @@ export function CreditBalance({ signedIn, busy }: { signedIn: boolean; busy: boo
             <span><b>{available}</b> credit{available === 1 ? '' : 's'} left</span>
             {plan ? <span className="credit-plan">{plan} plan</span> : null}
           </div>
+          {low ? <p className="credit-low-note">Almost out. A one-time top-up keeps paid work from pausing.</p> : null}
           {reserved > 0 ? <p className="credit-holding">{reserved} reserved for work in progress.</p> : null}
           {guide.length ? (
             <ul className="credit-guide">

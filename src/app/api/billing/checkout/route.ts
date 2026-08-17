@@ -114,7 +114,7 @@ export async function POST(request: Request) {
       })
       return Response.json({
         error: 'Payments are not open yet.',
-        status: 'pilot_waitlist',
+        status: 'payments_closed',
         plan: itemSlug,
         amountGhs: amountMinor / 100,
       }, { status: 503, headers: log.headers({ 'Cache-Control': 'no-store' }) })

@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
-import { logSinkSend } from "./log-sink";
-import { reportErrorEvent } from "./error-tracking";
+import { logSinkSend } from "./log-sink.ts";
+import { reportErrorEvent } from "./error-tracking.ts";
 
 type LogLevel = "info" | "warn" | "error";
 
@@ -75,8 +75,11 @@ function sentryLogSend(level: LogLevel, event: string, fields: LogFields) {
   if (level === "info") return;
   if (!process.env.SENTRY_DSN && !process.env.NEXT_PUBLIC_SENTRY_DSN) return;
   const attributes = { ...fields } as Record<string, unknown>;
-  if (level === "error") Sentry.logger.error(event, attributes);
-  else Sentry.logger.warn(event, attributes);
+  // `logger` only exists once the SDK is initialized; in a bare process (tests,
+  // workers) it may be absent even with a DSN set, and telemetry must never
+  // take the app down.
+  if (level === "error") Sentry.logger?.error(event, attributes);
+  else Sentry.logger?.warn(event, attributes);
 }
 
 /**

@@ -7,11 +7,14 @@ type StudioIconName =
   | "spark"
   | "image"
   | "video"
-  | "library"
-  | "workspace"
-  | "product"
-  | "city"
-  | "mark";
+  | "download"
+  | "market"
+  | "food"
+  | "shop"
+  | "cloth"
+  | "poster"
+  | "city";
+
 type MediaItem = {
   id: string;
   kind: MediaKind;
@@ -21,125 +24,229 @@ type MediaItem = {
   url: string;
   poster?: string;
   createdAt: string;
+  /** Examples ship with the studio; real work is the person's own. */
+  example?: boolean;
 };
 
-const DEMO_GALLERY: MediaItem[] = [
+/**
+ * Examples are inspiration, never work. They sit behind the person's own
+ * output and are labelled, so nothing here can be mistaken for something the
+ * studio produced for them.
+ */
+const EXAMPLE_GALLERY: MediaItem[] = [
   {
-    id: "media-1",
+    id: "example-motion",
     kind: "video",
     prompt:
-      "Abstract cinematic warm light ribbons drifting across a charcoal backdrop, a premium brand motion loop rendered from a single prompt.",
+      "Warm light ribbons drifting across a dark backdrop — a brand motion loop made from one sentence.",
     aspectRatio: "16:9",
-    styleName: "Seedance Motion Loop",
+    styleName: "Motion loop",
     url: "/studio-hero-loop.mp4",
     poster: "/studio-creative.png",
     createdAt: "Example",
+    example: true,
   },
   {
-    id: "media-2",
+    id: "example-portrait",
     kind: "image",
     prompt:
-      "Hyper-realistic cinematic portrait of an African tech founder with floating holographic AI dashboards in a golden-hour Accra high-rise.",
+      "Cinematic portrait of a founder at a desk in a high-rise Accra office at golden hour.",
     aspectRatio: "16:9",
-    styleName: "Cinematic Photoreal 8K",
+    styleName: "Cinematic photoreal",
     url: "/studio-hero.png",
     createdAt: "Example",
+    example: true,
   },
   {
-    id: "media-3",
+    id: "example-product",
     kind: "image",
     prompt:
-      "Minimalist luxury packaging for organic hibiscus and ginger tea on polished cream marble, soft studio sunlight, gold foil detail.",
+      "Hibiscus and ginger tea packaging on cream marble, soft studio sunlight, gold foil detail.",
     aspectRatio: "1:1",
-    styleName: "Studio Product Photography",
+    styleName: "Product studio",
     url: "/studio-product.png",
     createdAt: "Example",
+    example: true,
   },
   {
-    id: "media-4",
+    id: "example-texture",
     kind: "image",
     prompt:
-      "Abstract flowing warm golden light ribbons over a matte charcoal background, a premium brand texture with a sense of creative energy.",
+      "Flowing golden light ribbons over matte charcoal — a premium brand texture.",
     aspectRatio: "16:9",
-    styleName: "3D Hyper-Render",
+    styleName: "3D render",
     url: "/studio-creative.png",
     createdAt: "Example",
+    example: true,
   },
 ];
 
-const PROMPT_SUGGESTIONS = [
+/**
+ * Starters are written for the work people here actually sell: a market stall,
+ * a food plate, a mobile money kiosk, a church programme. Generic "futuristic
+ * AI" prompts produce pictures nobody can use on a Thursday afternoon.
+ */
+const IMAGE_STARTERS = [
   {
-    icon: "workspace",
-    label: "Tech Founder Workspace",
-    text: "A futuristic tech founder working with glowing holographic AI interfaces in a high-rise Accra office, cinematic 8k.",
+    icon: "market",
+    label: "Market product shot",
+    text: "A jar of pure shea butter on a wooden market table, warm morning light, clean uncluttered background, plenty of empty space at the top for a headline.",
   },
   {
-    icon: "product",
-    label: "Luxury Brand Pack",
-    text: "Minimalist luxury product packaging for organic hibiscus tea on a marble pedestal, soft studio sunlight.",
+    icon: "food",
+    label: "Food plate",
+    text: "Close-up of a waakye plate with shito, boiled egg and salad on an enamel dish, natural daylight, appetising, shot from just above.",
   },
   {
-    icon: "city",
-    label: "Sunset Drone Shot",
-    text: "Cinematic wide drone flyover of Accra skyline at golden hour sunset with modern glass skyscrapers.",
+    icon: "shop",
+    label: "Shop front",
+    text: "A neat mobile money agent kiosk on a busy street in the late afternoon, bright clean colours, friendly and trustworthy feel.",
   },
   {
-    icon: "mark",
-    label: "Minimalist Studio Logo",
-    text: "Modern minimalist vector logo for an AI creative studio, obsidian background, clean gold geometry.",
+    icon: "cloth",
+    label: "Brand pattern",
+    text: "A modern brand pattern inspired by kente weaving in gold, black and deep green, flat vector, seamless, suitable for packaging.",
+  },
+  {
+    icon: "poster",
+    label: "Poster background",
+    text: "Elegant event poster background in deep purple and gold with soft light rays and generous empty space in the middle for text.",
   },
 ] satisfies Array<{ icon: StudioIconName; label: string; text: string }>;
 
+const VIDEO_STARTERS = [
+  {
+    icon: "city",
+    label: "Skyline flyover",
+    text: "Slow aerial flyover of a coastal African city skyline at golden hour, warm cinematic colour, calm steady motion.",
+  },
+  {
+    icon: "cloth",
+    label: "Fabric stall pan",
+    text: "Slow pan across colourful wax print fabric stacked high at a market stall, warm daylight, rich colour.",
+  },
+  {
+    icon: "market",
+    label: "Product turntable",
+    text: "Slow rotating close-up of a bottle of chilled hibiscus drink on a dark table, soft studio light, condensation on the glass.",
+  },
+] satisfies Array<{ icon: StudioIconName; label: string; text: string }>;
+
+/** Formats named after where the work is actually posted. */
+const IMAGE_FORMATS = [
+  { ratio: "1:1", label: "Square", use: "Instagram, Jiji" },
+  { ratio: "9:16", label: "Tall", use: "Status, TikTok" },
+  { ratio: "16:9", label: "Wide", use: "YouTube, Facebook" },
+  { ratio: "2:3", label: "Poster", use: "Flyer, print" },
+] as const;
+
+const VIDEO_FORMATS = [
+  { ratio: "16:9", label: "Wide", use: "YouTube, Facebook" },
+  { ratio: "9:16", label: "Tall", use: "Status, TikTok" },
+] as const;
+
+const IMAGE_LOOKS = [
+  { value: "Cinematic Photoreal", label: "Photoreal" },
+  { value: "Studio Product Photography", label: "Product studio" },
+  { value: "3D Hyper-Render", label: "3D render" },
+  { value: "Minimalist Brand Identity", label: "Brand minimal" },
+  { value: "Vector Illustration & Art", label: "Illustration" },
+] as const;
+
+/**
+ * Two honest video tiers. The catalogue also has a premium engine, but at
+ * today's prices it costs more than a single render is allowed to charge, so
+ * offering it would only produce a refusal at the moment of confirming.
+ */
+const VIDEO_TIERS = [
+  {
+    value: "draft",
+    label: "Quick",
+    note: "Cheapest. Great for trying an idea.",
+  },
+  {
+    value: "standard",
+    label: "Best",
+    note: "Sharper motion and detail.",
+  },
+] as const;
+
+const VIDEO_MOTIONS = [
+  { value: "pan", label: "Pan" },
+  { value: "zoom", label: "Zoom" },
+  { value: "drone", label: "Aerial" },
+  { value: "static", label: "Locked" },
+] as const;
+
+/** Where each aspect ratio is usually headed, so the request carries intent. */
+function channelFor(aspectRatio: string, kind: MediaKind) {
+  if (aspectRatio === "9:16")
+    return kind === "video" ? "instagram_story" : "whatsapp_status";
+  if (aspectRatio === "16:9") return "youtube";
+  if (aspectRatio === "2:3") return "print";
+  return kind === "video" ? "instagram_story" : "instagram_post";
+}
+
 function StudioIcon({ name }: { name: StudioIconName }) {
-  if (name === "image")
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
+  const paths: Record<StudioIconName, React.ReactNode> = {
+    spark: <path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />,
+    image: (
+      <>
         <rect x="3.5" y="4" width="17" height="16" rx="2" />
         <circle cx="8.5" cy="9" r="1.5" />
         <path d="m5 18 5-5 3.2 3.2 2.2-2.2 3.6 4" />
-      </svg>
-    );
-  if (name === "video")
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
+      </>
+    ),
+    video: (
+      <>
         <rect x="3.5" y="5" width="13" height="14" rx="2" />
         <path d="m16.5 10 4-2v8l-4-2" />
-      </svg>
-    );
-  if (name === "library")
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 7.5h6l2-2h8v13H4z" />
-      </svg>
-    );
-  if (name === "workspace")
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="4" y="5" width="16" height="13" rx="2" />
-        <path d="M8 21h8M12 18v3M8 9h8M8 12h5" />
-      </svg>
-    );
-  if (name === "product")
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="m5 8 7-4 7 4v8l-7 4-7-4zM5 8l7 4 7-4M12 12v8" />
-      </svg>
-    );
-  if (name === "city")
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 20V9h6v11M10 20V4h6v16M16 20v-8h4v8M2 20h20M7 12h1M13 8h1M13 12h1" />
-      </svg>
-    );
-  if (name === "mark")
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 16l.7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7z" />
-      </svg>
-    );
+      </>
+    ),
+    download: (
+      <>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </>
+    ),
+    market: (
+      <>
+        <path d="M4 9h16l-1 10H5zM4 9l1.5-4h13L20 9" />
+        <path d="M9.5 13h5" />
+      </>
+    ),
+    food: (
+      <>
+        <circle cx="12" cy="12" r="7.5" />
+        <circle cx="12" cy="12" r="3.2" />
+      </>
+    ),
+    shop: (
+      <>
+        <path d="M4 10v9h16v-9" />
+        <path d="M3 10 5 5h14l2 5a2.6 2.6 0 0 1-4.5 1.6A2.6 2.6 0 0 1 12 11.6a2.6 2.6 0 0 1-4.5 0A2.6 2.6 0 0 1 3 10" />
+      </>
+    ),
+    cloth: (
+      <>
+        <path d="M4 5h16v14H4z" />
+        <path d="M4 9.5h16M4 14.5h16M9.5 5v14M14.5 5v14" />
+      </>
+    ),
+    poster: (
+      <>
+        <rect x="5" y="3.5" width="14" height="17" rx="1.6" />
+        <path d="M8.5 8h7M8.5 12h7M8.5 16h4" />
+      </>
+    ),
+    city: (
+      <path d="M4 20V9h6v11M10 20V4h6v16M16 20v-8h4v8M2 20h20M7 12h1M13 8h1M13 12h1" />
+    ),
+  };
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+      {paths[name]}
     </svg>
   );
 }
@@ -172,9 +279,10 @@ type VideoJob = {
   token: string;
   jobId?: string;
   status: string;
-  /** Re-show the same prompt/duration in the gallery when a render finishes after a refresh. */
+  /** Re-show the same prompt/format in the gallery when a render finishes after a refresh. */
   prompt: string;
   duration: string;
+  aspectRatio: string;
 };
 
 /** A completed durable media job as returned by `/api/studio/media?recent=1`. */
@@ -185,6 +293,13 @@ type RecentMediaJob = {
   outputAssetId?: string | null;
   createdAt?: string;
   intent?: { purpose?: string; aspectRatio?: string };
+};
+
+/** What each kind of work costs, read from the server so nothing is hardcoded. */
+type CreditFacts = {
+  available: number | null;
+  image: { from: number; to: number } | null;
+  video: { from: number; to: number } | null;
 };
 
 /**
@@ -231,7 +346,7 @@ function imageIntent(prompt: string, aspectRatio: string) {
     version: 1,
     mediaType: "image",
     purpose: prompt.slice(0, 200) || "Create a visual",
-    channel: "auto",
+    channel: channelFor(aspectRatio, "image"),
     aspectRatio,
     resolution: "1K",
     qualityTier: "standard",
@@ -244,16 +359,21 @@ function imageIntent(prompt: string, aspectRatio: string) {
   };
 }
 
-function videoIntent(prompt: string, duration: string, motion: string) {
+function videoIntent(
+  prompt: string,
+  aspectRatio: string,
+  motion: string,
+  qualityTier: string,
+) {
   return {
     version: 1,
     mediaType: "video",
     purpose: prompt.slice(0, 200) || "Create a motion clip",
-    channel: "auto",
-    aspectRatio: "16:9",
+    channel: channelFor(aspectRatio, "video"),
+    aspectRatio,
     resolution: "720p",
-    durationSeconds: duration === "8s" ? 8 : 4,
-    qualityTier: "standard",
+    durationSeconds: 4,
+    qualityTier,
     audio: "off",
     motion:
       motion === "zoom" || motion === "static"
@@ -273,19 +393,37 @@ function newRequestId(prefix: string) {
 }
 
 export function MediaStudio() {
-  const [tab, setTab] = useState<"image" | "video" | "gallery">("image");
+  const [mode, setMode] = useState<MediaKind>("image");
   const [prompt, setPrompt] = useState("");
-  const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [stylePreset, setStylePreset] = useState("Cinematic Photoreal");
-  const [videoDuration, setVideoDuration] = useState("4s");
+  const [imageAspect, setImageAspect] = useState("1:1");
+  const [videoAspect, setVideoAspect] = useState("9:16");
+  const [look, setLook] = useState<string>(IMAGE_LOOKS[0].value);
+  const [videoTier, setVideoTier] = useState<string>("draft");
   const [cameraMotion, setCameraMotion] = useState("pan");
   const [generating, setGenerating] = useState(false);
-  const [gallery, setGallery] = useState<MediaItem[]>(DEMO_GALLERY);
+  const [gallery, setGallery] = useState<MediaItem[]>(EXAMPLE_GALLERY);
+  const [galleryFilter, setGalleryFilter] = useState<"all" | MediaKind>("all");
   const [toastNotice, setToastNotice] = useState("");
   const [toastError, setToastError] = useState(false);
   const [videoQuote, setVideoQuote] = useState<VideoQuote | null>(null);
   const [videoJob, setVideoJob] = useState<VideoJob | null>(null);
   const [creditPanel, setCreditPanel] = useState<CreditPanelState | null>(null);
+  const [credits, setCredits] = useState<CreditFacts>({
+    available: null,
+    image: null,
+    video: null,
+  });
+  // Data-saver: people on metered or slow connections do not need looping
+  // video previews. This is a real constraint for this audience, not a nicety.
+  const [dataSaver, setDataSaver] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-data: reduce)");
+    const syncDataSaver = () => setDataSaver(media.matches);
+    syncDataSaver();
+    media.addEventListener("change", syncDataSaver);
+    return () => media.removeEventListener("change", syncDataSaver);
+  }, []);
 
   // Polling state lives in refs so a refresh-resumed poll never reads stale
   // closures and duplicate timers cannot stack after a visibility change.
@@ -336,6 +474,29 @@ export function MediaStudio() {
   };
 
   /**
+   * The balance and the real cost of each kind of work, straight from the
+   * server — so the studio never has to hardcode a price that could drift from
+   * what the credit engine actually charges.
+   */
+  const loadCredits = () =>
+    fetch("/api/credits", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setCredits({
+          available: typeof data.available === "number" ? data.available : null,
+          image: data.costs?.image ?? null,
+          video: data.costs?.video ?? null,
+        });
+      })
+      // The studio works perfectly well without a balance on screen.
+      .catch(() => undefined);
+
+  useEffect(() => {
+    void loadCredits();
+  }, []);
+
+  /**
    * A 402 means "not enough credits". Instead of a toast that points at
    * Settings, show an inline panel with both ways to continue: a quick top-up
    * for this one render, or a monthly plan (better value per credit) for
@@ -381,7 +542,7 @@ export function MediaStudio() {
   const handleGenerateImage = async () => {
     if (!prompt.trim() || generating) return;
     setGenerating(true);
-    setToastNotice("Generating your visual… this takes a few seconds.");
+    setToastNotice("Making your visual… this takes a few seconds.");
     setToastError(false);
     try {
       const response = await fetch("/api/studio/image", {
@@ -393,8 +554,8 @@ export function MediaStudio() {
         body: JSON.stringify({
           approved: true,
           prompt: prompt.trim(),
-          style: stylePreset,
-          intent: imageIntent(prompt.trim(), aspectRatio),
+          style: look,
+          intent: imageIntent(prompt.trim(), imageAspect),
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -405,7 +566,7 @@ export function MediaStudio() {
             typeof data.available === "number" ? data.available : 0,
           );
           showToast(
-            "You need more credits to generate this. Pick a top-up or a plan below.",
+            "You need more credits to make this. Pick a top-up or a plan below.",
             true,
           );
           return;
@@ -417,20 +578,21 @@ export function MediaStudio() {
         id: `media-${Date.now()}`,
         kind: "image",
         prompt: prompt.trim(),
-        aspectRatio,
-        styleName: stylePreset,
+        aspectRatio: imageAspect,
+        styleName:
+          IMAGE_LOOKS.find((entry) => entry.value === look)?.label || look,
         url: data.image,
         createdAt: "Just now",
       };
-      setGallery((prev) => [newItem, ...prev]);
-      setPrompt("");
-      setTab("gallery");
-      showToast("Visual generated. Find it in the gallery.", false);
+      setGallery((previous) => [newItem, ...previous]);
+      setGalleryFilter("all");
+      showToast("Your visual is ready — it is in your work below.", false);
+      void loadCredits();
     } catch (cause) {
       showToast(
         cause instanceof Error
           ? cause.message
-          : "Image generation failed. Please try again.",
+          : "That visual could not be made. Please try again.",
         true,
       );
     } finally {
@@ -441,7 +603,7 @@ export function MediaStudio() {
   const requestVideoQuote = async () => {
     if (!prompt.trim() || generating || videoJob) return;
     setGenerating(true);
-    setToastNotice("Checking current video pricing…");
+    setToastNotice("Checking today's price…");
     setToastError(false);
     try {
       const response = await fetch("/api/studio/video", {
@@ -452,7 +614,12 @@ export function MediaStudio() {
         },
         body: JSON.stringify({
           action: "quote",
-          intent: videoIntent(prompt.trim(), videoDuration, cameraMotion),
+          intent: videoIntent(
+            prompt.trim(),
+            videoAspect,
+            cameraMotion,
+            videoTier,
+          ),
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -479,7 +646,7 @@ export function MediaStudio() {
         model: data.model,
         intent:
           data.intent ||
-          videoIntent(prompt.trim(), videoDuration, cameraMotion),
+          videoIntent(prompt.trim(), videoAspect, cameraMotion, videoTier),
       });
       setToastNotice("");
     } catch (cause) {
@@ -519,7 +686,7 @@ export function MediaStudio() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.token) {
         if (response.status === 402) {
-          // Keep the quote so the person can Confirm & render again once topped up.
+          // Keep the quote so the person can confirm again once topped up.
           setVideoQuote(quote);
           await openCreditPanel(
             typeof data.required === "number" ? data.required : quote.credits,
@@ -541,11 +708,13 @@ export function MediaStudio() {
         jobId: data.jobId,
         status: data.status || "pending",
         prompt: prompt.trim(),
-        duration: videoDuration,
+        duration: "4s",
+        aspectRatio: videoAspect,
       };
       persistVideoJob(job);
       setToastNotice("");
       scheduleVideoPoll(job, 20_000);
+      void loadCredits();
     } catch (cause) {
       showToast(
         cause instanceof Error
@@ -572,7 +741,8 @@ export function MediaStudio() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         // The server can mark a job terminal inside an error response (for
-        // example when the provider lost the job and the hold was refunded).
+        // example when the provider lost the job, or a finished clip could not
+        // be saved) — the hold has already been returned in those cases.
         if (
           data.status === "failed" ||
           data.status === "cancelled" ||
@@ -584,6 +754,7 @@ export function MediaStudio() {
               "This video job is no longer available. Your credits were returned.",
             true,
           );
+          void loadCredits();
           return;
         }
         // A 5xx is transient (provider hiccup, delivery retry) — back off and
@@ -616,6 +787,7 @@ export function MediaStudio() {
             "This video job is no longer available. Your credits were returned.",
           true,
         );
+        void loadCredits();
         return;
       }
 
@@ -627,16 +799,16 @@ export function MediaStudio() {
           id: `media-${Date.now()}`,
           kind: "video",
           prompt: job.prompt,
-          aspectRatio: "16:9",
-          styleName: `${job.duration} Motion Clip`,
+          aspectRatio: job.aspectRatio || "16:9",
+          styleName: `${job.duration} clip`,
           url: data.downloadUrl,
           createdAt: "Just now",
         };
-        setGallery((prev) => [newItem, ...prev]);
+        setGallery((previous) => [newItem, ...previous]);
         clearVideoJob();
-        setPrompt("");
-        setTab("gallery");
-        showToast("Motion video rendered. Find it in the gallery.", false);
+        setGalleryFilter("all");
+        showToast("Your video is ready — it is in your work below.", false);
+        void loadCredits();
         return;
       }
       // failed, cancelled and expired are all terminal: the server already
@@ -651,6 +823,7 @@ export function MediaStudio() {
           data.error || "The video render failed. Your credits were returned.",
           true,
         );
+        void loadCredits();
         return;
       }
       const next = { ...job, jobId: data.jobId || job.jobId, status };
@@ -701,8 +874,8 @@ export function MediaStudio() {
 
   // The gallery is the person's real media, not just this session. Load the
   // most recent completed jobs — including clips that finished while the
-  // studio was closed — so generated work survives a refresh. Demo items stay
-  // behind the real work as inspiration.
+  // studio was closed — so generated work survives a refresh. Examples stay
+  // behind real work as inspiration.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/studio/media?recent=1", { cache: "no-store" })
@@ -726,7 +899,7 @@ export function MediaStudio() {
                 : "16:9",
             styleName:
               typeof job.model === "string" && job.model
-                ? job.model
+                ? job.model.split("/").pop() || job.model
                 : "AI generated",
             url: `/api/studio/media?assetId=${encodeURIComponent(job.outputAssetId as string)}`,
             createdAt:
@@ -736,9 +909,7 @@ export function MediaStudio() {
           }));
         setGallery((previous) => {
           const existingIds = new Set(
-            previous
-              .filter((item) => item.createdAt !== "Example")
-              .map((item) => item.id),
+            previous.filter((item) => !item.example).map((item) => item.id),
           );
           return [
             ...items.filter((item) => !existingIds.has(item.id)),
@@ -752,98 +923,83 @@ export function MediaStudio() {
     };
   }, []);
 
-  // A background video render never locks the studio: only the video
-  // render button is gated by an in-flight job, so images, the gallery and
-  // tab switching stay fully usable while a clip renders.
-  return (
-    <div className="media-studio-wrapper">
-      {/* Hero banner with a live generated motion loop behind the copy. */}
-      <section className="media-hero-banner">
-        <video
-          className="hero-bg-video"
-          autoPlay
-          muted
-          loop
-          playsInline
-          poster="/studio-creative.png"
-        >
-          <source src="/studio-hero-loop.mp4" type="video/mp4" />
-        </video>
-        <div className="hero-glow-overlay" />
-        <div className="hero-scrim" />
-        <div className="hero-content">
-          <div className="hero-badge">
-            <span className="sparkle-icon">
-              <StudioIcon name="spark" />
-            </span>
-            <span>AI CREATIVE STUDIO</span>
-          </div>
-          <h1>Turn a sentence into studio-grade images and motion</h1>
-          <p>
-            Cinematic visuals, product renders, brand assets and video,
-            generated from a single prompt. Everything on this page was made
-            here.
-          </p>
-        </div>
+  const isVideo = mode === "video";
+  const starters = isVideo ? VIDEO_STARTERS : IMAGE_STARTERS;
+  const formats = isVideo ? VIDEO_FORMATS : IMAGE_FORMATS;
+  const activeAspect = isVideo ? videoAspect : imageAspect;
+  const setActiveAspect = isVideo ? setVideoAspect : setImageAspect;
+  const cost = isVideo ? credits.video : credits.image;
+  const mine = gallery.filter((item) => !item.example);
+  const visible = gallery.filter(
+    (item) => galleryFilter === "all" || item.kind === galleryFilter,
+  );
+  const canGenerate =
+    Boolean(prompt.trim()) &&
+    !generating &&
+    !(isVideo && (Boolean(videoJob) || Boolean(videoQuote)));
 
-        {/* Studio Navigation Tabs */}
-        <div className="media-nav-switch">
-          <button
-            type="button"
-            className={tab === "image" ? "active" : ""}
-            onClick={() => setTab("image")}
-            aria-label="Image Studio"
-          >
-            <span className="tab-icon">
-              <StudioIcon name="image" />
-            </span>
-            <span className="media-tab-label-full">Image Studio</span>
-            <span className="media-tab-label-short" aria-hidden="true">
-              Image
-            </span>
-          </button>
-          <button
-            type="button"
-            className={tab === "video" ? "active" : ""}
-            onClick={() => setTab("video")}
-            aria-label="Video Studio"
-          >
-            <span className="tab-icon">
-              <StudioIcon name="video" />
-            </span>
-            <span className="media-tab-label-full">Video Studio</span>
-            <span className="media-tab-label-short" aria-hidden="true">
-              Video
-            </span>
-          </button>
-          <button
-            type="button"
-            className={tab === "gallery" ? "active" : ""}
-            onClick={() => setTab("gallery")}
-            aria-label={`Asset Gallery, ${gallery.length} assets`}
-          >
-            <span className="tab-icon">
-              <StudioIcon name="library" />
-            </span>
-            <span className="media-tab-label-full">
-              Asset Gallery ({gallery.length})
-            </span>
-            <span className="media-tab-label-short" aria-hidden="true">
-              Assets
-            </span>
-          </button>
+  return (
+    <div className="media-studio">
+      {/* A workspace opens on the work, not on a poster. The header stays one
+          compact line so the prompt is the first thing in reach on a phone. */}
+      <header className="ms-topbar">
+        <div className="ms-identity">
+          <span className="ms-mark">
+            <StudioIcon name="spark" />
+          </span>
+          <div>
+            <h1>Studio</h1>
+            <p>Make images and short videos from a sentence.</p>
+          </div>
         </div>
-      </section>
+        <div className="ms-topbar-right">
+          {credits.available !== null ? (
+            <span className="ms-balance" title="Your available credits">
+              <b>{credits.available}</b> credits
+            </span>
+          ) : null}
+          <div
+            className="ms-mode"
+            role="tablist"
+            aria-label="What do you want to make?"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!isVideo}
+              className={!isVideo ? "is-active" : ""}
+              onClick={() => setMode("image")}
+            >
+              <StudioIcon name="image" />
+              <span>Image</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isVideo}
+              className={isVideo ? "is-active" : ""}
+              onClick={() => setMode("video")}
+            >
+              <StudioIcon name="video" />
+              <span>Video</span>
+            </button>
+          </div>
+        </div>
+      </header>
 
       {toastNotice ? (
-        <div className={`studio-toast-banner${toastError ? " is-error" : ""}`}>
+        <div
+          className={`ms-toast${toastError ? " is-error" : ""}`}
+          role="status"
+          aria-live="polite"
+        >
           {toastNotice}
         </div>
       ) : null}
 
       {creditPanel ? (
-        <section className="studio-credit-panel">
-          <div className="studio-credit-head">
+        <section className="ms-credit-panel">
+          <div className="ms-credit-head">
             <div>
               <b>
                 You need {creditPanel.required} credit
@@ -851,12 +1007,12 @@ export function MediaStudio() {
               </b>
               <small>
                 You have {creditPanel.available} available. Pick a quick top-up
-                for this render, or a monthly plan if you use AI360 regularly.
+                for this one, or a monthly plan if you use AI360 regularly.
               </small>
             </div>
             <button
               type="button"
-              className="studio-credit-close"
+              className="ms-credit-close"
               onClick={() => setCreditPanel(null)}
               aria-label="Dismiss"
             >
@@ -865,22 +1021,19 @@ export function MediaStudio() {
           </div>
 
           {creditPanel.topUps.length ? (
-            <div className="studio-credit-section">
-              <span className="studio-credit-label">
+            <div className="ms-credit-section">
+              <span className="ms-credit-label">
                 Quick top-up — never expires, never renews
               </span>
-              <div className="studio-credit-grid">
+              <div className="ms-credit-grid">
                 {creditPanel.topUps.map((topUp) => (
                   <a
                     key={topUp.slug}
                     href={`/checkout?topup=${topUp.slug}`}
-                    className="studio-credit-card"
+                    className="ms-credit-card"
                   >
                     <b>{topUp.credits} credits</b>
-                    <strong>GH₵{topUp.priceGhs.toLocaleString()}</strong>
-                    <em>
-                      Top up now <span aria-hidden="true">→</span>
-                    </em>
+                    <small>GH₵{topUp.priceGhs}</small>
                   </a>
                 ))}
               </div>
@@ -888,379 +1041,314 @@ export function MediaStudio() {
           ) : null}
 
           {creditPanel.plans.length ? (
-            <div className="studio-credit-section">
-              <span className="studio-credit-label">
-                Or a monthly plan — more credits for your money
+            <div className="ms-credit-section">
+              <span className="ms-credit-label">
+                Monthly plan — better value per credit
               </span>
-              <div className="studio-credit-grid">
+              <div className="ms-credit-grid">
                 {creditPanel.plans.map((plan) => (
                   <a
                     key={plan.slug}
                     href={`/checkout?plan=${plan.slug}`}
-                    className={`studio-credit-card${plan.featured ? " is-featured" : ""}`}
+                    className={`ms-credit-card${plan.featured ? " is-featured" : ""}`}
                   >
                     <b>{plan.name}</b>
-                    <strong>
-                      GH₵{plan.monthlyPriceGhs.toLocaleString()} / month
-                    </strong>
-                    <em>
-                      {plan.includedCredits.toLocaleString()} credits per month{" "}
-                      <span aria-hidden="true">→</span>
-                    </em>
+                    <small>
+                      GH₵{plan.monthlyPriceGhs}/mo · {plan.includedCredits}{" "}
+                      credits
+                    </small>
                   </a>
                 ))}
               </div>
             </div>
           ) : null}
-
-          <p className="studio-credit-note">
-            Top-ups cost more per credit than a plan. If you use AI360
-            regularly, a monthly plan is better value — and failed renders never
-            charge you either way.
-          </p>
         </section>
       ) : null}
 
-      {/* Main Studio Content Area */}
-      <main className="media-studio-main">
-        {tab === "image" ? (
-          <section className="studio-panel-card">
-            <div className="panel-header">
-              <div>
-                <h2>AI Image & Graphic Studio</h2>
-                <p>
-                  Describe what you want to visualize, select your format and
-                  aesthetic style.
-                </p>
-              </div>
-            </div>
-
-            {/* Quick Inspiration Chips */}
-            <div className="inspiration-chips">
-              <span className="chips-title">Inspiration:</span>
-              {PROMPT_SUGGESTIONS.map((item) => (
+      <div className="ms-layout">
+        <section className="ms-composer" aria-label="Create">
+          <div className="ms-field">
+            <div className="ms-field-head">
+              <label htmlFor="ms-prompt">
+                {isVideo ? "Describe the shot" : "Describe the picture"}
+              </label>
+              {prompt ? (
                 <button
                   type="button"
-                  key={item.label}
-                  className="chip-btn"
-                  onClick={() => setPrompt(item.text)}
+                  className="ms-clear"
+                  onClick={() => setPrompt("")}
                 >
-                  <span>
-                    <StudioIcon name={item.icon} />
-                  </span>
-                  <span>{item.label}</span>
+                  Clear
                 </button>
-              ))}
+              ) : null}
             </div>
-
-            {/* Creative Prompt Input */}
-            <div className="prompt-input-container">
-              <textarea
-                className="studio-prompt-textarea"
-                rows={4}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe your scene in detail... (e.g. A futuristic mobile banking app interface floating above a sleek mahogany desk, cinematic lighting, 8k resolution)"
-              />
-            </div>
-
-            {/* Controls Grid */}
-            <div className="controls-grid">
-              <div className="control-card">
-                <label className="control-label">Aspect Ratio</label>
-                <div className="aspect-ratio-selector">
-                  {[
-                    { ratio: "16:9", label: "16:9 Widescreen" },
-                    { ratio: "1:1", label: "1:1 Square" },
-                    { ratio: "9:16", label: "9:16 Vertical/Reels" },
-                  ].map((item) => (
-                    <button
-                      key={item.ratio}
-                      type="button"
-                      className={`ratio-btn ${aspectRatio === item.ratio ? "selected" : ""}`}
-                      onClick={() => setAspectRatio(item.ratio)}
-                    >
-                      <b>{item.ratio}</b>
-                      <small>{item.label}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="control-card">
-                <label className="control-label">Visual Aesthetic</label>
-                <select
-                  value={stylePreset}
-                  onChange={(e) => setStylePreset(e.target.value)}
-                  className="aesthetic-dropdown"
-                >
-                  <option value="Cinematic Photoreal">
-                    Cinematic Photoreal (8K Studio)
-                  </option>
-                  <option value="Studio Product Photography">
-                    Studio Product Photography
-                  </option>
-                  <option value="3D Hyper-Render">3D Hyper-Render</option>
-                  <option value="Minimalist Brand Identity">
-                    Minimalist Brand Identity
-                  </option>
-                  <option value="Vector Illustration & Art">
-                    Vector Illustration & Art
-                  </option>
-                </select>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className={`generate-primary-action ${generating ? "is-generating" : ""}`}
-              onClick={handleGenerateImage}
-              disabled={!prompt.trim() || generating}
-            >
-              <span>
-                {generating ? "Generating AI Visual…" : "Generate Visual Asset"}
-              </span>
-              <svg
-                viewBox="0 0 24 24"
-                width="18"
-                height="18"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-              >
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-            </button>
-          </section>
-        ) : tab === "video" ? (
-          <section className="studio-panel-card">
-            <div className="panel-header">
-              <div>
-                <h2>AI Video & Motion Studio</h2>
-                <p>
-                  Animate concepts into motion clips with camera physics and
-                  duration controls.
-                </p>
-              </div>
-            </div>
-
-            {/* Quick Inspiration Chips */}
-            <div className="inspiration-chips">
-              <span className="chips-title">Inspiration:</span>
-              {PROMPT_SUGGESTIONS.slice(0, 3).map((item) => (
-                <button
-                  type="button"
-                  key={item.label}
-                  className="chip-btn"
-                  onClick={() => setPrompt(item.text)}
-                >
-                  <span>
-                    <StudioIcon name={item.icon} />
-                  </span>
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Creative Prompt Input */}
-            <div className="prompt-input-container">
-              <textarea
-                className="studio-prompt-textarea"
-                rows={4}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe the video action or scene... (e.g. Slow motion drone shot over Accra skyline at sunset, warm cinematic colors, 4k quality)"
-              />
-            </div>
-
-            {/* Controls Grid */}
-            <div className="controls-grid">
-              <div className="control-card">
-                <label className="control-label">Video Clip Duration</label>
-                <div className="aspect-ratio-selector">
-                  {[
-                    { dur: "4s", label: "4 Sec Motion" },
-                    // 8s clips are temporarily disabled while 4s render
-                    // reliability is validated end to end in production.
-                    // { dur: '8s', label: '8 Sec Extended' },
-                  ].map((item) => (
-                    <button
-                      key={item.dur}
-                      type="button"
-                      className={`ratio-btn ${videoDuration === item.dur ? "selected" : ""}`}
-                      onClick={() => setVideoDuration(item.dur)}
-                    >
-                      <b>{item.dur}</b>
-                      <small>{item.label}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="control-card">
-                <label className="control-label">Camera Motion Physics</label>
-                <select
-                  value={cameraMotion}
-                  onChange={(e) => setCameraMotion(e.target.value)}
-                  className="aesthetic-dropdown"
-                >
-                  <option value="pan">Smooth Cinematic Pan</option>
-                  <option value="zoom">Slow Dramatic Zoom</option>
-                  <option value="drone">Aerial Drone Flyover</option>
-                  <option value="static">Static Locked Shot</option>
-                </select>
-              </div>
-            </div>
-
-            {videoQuote ? (
-              <div className="video-quote-bar">
-                <div>
-                  <b>Render quoted at {videoQuote.credits} credits</b>
-                  <small>
-                    You will only be charged if it succeeds. Failed renders
-                    return your credits.
-                  </small>
-                </div>
-                <div className="video-quote-actions">
-                  <button
-                    type="button"
-                    className="quote-cancel-btn"
-                    onClick={() => setVideoQuote(null)}
-                    disabled={generating}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="quote-confirm-btn"
-                    onClick={confirmVideoRender}
-                    disabled={generating}
-                  >
-                    Confirm &amp; render
-                  </button>
-                </div>
-              </div>
-            ) : videoJob ? (
-              <div className="video-job-banner">
-                <div className="video-job-copy">
-                  <b>Rendering your motion video…</b>
-                  <small>
-                    This takes a minute or two. Images and the rest of the
-                    studio stay fully usable while it renders.
-                  </small>
-                </div>
-                <button
-                  type="button"
-                  className="quote-cancel-btn video-job-stop"
-                  onClick={stopWaitingForVideo}
-                >
-                  Stop waiting
-                </button>
-              </div>
-            ) : null}
-
-            <button
-              type="button"
-              className={`generate-primary-action ${generating ? "is-generating" : ""}`}
-              onClick={requestVideoQuote}
-              disabled={
-                !prompt.trim() ||
-                generating ||
-                Boolean(videoJob) ||
-                Boolean(videoQuote)
+            <textarea
+              id="ms-prompt"
+              className="ms-prompt"
+              rows={4}
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              placeholder={
+                isVideo
+                  ? "Slow pan across colourful wax print fabric at a market stall, warm daylight…"
+                  : "A jar of shea butter on a wooden market table, warm morning light, space at the top for a headline…"
               }
+            />
+          </div>
+
+          <div className="ms-starters" aria-label="Starting points">
+            {starters.map((item) => (
+              <button
+                type="button"
+                key={item.label}
+                className="ms-starter"
+                onClick={() => setPrompt(item.text)}
+              >
+                <StudioIcon name={item.icon} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="ms-control">
+            <span className="ms-control-label">Shape</span>
+            <div className="ms-chips" role="group" aria-label="Shape">
+              {formats.map((item) => (
+                <button
+                  key={item.ratio}
+                  type="button"
+                  aria-pressed={activeAspect === item.ratio}
+                  className={`ms-chip${activeAspect === item.ratio ? " is-active" : ""}`}
+                  onClick={() => setActiveAspect(item.ratio)}
+                >
+                  <b>{item.label}</b>
+                  <small>{item.use}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isVideo ? (
+            <>
+              <div className="ms-control">
+                <span className="ms-control-label">Quality</span>
+                <div className="ms-chips" role="group" aria-label="Quality">
+                  {VIDEO_TIERS.map((tier) => (
+                    <button
+                      key={tier.value}
+                      type="button"
+                      aria-pressed={videoTier === tier.value}
+                      className={`ms-chip${videoTier === tier.value ? " is-active" : ""}`}
+                      onClick={() => setVideoTier(tier.value)}
+                    >
+                      <b>{tier.label}</b>
+                      <small>{tier.note}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="ms-control">
+                <span className="ms-control-label">Camera</span>
+                <div className="ms-chips is-compact" role="group" aria-label="Camera">
+                  {VIDEO_MOTIONS.map((motion) => (
+                    <button
+                      key={motion.value}
+                      type="button"
+                      aria-pressed={cameraMotion === motion.value}
+                      className={`ms-chip${cameraMotion === motion.value ? " is-active" : ""}`}
+                      onClick={() => setCameraMotion(motion.value)}
+                    >
+                      <b>{motion.label}</b>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="ms-control">
+              <span className="ms-control-label">Look</span>
+              <div className="ms-chips is-compact" role="group" aria-label="Look">
+                {IMAGE_LOOKS.map((entry) => (
+                  <button
+                    key={entry.value}
+                    type="button"
+                    aria-pressed={look === entry.value}
+                    className={`ms-chip${look === entry.value ? " is-active" : ""}`}
+                    onClick={() => setLook(entry.value)}
+                  >
+                    <b>{entry.label}</b>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {videoQuote ? (
+            <div className="ms-quote" role="status">
+              <div>
+                <b>{videoQuote.credits} credits for this render</b>
+                <small>
+                  You are only charged if it works. A failed render returns your
+                  credits.
+                </small>
+              </div>
+              <div className="ms-quote-actions">
+                <button
+                  type="button"
+                  className="ms-ghost-btn"
+                  onClick={() => setVideoQuote(null)}
+                  disabled={generating}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="ms-confirm-btn"
+                  onClick={confirmVideoRender}
+                  disabled={generating}
+                >
+                  Render it
+                </button>
+              </div>
+            </div>
+          ) : videoJob ? (
+            <div className="ms-rendering" role="status">
+              <span className="ms-spinner" aria-hidden="true" />
+              <div>
+                <b>Rendering your video…</b>
+                <small>
+                  About a minute. You can keep making images while it works.
+                </small>
+              </div>
+              <button
+                type="button"
+                className="ms-ghost-btn"
+                onClick={stopWaitingForVideo}
+              >
+                Stop waiting
+              </button>
+            </div>
+          ) : null}
+
+          <div className="ms-action">
+            <button
+              type="button"
+              className={`ms-generate${generating ? " is-busy" : ""}`}
+              onClick={isVideo ? requestVideoQuote : handleGenerateImage}
+              disabled={!canGenerate}
             >
+              <StudioIcon name="spark" />
               <span>
                 {generating
-                  ? "Checking video price…"
-                  : videoJob
-                    ? "Rendering…"
-                    : "Render Motion Video Clip"}
+                  ? isVideo
+                    ? "Checking price…"
+                    : "Making it…"
+                  : isVideo
+                    ? videoJob
+                      ? "Rendering…"
+                      : "See price and render"
+                    : "Make the image"}
               </span>
-              <svg
-                viewBox="0 0 24 24"
-                width="18"
-                height="18"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-              >
-                <path d="M23 7l-7 5 7 5V7z" />
-                <rect x="1" y="5" width="15" height="14" rx="2" />
-              </svg>
             </button>
-          </section>
-        ) : (
-          <section className="studio-gallery-grid">
-            {gallery.map((item, index) => (
-              <div
-                className="gallery-item-card"
-                key={item.id}
-                style={{ animationDelay: `${Math.min(index, 8) * 0.07}s` }}
-              >
-                <div className="card-media-wrapper">
-                  {item.kind === "video" ? (
-                    <video
-                      className="card-media-img"
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
-                      poster={item.poster}
-                    >
-                      <source src={item.url} type="video/mp4" />
-                    </video>
-                  ) : (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={item.url}
-                      alt={item.prompt}
-                      className="card-media-img"
-                    />
-                  )}
-                  <div className="card-overlay">
-                    <span className="media-badge">
+            <p className="ms-cost-note">
+              {cost
+                ? `${cost.from}–${cost.to} credits${isVideo ? ". You see the exact price before it runs." : " per image."}`
+                : "You are only charged when the work succeeds."}
+            </p>
+          </div>
+        </section>
+
+        <section className="ms-results" aria-label="Your work">
+          <div className="ms-results-head">
+            <h2>
+              {mine.length ? "Your work" : "Made in this studio"}
+              <span className="ms-count">
+                {visible.length}
+                <span className="ms-sr-only"> items shown</span>
+              </span>
+            </h2>
+            <div className="ms-filters" role="group" aria-label="Filter">
+              {(["all", "image", "video"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={galleryFilter === value}
+                  className={galleryFilter === value ? "is-active" : ""}
+                  onClick={() => setGalleryFilter(value)}
+                >
+                  {value === "all"
+                    ? "All"
+                    : value === "image"
+                      ? "Images"
+                      : "Videos"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {visible.length ? (
+            <div className="ms-grid">
+              {visible.map((item, index) => (
+                <article
+                  className={`ms-card${item.example ? " is-example" : ""}`}
+                  key={item.id}
+                  style={{ animationDelay: `${Math.min(index, 8) * 0.05}s` }}
+                >
+                  <div
+                    className="ms-card-media"
+                    data-ratio={item.aspectRatio}
+                  >
+                    {item.kind === "video" ? (
+                      <video
+                        src={item.url}
+                        poster={item.poster}
+                        controls
+                        muted
+                        loop
+                        playsInline
+                        preload={dataSaver ? "none" : "metadata"}
+                        autoPlay={!dataSaver && item.example}
+                      />
+                    ) : (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={item.url} alt={item.prompt} loading="lazy" />
+                    )}
+                    <span className="ms-card-tag">
                       <StudioIcon
                         name={item.kind === "video" ? "video" : "image"}
                       />
-                      {item.kind === "video" ? "MOTION VIDEO" : "AI VISUAL"}
+                      {item.example ? "Example" : item.aspectRatio}
                     </span>
-                    <span className="ratio-tag">{item.aspectRatio}</span>
                   </div>
-                </div>
-                <div className="card-content">
-                  <p className="card-prompt">{item.prompt}</p>
-                  <div className="card-meta-row">
-                    <span className="style-tag">{item.styleName}</span>
-                    <span className="date-tag">{item.createdAt}</span>
+                  <div className="ms-card-body">
+                    <p>{item.prompt}</p>
+                    <div className="ms-card-foot">
+                      <span className="ms-card-meta">
+                        {item.styleName} · {item.createdAt}
+                      </span>
+                      {!item.example ? (
+                        <a
+                          href={item.url}
+                          download={`ai360-${item.kind}-${item.id}.${item.kind === "video" ? "mp4" : "png"}`}
+                          className="ms-download"
+                        >
+                          <StudioIcon name="download" />
+                          <span>Save</span>
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="card-footer">
-                    <a
-                      href={item.url}
-                      download={`ai360-media-${item.id}.${item.kind === "video" ? "mp4" : "png"}`}
-                      className="download-action-btn"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        width="14"
-                        height="14"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                      >
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                      <span>Download High-Res</span>
-                    </a>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </section>
-        )}
-      </main>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="ms-empty">
+              Nothing here yet. Write a sentence on the left and make your
+              first one.
+            </p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

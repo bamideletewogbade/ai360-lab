@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowUpRightIcon } from '@/components/ArrowUpRightIcon'
 import { ContextVideo } from '@/components/ContextVideo'
+import { StartCta } from '@/components/StartCta'
 import { BRAND, workspaceHref } from '@/lib/brand'
 
 const OUTCOMES = [
@@ -110,7 +111,7 @@ export function LandingProcess() {
         <p>From intention to action</p>
         <h2>From “I need to…”<br />to “it’s ready.”</h2>
         <div className="process-actions">
-          <Link className="process-primary" href="/app">Start with your goal</Link>
+          <StartCta className="process-primary" />
           <Link className="process-detail" href="/how-it-works">See how routing, approvals, credits and safety work</Link>
         </div>
       </div>

@@ -48,7 +48,7 @@
 .linkGroup h3 {
   margin: 0;
   color: #c8d573;
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-weight: 750;
   letter-spacing: 0.15em;
   line-height: 1.4;
@@ -58,7 +58,7 @@
 .intro h2 {
   max-width: 720px;
   margin: 17px 0 24px;
-  font-size: clamp(2.65rem, 6.2vw, 6.2rem);
+  font-size: clamp(2.75rem, 6.386vw, 6.375rem);
   font-weight: 620;
   letter-spacing: -0.068em;
   line-height: 0.92;
@@ -68,7 +68,7 @@
   max-width: 610px;
   margin: 0;
   color: var(--footer-muted);
-  font-size: clamp(0.95rem, 1.25vw, 1.08rem);
+  font-size: clamp(1.0625rem, 1.363vw, 1.1875rem);
   line-height: 1.7;
 }
 
@@ -83,7 +83,7 @@
   padding: 0 22px;
   border: 1px solid var(--footer-line);
   border-radius: 8px;
-  font-size: 0.84rem;
+  font-size: 1rem;
   font-weight: 800;
   line-height: 1.2;
   white-space: nowrap;
@@ -111,11 +111,11 @@
   background: rgba(255, 255, 255, 0.035);
   backdrop-filter: blur(12px);
 }
-.cardNumber { margin-bottom: auto; color: #737777; font-size: 0.61rem; font-weight: 700; letter-spacing: 0.15em; }
+.cardNumber { margin-bottom: auto; color: #737777; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.15em; }
 .cardLabel { margin-bottom: 13px; }
-.addressCard strong { margin-bottom: 10px; font-size: clamp(1.65rem, 2.6vw, 2.5rem); letter-spacing: -0.045em; }
-.addressCard > span:not(.cardNumber, .cardLabel) { color: var(--footer-muted); font-size: 0.86rem; line-height: 1.7; }
-.addressCard a { display: inline-flex; align-items: center; min-height: 30px; width: fit-content; margin-top: 14px; color: var(--footer-ink); font-size: 0.78rem; font-weight: 720; text-decoration: none; }
+.addressCard strong { margin-bottom: 10px; font-size: clamp(1.6875rem, 2.678vw, 2.5625rem); letter-spacing: -0.045em; }
+.addressCard > span:not(.cardNumber, .cardLabel) { color: var(--footer-muted); font-size: 1rem; line-height: 1.7; }
+.addressCard a { display: inline-flex; align-items: center; min-height: 30px; width: fit-content; margin-top: 14px; color: var(--footer-ink); font-size: 0.875rem; font-weight: 720; text-decoration: none; }
 .addressCard a:hover { color: #c8d573; }
 
 .directory {
@@ -130,11 +130,11 @@
 .linkGroup h3 { min-height: 2.1em; margin-bottom: 10px; color: #747978; }
 /* Directory links are navigation, not prose, so they carry a real target area
    rather than the bare height of their text. */
-.linkGroup a { display: inline-flex; align-items: center; min-height: 30px; color: #d6d6d1; font-size: 0.84rem; line-height: 1.45; text-decoration: none; transition: color 160ms ease, transform 160ms ease; }
+.linkGroup a { display: inline-flex; align-items: center; min-height: 30px; color: #d6d6d1; font-size: 1rem; line-height: 1.45; text-decoration: none; transition: color 160ms ease, transform 160ms ease; }
 .linkGroup a:hover { color: #c8d573; transform: translateX(3px); }
 
 .bottom { display: flex; justify-content: space-between; gap: 24px; padding-top: 27px; }
-.bottom p { margin: 0; color: #747978; font-size: 0.69rem; letter-spacing: 0.02em; }
+.bottom p { margin: 0; color: #747978; font-size: 0.875rem; letter-spacing: 0.02em; }
 
 @media (max-width: 900px) {
   .lead { grid-template-columns: 1fr; align-items: stretch; }
@@ -150,7 +150,7 @@
   .shell { padding-right: max(18px, env(safe-area-inset-right)); padding-bottom: max(34px, env(safe-area-inset-bottom)); padding-left: max(18px, env(safe-area-inset-left)); }
   .lead { gap: 36px; }
   .logo { margin-bottom: 42px; }
-  .intro h2 { font-size: clamp(2.7rem, 14.5vw, 4.5rem); }
+  .intro h2 { font-size: clamp(2.75rem, 14.935vw, 4.625rem); }
   .actions { flex-direction: column; }
   .primaryAction, .secondaryAction { width: 100%; }
   .addressCard { min-height: 260px; border-radius: 14px; }

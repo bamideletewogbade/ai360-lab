@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { BILLING_PLANS, CREDIT_GUIDE } from '@/lib/billing/catalog'
+import { BILLING_PLANS, CHAT_FAIR_USE_DAILY, CREDIT_GUIDE, CREDIT_TOP_UPS, FREE_MONTHLY_CREDITS, findBillingPlan } from '@/lib/billing/catalog'
+import { FEATURE_WEIGHTS } from '@/lib/billing/credits'
 import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
+import { StartCta } from '@/components/StartCta'
 import styles from '@/app/pricing/pricing.module.css'
 
 const TEMPLATE_GROUPS = [
@@ -15,6 +17,23 @@ const TEMPLATE_GROUPS = [
 
 const BILLING_ENABLED = process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true'
 
+/**
+ * Every number this page shows a customer is read from the engine that charges
+ * them. Hardcoding them here is how a pricing page ends up advertising a figure
+ * the product no longer honours — which is exactly what happened when the video
+ * range moved and this page would have kept quoting the old one.
+ */
+const WALLET_EXAMPLE = findBillingPlan('everyday')
+const TOP_UP_SIZES = CREDIT_TOP_UPS.map((topUp) => topUp.credits)
+const CHAT_LIMITS = BILLING_PLANS
+  .map((plan) => `${plan.name} ${CHAT_FAIR_USE_DAILY[plan.slug]}`)
+  .join(', ')
+const EXAMPLE_COSTS = [
+  { key: 'R', title: 'Research brief', note: 'Checked and ready', credits: FEATURE_WEIGHTS['chat.research'].floor },
+  { key: 'I', title: 'Campaign image', note: 'Generated for review', credits: FEATURE_WEIGHTS.image.floor },
+  { key: 'A', title: 'Agent workflow', note: 'Plan to completion', credits: FEATURE_WEIGHTS.agent.reserve },
+]
+
 export function PricingExperience() {
   return (
     <main className={styles.shell}>
@@ -25,11 +44,11 @@ export function PricingExperience() {
           <p className={styles.kicker}>Simple plans · flexible payment</p>
           <h1>Start free.<br /><em>Pay your way.</em></h1>
           <p>{BILLING_ENABLED
-            ? 'Get 5 credits every month to explore AI360. When you need more, choose a plan and pay securely with Mobile Money or card. You will see the complete amount before you confirm.'
-            : 'Get 5 credits every month to explore AI360. Paid plans are shown for transparency and will open after payment verification for the private pilot is complete.'}</p>
+            ? `Get ${FREE_MONTHLY_CREDITS} free credits every month to explore AI360. When you need more, choose a plan and pay securely with Mobile Money or card. You will see the complete amount before you confirm.`
+            : `Get ${FREE_MONTHLY_CREDITS} free credits every month to explore AI360. Paid plans are shown for transparency and open once payment verification is complete.`}</p>
           <div className={styles.paymentTrust}>
-            <span><i className={styles.freeDot} /> 5 free credits monthly</span>
-            <span><i className={styles.momoDot} /> {BILLING_ENABLED ? 'Mobile Money or card' : 'Payments opening after pilot verification'}</span>
+            <span><i className={styles.freeDot} /> {FREE_MONTHLY_CREDITS} free credits every month</span>
+            <span><i className={styles.momoDot} /> {BILLING_ENABLED ? 'Mobile Money or card' : 'Payments opening after verification'}</span>
             <span><i /> No surprise overage bills</span>
           </div>
         </div>
@@ -50,15 +69,19 @@ export function PricingExperience() {
           <div className={styles.flowLine}><i /><i /><i /></div>
           <div className={styles.creditWallet}>
             <div><span>AI360</span><small>WORK WALLET</small></div>
-            <strong>120</strong>
+            <strong>{WALLET_EXAMPLE?.includedCredits.toLocaleString() ?? '120'}</strong>
             <p>credits ready</p>
             <div className={styles.walletMeter}><i /></div>
             <small>Use across chat, agents and creative work</small>
           </div>
           <div className={styles.outcomeStack}>
-            <div><span>R</span><p><b>Research brief</b><small>Checked and ready</small></p><em>2 credits</em></div>
-            <div><span>I</span><p><b>Campaign image</b><small>Generated for review</small></p><em>4 credits</em></div>
-            <div><span>A</span><p><b>Agent workflow</b><small>Plan to completion</small></p><em>6 credits</em></div>
+            {EXAMPLE_COSTS.map((example) => (
+              <div key={example.key}>
+                <span>{example.key}</span>
+                <p><b>{example.title}</b><small>{example.note}</small></p>
+                <em>{example.credits} credits</em>
+              </div>
+            ))}
           </div>
           <span className={styles.sceneCaption}><i /> One balance. Many useful outcomes.</span>
         </div>
@@ -68,8 +91,8 @@ export function PricingExperience() {
         <div className={styles.sectionHead}>
           <div><p>AI360 plans</p><h2 id="plans-title">Choose the pace that fits.</h2></div>
           <div className={styles.pricingDecision}>
-            <span>One-month pilot access</span>
-            <p>Pay for one month at a time. Automatic renewal and annual billing stay off until renewal and refund operations are proven.</p>
+            <span>Pay one month at a time</span>
+            <p>Nothing renews automatically. Annual billing stays off until renewals and refunds are proven, so a longer commitment is never asked for before it is earned.</p>
           </div>
         </div>
 
@@ -85,26 +108,31 @@ export function PricingExperience() {
                 <h3>{plan.name}</h3>
                 <p className={styles.audience}>{plan.audience}</p>
                 <div className={styles.price}><span>GH₵</span><b>{price.toLocaleString()}</b><small>{paid ? '/ one month' : 'forever'}</small></div>
-                <p className={styles.billingNote}>{plan.assisted ? 'Five people included · assisted pilot' : paid ? 'One month of access · renew only when you choose' : 'No payment method required'}</p>
+                <p className={styles.billingNote}>{plan.assisted ? 'Five people included · assisted setup' : paid ? 'One month of access · renew only when you choose' : 'No payment method required'}</p>
                 <div className={styles.creditLine}><span>{plan.includedCredits.toLocaleString()}</span><span>{plan.slug === 'explorer' ? 'free credits, reset monthly' : 'work credits for one month'}</span></div>
                 <ul>{plan.features.map((feature) => <li key={feature}><span>✓</span>{feature}</li>)}</ul>
                 <div className={styles.templates}><small>Example templates</small><p>{plan.templateExamples.join(' · ')}</p></div>
                 {plan.assisted ? (
-                  <a href="mailto:info@accrainnovationcentre.com?subject=AI360%20Team%20pilot" className={styles.choose}>
-                    Request Team pilot
+                  <a href="mailto:info@accrainnovationcentre.com?subject=AI360%20Team%20plan" className={styles.choose}>
+                    Talk to us about Team
                   </a>
-                ) : (
-                  <Link href={paid && BILLING_ENABLED ? checkoutHref : paid ? `/sign-up?plan=${plan.slug}&cadence=monthly` : '/app'} className={paid ? styles.choose : styles.start}>
-                    {paid ? (BILLING_ENABLED ? `Choose ${plan.name}` : `Join the ${plan.name} pilot`) : 'Start free'}
+                ) : paid ? (
+                  <Link href={BILLING_ENABLED ? checkoutHref : `/sign-up?plan=${plan.slug}&cadence=monthly`} className={styles.choose}>
+                    {BILLING_ENABLED ? `Choose ${plan.name}` : `Join the ${plan.name} waiting list`}
                   </Link>
+                ) : (
+                  // The free plan opens the product, so it uses the one shared
+                  // call to action rather than telling someone already signed in
+                  // to "start free" again.
+                  <StartCta className={styles.start} />
                 )}
               </article>
             )
           })}
         </div>
-        <p className={styles.pilotNote}>{BILLING_ENABLED
-          ? 'Prices are shown in Ghana cedis. Each successful payment buys one month of access and does not renew automatically during the pilot. Team onboarding is assisted.'
-          : 'Paid checkout is not open yet. Joining a paid-plan pilot does not charge you; payment will only open after the payment and reconciliation flow passes verification. Team onboarding is assisted.'}</p>
+        <p className={styles.planNote}>{BILLING_ENABLED
+          ? 'Prices are shown in Ghana cedis. Each successful payment buys one month of access and does not renew automatically. Team onboarding is assisted.'
+          : 'Paid checkout is not open yet. Joining a waiting list does not charge you; payment opens once the payment and reconciliation flow passes verification. Team onboarding is assisted.'}</p>
       </section>
 
       <section className={styles.creditSection}>
@@ -150,7 +178,7 @@ export function PricingExperience() {
           <div className={styles.reviewTop}><span>CHECKOUT PREVIEW</span><b>Clear before confirmation</b></div>
           <dl>
             <div><dt>Due today</dt><dd>Plan price plus clearly listed tax or fees</dd></div>
-            <div><dt>Access</dt><dd>One month during the pilot, with no automatic renewal</dd></div>
+            <div><dt>Access</dt><dd>One month, with no automatic renewal</dd></div>
             <div><dt>Included</dt><dd>Your plan features and monthly work credits</dd></div>
             <div><dt>Credits</dt><dd>Included allowance and expiry rules shown plainly</dd></div>
             <div><dt>Payment</dt><dd>Your selected Mobile Money wallet or card</dd></div>
@@ -164,14 +192,14 @@ export function PricingExperience() {
         <div><p>Important questions</p><h2>Clear before checkout.</h2></div>
         <div className={styles.faqs}>
           <details><summary>Why not promise unlimited AI?<span>+</span></summary><p>Model, research, image and video costs vary. An allowance keeps entry prices low and prevents one unusually expensive workflow from raising prices for everyone.</p></details>
-          <details><summary>Will Mobile Money renew automatically?<span>+</span></summary><p>No. During the pilot, every payment buys one month of access. AI360 will not charge the wallet or card again unless you start and confirm another payment.</p></details>
+          <details><summary>Will Mobile Money renew automatically?<span>+</span></summary><p>No. Every payment buys one month of access. AI360 will not charge the wallet or card again unless you start and confirm another payment.</p></details>
           <details><summary>Will I see the complete price before paying?<span>+</span></summary><p>Yes. The final review shows the amount due today, one-month access period and any applicable tax or payment fee before you confirm.</p></details>
-          <details><summary>Can I pay annually?<span>+</span></summary><p>Not during the first pilot. AI360 will prove repeat payments, reversals and refunds before asking anyone to make a longer commitment.</p></details>
-          <details><summary>Can I stop or change my plan?<span>+</span></summary><p>Yes. There is nothing to cancel during the pilot because access does not renew automatically. You can choose a different plan when you make your next payment.</p></details>
+          <details><summary>Can I pay annually?<span>+</span></summary><p>Not yet. AI360 will prove repeat payments, reversals and refunds before asking anyone to make a longer commitment.</p></details>
+          <details><summary>Can I stop or change my plan?<span>+</span></summary><p>Yes. There is nothing to cancel, because access does not renew automatically. You can choose a different plan when you make your next payment.</p></details>
           <details><summary>Can a student or programme receive a discount?<span>+</span></summary><p>Yes. Sponsored seats and verified education or community programmes should receive controlled allowances rather than a permanent blanket discount with no funding source.</p></details>
-          <details><summary>Do the five free credits roll over?<span>+</span></summary><p>No. They reset on the first day of each month and unused free credits expire. This keeps the free tier generous enough to test real work without creating an open-ended cost.</p></details>
-          <details><summary>What happens when credits finish?<span>+</span></summary><p>You can buy a one-time top-up of 40, 90 or 185 credits from your credit page whenever you need more. Top-ups cost more per credit than a plan, so a monthly plan is better value when you use AI360 regularly. AI360 will never create a silent overage bill.</p></details>
-          <details><summary>What counts toward the daily chat limit?<span>+</span></summary><p>Everyday chat is included up to a daily fair-use limit (Explorer 10, Everyday 60, Builder 120, Team 150) that resets at midnight UTC. Past the limit, extra messages cost 1 credit each — the price is shown before the message runs. Paid work like research, files and premium models never counts toward the free limit, because it already draws from your credits.</p></details>
+          <details><summary>Do the {FREE_MONTHLY_CREDITS} free credits roll over?<span>+</span></summary><p>No. They reset on the first day of each month and unused free credits expire. This keeps the free tier generous enough to test real work without creating an open-ended cost.</p></details>
+          <details><summary>What happens when credits finish?<span>+</span></summary><p>You can buy a one-time top-up of {TOP_UP_SIZES.slice(0, -1).join(', ')} or {TOP_UP_SIZES.at(-1)} credits from your credit page whenever you need more. Top-ups cost more per credit than a plan, so a monthly plan is better value when you use AI360 regularly. AI360 will never create a silent overage bill.</p></details>
+          <details><summary>What counts toward the daily chat limit?<span>+</span></summary><p>Everyday chat is included up to a daily fair-use limit ({CHAT_LIMITS}) that resets at midnight UTC. Past the limit, extra messages cost 1 credit each — the price is shown before the message runs. Paid work like research, files and premium models never counts toward the free limit, because it already draws from your credits.</p></details>
         </div>
       </section>
 

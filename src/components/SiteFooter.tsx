@@ -1,12 +1,13 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowUpRightIcon } from '@/components/ArrowUpRightIcon'
+import { StartCta } from '@/components/StartCta'
 import styles from './SiteFooter.module.css'
 
 const exploreLinks = [
   { href: '/what-you-can-make', label: 'What you can do' },
   { href: '/how-it-works', label: 'How it works' },
-  { href: '/pricing', label: 'Plans' },
+  { href: '/pricing', label: 'Pricing' },
 ]
 
 const organisationLinks = [
@@ -30,7 +31,7 @@ export function SiteFooter() {
               Bring the goal. AI360 helps you research, decide and make the work while you stay in control.
             </p>
             <div className={styles.actions}>
-              <Link className={styles.primaryAction} href="/app">Start with a goal</Link>
+              <StartCta className={styles.primaryAction} />
               <a className={styles.secondaryAction} href="https://accrainnovationcenter.com/" target="_blank" rel="noreferrer">
                 Visit AIC <ArrowUpRightIcon />
               </a>

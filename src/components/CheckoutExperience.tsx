@@ -92,7 +92,7 @@ export function CheckoutExperience({ planSlug, topupSlug }: { planSlug: string; 
               <div><dt>Plan</dt><dd>{plan!.name}</dd></div>
               <div><dt>Credits</dt><dd>{credits.toLocaleString()} work credits</dd></div>
               <div><dt>Access</dt><dd>One month</dd></div>
-              <div><dt>Renewal</dt><dd>Not automatic during the pilot</dd></div>
+              <div><dt>Renewal</dt><dd>Never automatic</dd></div>
             </dl>
           )}
           {topUp && <p className={styles.terms}>Top-ups are a convenience purchase: they cost more per credit than a plan. If you use AI360 regularly, a monthly plan gives you more credits for your money. <Link href="/pricing">Compare plans</Link>.</p>}

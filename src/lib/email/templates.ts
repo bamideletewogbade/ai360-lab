@@ -154,14 +154,14 @@ export function lowCreditEmail(data: {
     heading: 'Running low on credits',
     bodyHtml:
       paragraph(`Hi ${name}, you have <strong>${available} credit${available === 1 ? '' : 's'}</strong> left on your ${escapeHtml(data.planName.slice(0, 60))} plan.`) +
-      paragraph('AI360 will not create a surprise overage charge. During the pilot, you can move to a larger plan or choose another month of access when you are ready.'),
-    cta: { label: 'View plans', href: `${appUrl}/pricing` },
+      paragraph('AI360 will not create a surprise overage charge. You can move to a larger plan, or buy another month of access, whenever you are ready.'),
+    cta: { label: 'See pricing', href: `${appUrl}/pricing` },
   })
   const text = `Running low on credits
 
 Hi ${name}, you have ${available} credit${available === 1 ? '' : 's'} left on your ${data.planName} plan.
 
-AI360 will not create a surprise overage charge. To compare the pilot plans: ${appUrl}/pricing`
+AI360 will not create a surprise overage charge. To compare plans: ${appUrl}/pricing`
   return { subject, html, text }
 }
 

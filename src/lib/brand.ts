@@ -20,17 +20,27 @@ export type PublicNavLink = {
   external?: boolean
 }
 
+/**
+ * The page is "Pricing", the things on it are "plans".
+ *
+ * The label used to be "Plans" while the URL was /pricing, the metadata title
+ * said "plans and pricing" and the page sold plans, top-ups and per-task credit
+ * costs. Someone scanning a navigation bar for what it costs looks for the
+ * word "pricing", and "Plans" also under-describes a page that is mostly not
+ * about plans. Naming the page after its URL removes the mismatch without
+ * touching a route that sitemaps, emails and search results already point at.
+ */
 export const PUBLIC_NAV_LINKS: readonly PublicNavLink[] = [
   { href: '/what-you-can-make', label: 'What you can do', current: 'what' },
   { href: '/how-it-works', label: 'How it works', current: 'how' },
-  { href: '/pricing', label: 'Plans', current: 'pricing' },
+  { href: '/pricing', label: 'Pricing', current: 'pricing' },
   { href: 'https://aithreesixty.tech', label: 'About AI360', external: true },
 ]
 
 export const PUBLIC_FOOTER_LINKS = [
   { href: '/what-you-can-make', label: 'What you can do' },
   { href: '/how-it-works', label: 'How it works' },
-  { href: '/pricing', label: 'Plans' },
+  { href: '/pricing', label: 'Pricing' },
   { href: '/changelog', label: 'Changelog' },
   { href: '/privacy', label: 'Privacy' },
   { href: '/terms', label: 'Terms' },

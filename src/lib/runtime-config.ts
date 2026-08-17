@@ -34,6 +34,11 @@ export function productionReadinessChecks(): ReadinessCheck[] {
     || configured('NEXT_PUBLIC_SUPABASE_ANON_KEY')
   const supabaseAuthReady = supabasePublishable && validUrl(supabaseUrl, production)
   const databaseProvider = selectedDatabaseProvider()
+  // Kept as a local check rather than an import: this module is read for
+  // configuration reporting and must not pull in the server-only storage client.
+  const mediaStorageReady = configured('NEXT_PUBLIC_SUPABASE_URL')
+    && configured('SUPABASE_SECRET_KEY')
+    && configured('SUPABASE_PRIVATE_BUCKET')
   const billingEnabled = process.env.NEXT_PUBLIC_BILLING_ENABLED === 'true'
   const paymentProviderReady = process.env.PAYMENTS_PROVIDER === 'expresspay'
     && (process.env.EXPRESSPAY_ENV === 'sandbox' || process.env.EXPRESSPAY_ENV === 'live')
@@ -81,6 +86,22 @@ export function productionReadinessChecks(): ReadinessCheck[] {
       message: databaseProvider === 'postgres'
         ? 'Supabase Postgres is configured and serves every application data route.'
         : 'No durable application database is configured.',
+    },
+    {
+      // Studio media is paid work whose deliverable only exists once it is
+      // stored. Without this, a render can finish at the provider, be charged
+      // for, and still never reach the person — which is exactly what happened
+      // in production while every other check reported ready.
+      key: 'media_storage',
+      status: mediaStorageReady
+        ? 'ready'
+        : configured('NEXT_PUBLIC_SUPABASE_URL') || configured('SUPABASE_SECRET_KEY') || configured('SUPABASE_PRIVATE_BUCKET')
+          ? 'invalid'
+          : 'missing',
+      required: production,
+      message: mediaStorageReady
+        ? 'Generated images and videos can be stored and delivered from the private media bucket.'
+        : 'Generated media cannot be delivered: the private media bucket, project URL or server secret key is missing.',
     },
     {
       key: 'payments',

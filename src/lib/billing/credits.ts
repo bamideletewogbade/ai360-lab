@@ -119,7 +119,15 @@ export const FEATURE_WEIGHTS: Record<CreditFeature, { floor: number; reserve: nu
   'chat.document': { floor: 2, reserve: 2, ceiling: 4 },
   agent: { floor: 3, reserve: 5, ceiling: 8 },
   image: { floor: 3, reserve: 4, ceiling: 6 },
-  video: { floor: 12, reserve: 16, ceiling: 20 },
+  // Video is quoted from a live provider price before it runs, so `reserve` is
+  // only the fallback for an unquoted estimate. The floor is set for the
+  // cheapest engine Studio offers (a 4s draft clip costs about 7 credits), not
+  // for the dearest: a floor of 12 charged a draft clip nearly as much as the
+  // best one and erased the reason to choose it. The ceiling is what the model
+  // budget is derived from, and carries deliberate headroom — at 20 credits the
+  // standard engine sat 7% below the limit, so a small provider price rise
+  // would have made video unsellable outright.
+  video: { floor: 6, reserve: 16, ceiling: 24 },
   voice: { floor: 1, reserve: 1, ceiling: 2 },
   export: { floor: 0, reserve: 0, ceiling: 0 },
 }
@@ -165,16 +173,20 @@ export type CreditEstimate = {
  * Credits to hold before work begins.
  *
  * When the provider gives a real price up front, as the video quote endpoint
- * does, that price decides the reservation and the published range only sets
- * the floor. Otherwise the published reservation applies.
+ * does, that price decides the reservation and the feature floor is the only
+ * minimum that applies. Holding the published `reserve` on top of a known
+ * cheaper price would charge someone the dear engine's rate for the cheap one,
+ * which is precisely what makes a lower-cost option worth offering. Without a
+ * quote there is nothing better to go on, so the published reservation applies.
  */
 export function estimateCredits(feature: CreditFeature, options: { quotedUsd?: number } = {}): CreditEstimate {
   const weight = FEATURE_WEIGHTS[feature]
   const quoted = Number.isFinite(options.quotedUsd) && (options.quotedUsd as number) > 0
     ? (options.quotedUsd as number)
     : null
-  const fromQuote = quoted === null ? 0 : creditsForUsd(quoted)
-  const reserve = Math.max(weight.reserve, fromQuote)
+  const reserve = quoted === null
+    ? weight.reserve
+    : Math.max(weight.floor, creditsForUsd(quoted))
   return {
     feature,
     reserve,

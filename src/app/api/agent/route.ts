@@ -3,6 +3,7 @@ import { rateLimit, rejectLargeRequest, requireIdentifiedRequester, resolveReque
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
 import { openCreditGate } from '@/lib/billing/credit-gate'
+import { creditsForUsd } from '@/lib/billing/credits'
 import { failRun, runAgent } from '@/lib/agent/runtime'
 import { isAgentDepth, reconcileApprovedPlan, type AgentDepth } from '@/lib/agent/protocol'
 import { DEFAULT_LANGUAGE, isLanguageCode, type LanguageCode } from '@/lib/languages'
@@ -267,7 +268,14 @@ export async function POST(request: Request) {
           content: resultContent,
           sources: run.sources,
           actions: actionSuggestions(messages, resultContent),
-          usage: { totalTokens: run.totalTokens, cost: run.costUsd },
+          // The credit figure is the honest post-settlement number, computed
+          // with the same conversion the ledger uses, so the receipt under the
+          // answer matches what the balance actually dropped by.
+          usage: {
+            totalTokens: run.totalTokens,
+            cost: run.costUsd,
+            credits: creditsForUsd(run.costUsd ?? 0),
+          },
         })
         await recordUsageEventSafe({
           requestId: log.requestId, route: '/api/agent', feature: 'agent', provider: 'openrouter',

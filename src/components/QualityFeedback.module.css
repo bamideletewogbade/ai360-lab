@@ -1,56 +1,56 @@
 /* Feedback dialog. Colours are tokens so the surface follows the active theme;
    the raised ladder is warm-white (dialog) < line (subtle band) < white (cards,
    inputs). Semantic error tints stay fixed because they carry meaning. */
-.responseTrigger { display:inline-flex; align-items:center; gap:4px; padding:3px 7px; border:0; border-radius:6px; background:transparent; color:var(--grey); cursor:pointer; font-size:10px; }
+.responseTrigger { display:inline-flex; align-items:center; gap:4px; padding:3px 7px; border:0; border-radius:6px; background:transparent; color:var(--grey); cursor:pointer; font-size: 13px; }
 .responseTrigger:hover { background:var(--white); color:var(--black); }
 .responseTrigger svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
 .backdrop { position:fixed; inset:0; z-index:180; display:grid; place-items:center; padding:20px; background:rgba(16,17,18,.62); backdrop-filter:blur(10px); }
 .dialog { position:relative; width:min(720px,100%); max-height:calc(100dvh - 40px); overflow-y:auto; border:1px solid var(--line-dark); border-radius:22px; background:var(--warm-white); box-shadow:0 36px 120px rgba(0,0,0,.36); }
 .dialog form,.receipt,.feedbackChoice { padding:clamp(25px,5vw,42px); }
-.close { position:absolute; top:17px; right:18px; min-height:34px; padding:0 10px; border:1px solid var(--line-dark); border-radius:9px; background:var(--white); cursor:pointer; color:var(--grey); font-size:10px; font-weight:750; }
-.eyebrow,.receipt>span { margin:0 0 17px; color:var(--grey); font-size:10px; font-weight:850; letter-spacing:.13em; text-transform:uppercase; }
-.dialog h2 { max-width:560px; margin:0; padding-right:70px; font-family:var(--font-heading); font-size:clamp(31px,5vw,48px); line-height:1.02; letter-spacing:-.055em; }
-.intro { max-width:560px; margin:14px 0 25px; color:var(--grey); font-size:13px; line-height:1.65; }
+.close { position:absolute; top:17px; right:18px; min-height:34px; padding:0 10px; border:1px solid var(--line-dark); border-radius:9px; background:var(--white); cursor:pointer; color:var(--grey); font-size: 13px; font-weight:750; }
+.eyebrow,.receipt>span { margin:0 0 17px; color:var(--grey); font-size: 13px; font-weight:850; letter-spacing:.13em; text-transform:uppercase; }
+.dialog h2 { max-width:560px; margin:0; padding-right:70px; font-family:var(--font-heading); font-size: clamp(32px,5.15vw,49px); line-height:1.02; letter-spacing:-.055em; }
+.intro { max-width:560px; margin:14px 0 25px; color:var(--grey); font-size: 15px; line-height:1.65; }
 .choiceActions { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
 .choiceActions button { display:grid; grid-template-columns:30px 1fr; column-gap:10px; align-items:center; min-height:72px; padding:12px; border:1px solid var(--line-dark); border-radius:12px; background:var(--white); color:var(--black); cursor:pointer; text-align:left; }
 .choiceActions button:hover { border-color:var(--black); box-shadow:inset 0 0 0 1px var(--black); }
 .choiceActions button:last-child { grid-column:1/-1; }
-.choiceActions button>span { grid-row:1/3; display:grid; place-items:center; width:30px; height:30px; border-radius:9px; background:var(--line); font-size:14px; font-weight:800; }
+.choiceActions button>span { grid-row:1/3; display:grid; place-items:center; width:30px; height:30px; border-radius:9px; background:var(--line); font-size: 16px; font-weight:800; }
 .choiceActions b,.choiceActions small { display:block; }
-.choiceActions b { font-size:11px; }
-.choiceActions small { margin-top:3px; color:var(--grey); font-size:9px; }
+.choiceActions b { font-size: 14px; }
+.choiceActions small { margin-top:3px; color:var(--grey); font-size: 12px; }
 .choiceActions button:disabled { cursor:wait; opacity:.55; }
 .dialog fieldset { margin:0; padding:0; border:0; }
-.dialog legend,.textField>span { display:block; margin-bottom:10px; color:var(--grey); font-size:10px; font-weight:850; letter-spacing:.09em; text-transform:uppercase; }
-.textField>span small { margin-left:5px; color:var(--soft-grey); font-size:8px; }
+.dialog legend,.textField>span { display:block; margin-bottom:10px; color:var(--grey); font-size: 13px; font-weight:850; letter-spacing:.09em; text-transform:uppercase; }
+.textField>span small { margin-left:5px; color:var(--soft-grey); font-size: 12px; }
 .categories { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
 .categories legend { grid-column:1/-1; }
-.categories label { display:flex; align-items:center; min-height:47px; padding:10px 12px; border:1px solid var(--line-dark); border-radius:10px; background:var(--white); cursor:pointer; font-size:11px; font-weight:700; }
+.categories label { display:flex; align-items:center; min-height:47px; padding:10px 12px; border:1px solid var(--line-dark); border-radius:10px; background:var(--white); cursor:pointer; font-size: 14px; font-weight:700; }
 .categories label:hover,.categories .selected { border-color:var(--black); box-shadow:inset 0 0 0 1px var(--black); }
 .categories input { position:absolute; opacity:0; pointer-events:none; }
 .textField { display:block; margin-top:22px; }
-.textField textarea,.textField input { width:100%; padding:13px 14px; border:1px solid var(--line-dark); border-radius:11px; background:var(--white); outline:none; color:var(--black); font-size:13px; resize:vertical; }
+.textField textarea,.textField input { width:100%; padding:13px 14px; border:1px solid var(--line-dark); border-radius:11px; background:var(--white); outline:none; color:var(--black); font-size: 15px; resize:vertical; }
 .textField textarea:focus,.textField input:focus { border-color:var(--black); box-shadow:0 0 0 3px rgba(16,17,18,.07); }
 .evidence { display:grid; gap:7px; margin-top:23px!important; padding:18px!important; border:1px solid var(--line-dark)!important; border-radius:13px; background:var(--line); }
 .evidence legend { float:left; width:100%; margin:0 0 4px; }
-.evidence>p { clear:both; margin:0 0 8px; color:var(--grey); font-size:10px; }
+.evidence>p { clear:both; margin:0 0 8px; color:var(--grey); font-size: 13px; }
 .evidence label,.checkRow { display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
 .evidence label { padding:9px 10px; border-radius:9px; background:var(--white); }
 .evidence input,.checkRow input { margin-top:3px; accent-color:var(--black); }
 .evidence b,.evidence small,.checkRow b,.checkRow small { display:block; }
-.evidence b,.checkRow b { font-size:11px; }
-.evidence small,.checkRow small { margin-top:2px; color:var(--grey); font-size:9px; line-height:1.45; }
+.evidence b,.checkRow b { font-size: 14px; }
+.evidence small,.checkRow small { margin-top:2px; color:var(--grey); font-size: 12px; line-height:1.45; }
 .checkRow { margin-top:16px; padding:13px; border:1px solid var(--line-dark); border-radius:11px; background:var(--white); }
-.error { margin:15px 0 0; padding:10px 12px; border-radius:8px; background:#f4e4df; color:#79372c; font-size:11px; }
+.error { margin:15px 0 0; padding:10px 12px; border-radius:8px; background:#f4e4df; color:#79372c; font-size: 14px; }
 .submitRow { display:flex; align-items:center; justify-content:space-between; gap:24px; margin-top:25px; padding-top:20px; border-top:1px solid var(--line-dark); }
-.submitRow p { max-width:330px; margin:0; color:var(--grey); font-size:10px; line-height:1.5; }
+.submitRow p { max-width:330px; margin:0; color:var(--grey); font-size: 13px; line-height:1.5; }
 /* The primary action inverts against the page, so its label uses the page
    colour rather than a fixed white, which would vanish on a light-on-dark chip. */
-.submitRow button,.receipt>a { display:inline-flex; min-height:46px; align-items:center; justify-content:center; padding:0 17px; border:1px solid var(--black); border-radius:10px; background:var(--black); color:var(--paper); cursor:pointer; font-size:11px; font-weight:800; text-decoration:none; }
+.submitRow button,.receipt>a { display:inline-flex; min-height:46px; align-items:center; justify-content:center; padding:0 17px; border:1px solid var(--black); border-radius:10px; background:var(--black); color:var(--paper); cursor:pointer; font-size: 14px; font-weight:800; text-decoration:none; }
 .submitRow button:disabled { cursor:wait; opacity:.6; }
 .receipt p { max-width:560px; margin:16px 0 24px; color:var(--grey); line-height:1.7; }
 .receipt>div { display:grid; gap:5px; margin-bottom:18px; padding:17px; border:1px solid var(--line-dark); border-radius:12px; background:var(--white); }
-.receipt small { color:var(--grey); font-size:9px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; }
-.receipt strong { overflow-wrap:anywhere; font-family:var(--font-heading); font-size:17px; }
-@media(max-width:620px){.responseTrigger span{display:none}.backdrop{align-items:end;padding:0}.dialog{max-height:92dvh;padding-bottom:env(safe-area-inset-bottom);border-radius:20px 20px 0 0}.dialog form,.receipt,.feedbackChoice{padding:27px 20px}.categories,.choiceActions{grid-template-columns:1fr}.choiceActions button:last-child{grid-column:auto}.dialog h2{padding-right:60px}.submitRow{align-items:stretch;flex-direction:column;gap:13px}.submitRow button{width:100%}.dialog input,.dialog textarea,.dialog select{font-size:16px}.dialog button{min-height:44px}}
+.receipt small { color:var(--grey); font-size: 12px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; }
+.receipt strong { overflow-wrap:anywhere; font-family:var(--font-heading); font-size: 19px; }
+@media(max-width:620px){.responseTrigger span{display:none}.backdrop{align-items:end;padding:0}.dialog{max-height:92dvh;padding-bottom:env(safe-area-inset-bottom);border-radius:20px 20px 0 0}.dialog form,.receipt,.feedbackChoice{padding:27px 20px}.categories,.choiceActions{grid-template-columns:1fr}.choiceActions button:last-child{grid-column:auto}.dialog h2{padding-right:60px}.submitRow{align-items:stretch;flex-direction:column;gap:13px}.submitRow button{width:100%}.dialog input,.dialog textarea,.dialog select{font-size: 17px}.dialog button{min-height:44px}}
 @media(prefers-reduced-motion:reduce){.backdrop{backdrop-filter:none}}

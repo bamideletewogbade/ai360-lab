@@ -54,7 +54,7 @@ type Msg = {
    */
   agentRunId?: string
   sources?: SourceLink[]
-  usage?: { totalTokens?: number; cost?: number }
+  usage?: { totalTokens?: number; cost?: number; credits?: number }
   actions?: AgentAction[]
   /** Correlates customer feedback with the server trace that produced this answer. */
   requestId?: string
@@ -284,7 +284,7 @@ type AgentEvent =
   | { type: 'step'; id: string; label: string; status: 'pending' | 'active' | 'complete' | 'failed' }
   | { type: 'delta'; text: string; reset?: boolean }
   | { type: 'plan'; objectives: string[]; depth: AgentDepth; awaitingApproval: boolean; estimatedCredits: number }
-  | { type: 'result'; content: string; sources?: SourceLink[]; actions?: AgentAction[]; usage?: { totalTokens?: number; cost?: number } }
+  | { type: 'result'; content: string; sources?: SourceLink[]; actions?: AgentAction[]; usage?: { totalTokens?: number; cost?: number; credits?: number } }
   | { type: 'error'; message: string; code?: string; retryable?: boolean; creditNotice?: string; requestId?: string }
 
 async function readAgentStream(response: Response, onEvent: (event: AgentEvent) => void) {
@@ -1225,7 +1225,7 @@ function LabWorkspace({
         steps?: AgentStep[]
         content?: string | null
         sources?: SourceLink[]
-        usage?: { totalTokens?: number; cost?: number } | null
+        usage?: { totalTokens?: number; cost?: number; credits?: number } | null
         activity?: AgentActivity[]
       }
       try {
@@ -1912,6 +1912,13 @@ function LabWorkspace({
                         <span>Working...</span>
                       </span>
                     )}
+                    {/* The honest receipt under metered work: what this task
+                        actually settled, not the estimate shown before it ran. */}
+                    {message.usage?.credits ? (
+                      <p className="message-credit-receipt">
+                        This {message.agent ? 'research' : 'answer'} used {message.usage.credits} credit{message.usage.credits === 1 ? '' : 's'}.
+                      </p>
+                    ) : null}
                     {message.sources?.length ? (
                       <details className="source-drawer">
                         <summary>{message.sources.length} source{message.sources.length === 1 ? '' : 's'} used</summary>

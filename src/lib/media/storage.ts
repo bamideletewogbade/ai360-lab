@@ -8,11 +8,32 @@ const MAX_MEDIA_BYTES = 100 * 1024 * 1024
 const MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm'])
 let client: SupabaseClient | null = null
 
+/**
+ * A missing storage configuration is not a passing hiccup: no amount of
+ * retrying will make an unset environment variable appear. It is typed so
+ * callers can stop retrying and tell the person the truth instead of leaving a
+ * finished render pending forever.
+ */
+export class MediaStorageNotConfiguredError extends Error {
+  constructor() {
+    super('Private media storage is not configured.')
+    this.name = 'MediaStorageNotConfiguredError'
+  }
+}
+
+export function isMediaStorageConfigured() {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+    && process.env.SUPABASE_SECRET_KEY?.trim()
+    && process.env.SUPABASE_PRIVATE_BUCKET?.trim(),
+  )
+}
+
 function configuration() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
   const secret = process.env.SUPABASE_SECRET_KEY?.trim()
   const bucket = process.env.SUPABASE_PRIVATE_BUCKET?.trim()
-  if (!url || !secret || !bucket) throw new Error('Private media storage is not configured.')
+  if (!url || !secret || !bucket) throw new MediaStorageNotConfiguredError()
   return { url, secret, bucket }
 }
 

@@ -8,6 +8,7 @@ import { consumeChatDailyCounter } from '@/lib/chat-daily-cap'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { citationSources, LIVE_INFORMATION_TOOLS } from '@/lib/live-tools'
 import { recordUsageEventSafe } from '@/lib/usage'
+import { CHAT_FAIR_USE_DAILY, CHAT_FAIR_USE_FALLBACK } from '@/lib/billing/catalog'
 import { openCreditGate } from '@/lib/billing/credit-gate'
 import { chatFeature } from '@/lib/billing/credits'
 import { readBalance } from '@/lib/billing/credit-repository'
@@ -35,28 +36,20 @@ type ContentPart =
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * Everyday chat is included with a plan, so its cost is bounded by a daily
- * fair-use cap instead of a credit meter. The cap follows the plan, because a
- * free Explorer workspace must not be able to chat like a paid one. Anonymous
- * callers sit at the Explorer allowance: they cannot buy credits, so over the
- * cap they are asked to sign in rather than overflow onto a balance.
+ * Anonymous callers sit at the Explorer allowance: they cannot buy credits, so
+ * over the cap they are asked to sign in rather than overflow onto a balance.
+ * The caps themselves live in the catalogue, because the pricing page publishes
+ * them and the two must not drift.
  */
-const CHAT_FAIR_USE_DAILY: Record<string, number> = {
-  explorer: 10,
-  everyday: 60,
-  builder: 120,
-  team: 150,
-}
-
 async function chatFairUseDaily(requester: Requester) {
   const planLimit = !requester.context
     ? CHAT_FAIR_USE_DAILY.explorer
     : await readBalance(requester.context)
-        .then((balance) => CHAT_FAIR_USE_DAILY[balance?.plan ?? 'everyday'] ?? 60)
+        .then((balance) => CHAT_FAIR_USE_DAILY[balance?.plan ?? 'everyday'] ?? CHAT_FAIR_USE_FALLBACK)
         .catch(() => {
           // The meter must never block chat because the billing database is
           // slow or down; the conservative paid-plan default still bounds cost.
-          return 60
+          return CHAT_FAIR_USE_FALLBACK
         })
   return configuredLimit('AI360_RATE_CHAT_PER_DAY', planLimit)
 }

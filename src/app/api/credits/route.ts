@@ -2,6 +2,7 @@ import { getOptionalAuthContext } from '@/lib/auth'
 import { readBalance } from '@/lib/billing/credit-repository'
 import { BILLING_PLANS, CREDIT_GUIDE, CREDIT_TOP_UPS } from '@/lib/billing/catalog'
 import { FEATURE_WEIGHTS } from '@/lib/billing/credits'
+import { lowCreditThreshold } from '@/lib/email/config'
 import { errorDetails, requestLogger } from '@/lib/observability'
 
 export const runtime = 'nodejs'
@@ -33,6 +34,9 @@ export async function GET(request: Request) {
       allowance: balance.allowance,
       plan: balance.plan,
       period: balance.period,
+      // Balance at or below which the interface suggests a top-up. The same
+      // threshold drives the low-credit email, so one value keeps both honest.
+      lowThreshold: lowCreditThreshold(),
       // What each kind of work costs, so the interface never has to hardcode it.
       costs: Object.fromEntries(
         Object.entries(FEATURE_WEIGHTS)

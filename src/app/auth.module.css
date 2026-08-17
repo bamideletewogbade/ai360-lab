@@ -28,34 +28,34 @@
 }
 .brand:hover { opacity: .72; transform: translateY(-1px); }
 .brand img { width: 142px; height: auto; }
-.brand span { padding-left: 11px; border-left: 1px solid var(--soft-grey); font-family: var(--font-heading); font-size: 0.775rem; font-weight: 800; letter-spacing: .16em; }
+.brand span { padding-left: 11px; border-left: 1px solid var(--soft-grey); font-family: var(--font-heading); font-size: 0.875rem; font-weight: 800; letter-spacing: .16em; }
 
 .story { position: relative; display: flex; align-items: center; overflow: hidden; padding: 130px clamp(36px, 6vw, 110px) 70px; border-right: 1px solid rgba(86, 89, 92, .3); }
 .story::after { position: absolute; right: -110px; bottom: -210px; width: 520px; height: 520px; border: 1px solid rgba(86, 89, 92, .13); border-radius: 50%; content: ''; }
 .storyContent { position: relative; z-index: 2; width: min(100%, 690px); animation: auth-story-in .72s cubic-bezier(.22, 1, .36, 1) both; }
-.kicker, .eyebrow { margin: 0 0 20px; color: var(--grey); font-size: 0.85rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.kicker, .eyebrow { margin: 0 0 20px; color: var(--grey); font-size: 1rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 .kicker { display: flex; align-items: center; gap: 9px; }
-.kicker span { color: var(--ink); font-size: 1rem; }
-.story h1 { max-width: 650px; margin: 0; color: var(--charcoal); font-family: var(--font-heading); font-size: clamp(3.5rem, 6vw, 7.25rem); font-weight: 700; line-height: .92; letter-spacing: -.065em; }
-.lead { max-width: 590px; margin: 28px 0 43px; color: var(--grey); font-size: clamp(1.092rem, 1.25vw, 1.311rem); line-height: 1.7; }
+.kicker span { color: var(--ink); font-size: 1.0625rem; }
+.story h1 { max-width: 650px; margin: 0; color: var(--charcoal); font-family: var(--font-heading); font-size: clamp(3.625rem, 6.18vw, 7.4375rem); font-weight: 700; line-height: .92; letter-spacing: -.065em; }
+.lead { max-width: 590px; margin: 28px 0 43px; color: var(--grey); font-size: clamp(1.1875rem, 1.363vw, 1.4375rem); line-height: 1.7; }
 .benefits { border-top: 1px solid rgba(86, 89, 92, .28); }
 .benefits article { display: grid; grid-template-columns: 38px 1fr; gap: 14px; align-items: center; min-height: 80px; border-bottom: 1px solid rgba(86, 89, 92, .28); animation: auth-row-in .55s cubic-bezier(.22, 1, .36, 1) both; }
 .benefits article:nth-child(1) { animation-delay: .12s; }
 .benefits article:nth-child(2) { animation-delay: .2s; }
 .benefits article:nth-child(3) { animation-delay: .28s; }
-.benefits article > span { color: #85888a; font-size: 0.737rem; font-weight: 750; letter-spacing: .1em; }
+.benefits article > span { color: #85888a; font-size: 0.9375rem; font-weight: 750; letter-spacing: .1em; }
 .benefits b, .benefits small { display: block; }
-.benefits b { font-family: var(--font-heading); font-size: 1.025rem; }
-.benefits small { margin-top: 4px; color: var(--grey); font-size: 0.85rem; line-height: 1.5; }
+.benefits b { font-family: var(--font-heading); font-size: 1.125rem; }
+.benefits small { margin-top: 4px; color: var(--grey); font-size: 1rem; line-height: 1.5; }
 .audiences { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 24px; }
-.audiences span { border: 1px solid rgba(86, 89, 92, .28); border-radius: 999px; padding: 7px 11px; color: var(--grey); font-size: 0.725rem; font-weight: 750; }
+.audiences span { border: 1px solid rgba(86, 89, 92, .28); border-radius: 999px; padding: 7px 11px; color: var(--grey); font-size: 0.9375rem; font-weight: 750; }
 
 .continuityCard { display: grid; grid-template-columns: 38px 1fr auto; gap: 11px; align-items: center; margin-top: 18px; padding: 11px 13px; border: 1px solid rgba(86, 89, 92, .22); border-radius: 13px; background: rgba(255,255,255,.45); box-shadow: 0 14px 45px rgba(16,17,18,.05); animation: auth-card-float 5s ease-in-out infinite; }
-.continuityMark { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 10px; background: var(--ink); color: white; font-family: var(--font-heading); font-size: 0.813rem; font-weight: 800; }
+.continuityMark { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 10px; background: var(--ink); color: white; font-family: var(--font-heading); font-size: 0.9375rem; font-weight: 800; }
 .continuityCard b, .continuityCard small { display: block; }
-.continuityCard b { font-family: var(--font-heading); font-size: 0.875rem; }
-.continuityCard small { margin-top: 2px; color: var(--grey); font-size: 0.725rem; }
-.continuityCard i { color: #436a55; font-size: 0.7rem; font-style: normal; font-weight: 800; }
+.continuityCard b { font-family: var(--font-heading); font-size: 1rem; }
+.continuityCard small { margin-top: 2px; color: var(--grey); font-size: 0.9375rem; }
+.continuityCard i { color: #436a55; font-size: 0.875rem; font-style: normal; font-weight: 800; }
 
 .orbit { position: absolute; inset: 0; pointer-events: none; }
 .orbit::before, .orbit::after { position: absolute; width: 460px; height: 460px; border: 1px dashed rgba(86, 89, 92, .12); border-radius: 50%; content: ''; animation: auth-spin 36s linear infinite; }
@@ -68,13 +68,13 @@
 
 .panel { display: grid; place-items: center; padding: 110px clamp(28px, 6vw, 104px) 60px; background: #fff; }
 .panelInner { width: min(100%, 470px); animation: auth-panel-in .68s cubic-bezier(.22, 1, .36, 1) .08s both; }
-.journey { display: grid; grid-template-columns: auto 1fr auto 1fr auto; gap: 9px; align-items: center; margin-bottom: 38px; color: #9a9c9e; font-size: 0.688rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.journey { display: grid; grid-template-columns: auto 1fr auto 1fr auto; gap: 9px; align-items: center; margin-bottom: 38px; color: #9a9c9e; font-size: 0.875rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
 .journey i { height: 1px; background: #dedcd5; overflow: hidden; }
 .journey i:first-of-type::after { display: block; width: 100%; height: 100%; background: var(--ink); content: ''; animation: auth-line-in .7s cubic-bezier(.22, 1, .36, 1) .35s both; transform-origin: left; }
 .journey .done { color: #436a55; }
 .journey .current { color: var(--ink); }
-.panel h2 { margin: 0; font-family: var(--font-heading); font-size: clamp(1.8rem, 3vw, 2.65rem); line-height: 1.05; letter-spacing: -.045em; }
-.panelCopy { margin: 12px 0 30px; color: var(--grey); font-size: 1.037rem; line-height: 1.6; }
+.panel h2 { margin: 0; font-family: var(--font-heading); font-size: clamp(1.875rem, 3.09vw, 2.75rem); line-height: 1.05; letter-spacing: -.045em; }
+.panelCopy { margin: 12px 0 30px; color: var(--grey); font-size: 1.125rem; line-height: 1.6; }
 .formFrame { width: 100%; min-height: 320px; }
 
 /* Google is offered first because it is the fastest route for most people and
@@ -92,7 +92,7 @@
   background: #fff;
   color: #101112;
   font: inherit;
-  font-size: 0.92rem;
+  font-size: 1.0625rem;
   font-weight: 650;
   cursor: pointer;
   transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
@@ -101,12 +101,12 @@
 .googleButton:disabled { opacity: .55; cursor: not-allowed; }
 .googleButton svg { flex: none; }
 
-.authDivider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--grey); font-size: 0.74rem; font-weight: 550; }
+.authDivider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--grey); font-size: 0.9375rem; font-weight: 550; }
 .authDivider::before,
 .authDivider::after { flex: 1; height: 1px; background: #dedcd5; content: ''; }
 
 .authForm { display: grid; gap: 14px; }
-.authForm label { display: grid; gap: 7px; color: var(--charcoal); font-size: 0.82rem; font-weight: 600; }
+.authForm label { display: grid; gap: 7px; color: var(--charcoal); font-size: 0.9375rem; font-weight: 600; }
 .authForm input {
   width: 100%;
   min-height: 48px;
@@ -116,7 +116,7 @@
   padding: 0 14px;
   color: var(--ink);
   font: inherit;
-  font-size: 1rem;
+  font-size: 1.0625rem;
   font-weight: 450;
   outline: 0;
   transition: border-color .18s ease, box-shadow .18s ease;
@@ -132,7 +132,7 @@
   background: var(--ink);
   color: #fff;
   font: inherit;
-  font-size: 0.92rem;
+  font-size: 1.0625rem;
   font-weight: 700;
   cursor: pointer;
   transition: transform .18s ease, background .18s ease, opacity .18s ease;
@@ -172,7 +172,7 @@
   border-radius: 4px;
   background: none;
   color: var(--grey);
-  font-size: 0.85rem;
+  font-size: 1rem;
   font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -182,19 +182,19 @@
 .authSuccess {
   border-radius: 12px;
   padding: 12px 13px;
-  font-size: 0.85rem;
+  font-size: 1rem;
   line-height: 1.5;
 }
 .authError { border: 1px solid #e5b8b1; background: #fff4f2; color: #8a2519; }
 .authSuccess { border: 1px solid #b7d6c2; background: #f1fbf4; color: #285c3b; }
 .setupNotice { display: grid; min-height: 310px; place-items: center; align-content: center; border: 1px solid #dedcd5; border-radius: 16px; background: var(--paper); padding: 42px; text-align: center; }
-.setupNotice b { font-family: var(--font-heading); font-size: 1.15rem; }
-.setupNotice p { max-width: 330px; margin: 10px 0 20px; color: var(--grey); font-size: 0.9rem; line-height: 1.6; }
-.setupNotice a { border-radius: 9px; background: var(--ink); padding: 12px 16px; color: #fff; font-size: 0.85rem; font-weight: 750; text-decoration: none; transition: transform .18s ease, background .18s ease; }
+.setupNotice b { font-family: var(--font-heading); font-size: 1.25rem; }
+.setupNotice p { max-width: 330px; margin: 10px 0 20px; color: var(--grey); font-size: 1.0625rem; line-height: 1.6; }
+.setupNotice a { border-radius: 9px; background: var(--ink); padding: 12px 16px; color: #fff; font-size: 1rem; font-weight: 750; text-decoration: none; transition: transform .18s ease, background .18s ease; }
 .setupNotice a:hover { transform: translateY(-1px); background: var(--charcoal); }
-.alternate { margin: 22px 0 0; color: var(--grey); font-size: 0.9rem; text-align: center; }
+.alternate { margin: 22px 0 0; color: var(--grey); font-size: 1.0625rem; text-align: center; }
 .alternate a, .legal a { color: var(--ink); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
-.legal { max-width: 390px; margin: 18px auto 0; color: #85888a; font-size: 0.737rem; line-height: 1.6; text-align: center; }
+.legal { max-width: 390px; margin: 18px auto 0; color: #85888a; font-size: 0.9375rem; line-height: 1.6; text-align: center; }
 
 @keyframes auth-spin { to { transform: rotate(360deg); } }
 @keyframes auth-pulse { 50% { transform: rotate(45deg) scale(.85); } }
@@ -208,7 +208,7 @@
   .shell { grid-template-columns: 1fr; overflow: visible; }
   .brand { position: relative; top: auto; left: auto; margin: 24px 24px 0; }
   .story { min-height: auto; padding: 70px 24px 58px; border-right: 0; border-bottom: 1px solid rgba(86, 89, 92, .3); }
-  .story h1 { font-size: clamp(3.2rem, 12vw, 6rem); }
+  .story h1 { font-size: clamp(3.3125rem, 12.36vw, 6.1875rem); }
   .benefits { display: none; }
   .lead { margin-bottom: 25px; }
   .continuityCard { display: none; }
@@ -223,8 +223,8 @@
   .story { display: none; }
   .panel { place-items: start center; padding-top: 34px; }
   .panelInner { max-width: 480px; }
-  .panel h2 { font-size: clamp(1.8rem, 8.5vw, 2.25rem); line-height: 1.1; }
-  .panelCopy { margin: 10px 0 24px; font-size: .95rem; line-height: 1.55; }
+  .panel h2 { font-size: clamp(1.875rem, 8.755vw, 2.3125rem); line-height: 1.1; }
+  .panelCopy { margin: 10px 0 24px; font-size: 1.125rem; line-height: 1.55; }
   .formFrame { min-height: 0; }
   .googleButton,
   .authForm input,
@@ -237,8 +237,8 @@
   .brand { margin-top: max(20px, env(safe-area-inset-top)); margin-right: max(18px, env(safe-area-inset-right)); margin-left: max(18px, env(safe-area-inset-left)); }
   .brand img { width: 126px; }
   .panel { padding-top: 28px; padding-right: max(18px, env(safe-area-inset-right)); padding-bottom: max(48px, env(safe-area-inset-bottom)); padding-left: max(18px, env(safe-area-inset-left)); }
-  .panel input, .panel select, .panel textarea { font-size: 16px; }
-  .journey { gap: 6px; margin-bottom: 24px; font-size: 0.6rem; }
+  .panel input, .panel select, .panel textarea { font-size: 17px; }
+  .journey { gap: 6px; margin-bottom: 24px; font-size: 0.8125rem; }
   .authForm { gap: 15px; }
   .alternate { margin-top: 20px; }
   .legal { margin-top: 16px; }

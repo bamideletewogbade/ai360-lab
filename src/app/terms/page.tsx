@@ -37,7 +37,7 @@ export default function TermsPage() {
 
           <section>
             <h2>Content and availability</h2>
-            <p>You retain your rights in the material you submit. AI-generated output may not be unique and may require editing. The service is provided as available, may change during the pilot, and may be limited or suspended to protect users, costs and reliability.</p>
+            <p>You retain your rights in the material you submit. AI-generated output may not be unique and may require editing. The service is provided as available, may change, and may be limited or suspended to protect users, costs and reliability.</p>
           </section>
 
           <section>
@@ -46,9 +46,9 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2>Pilot plans and payments</h2>
-            <p>Prices and allowances shown on the pricing page are a pilot proposal until checkout is activated. During the first paid pilot, each successful payment buys one month of access and does not renew automatically. Before payment, the final amount, access period, included allowance and applicable taxes will be displayed for approval.</p>
-            <p>Individuals will not receive silent renewal or usage-overage charges. If an allowance is exhausted, paid capabilities may pause until the person chooses another month or a different plan. One-time top-ups are not sold during the first pilot. Failed provider work should release unused reserved credits after reconciliation.</p>
+            <h2>Plans and payments</h2>
+            <p>Each successful payment buys one month of access and does not renew automatically. Before payment, the final amount, access period, included allowance and applicable taxes will be displayed for approval. Prices and allowances shown on the pricing page apply to the payment you are about to make; they may change for future purchases.</p>
+            <p>Individuals will not receive silent renewal or usage-overage charges. If an allowance is exhausted, paid capabilities may pause until the person chooses another month or a different plan. One-time credit top-ups may be purchased separately; they do not expire and do not renew. Failed provider work should release unused reserved credits after reconciliation.</p>
           </section>
         </article>
       </div>

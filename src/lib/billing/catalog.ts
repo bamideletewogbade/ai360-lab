@@ -79,6 +79,28 @@ export const CREDIT_TOP_UPS = [
 ] as const
 
 /**
+ * Everyday chat is included with a plan, so its cost is bounded by a daily
+ * fair-use cap rather than a credit meter. The cap follows the plan, because a
+ * free Explorer workspace must not be able to chat like a paid one. Anonymous
+ * callers sit at the Explorer allowance.
+ *
+ * It lives beside the catalogue rather than inside the chat route because the
+ * pricing page publishes these exact numbers to customers. Kept in the route,
+ * the published figures and the enforced ones could drift apart silently, which
+ * is the same failure that let the studio advertise a price the engine did not
+ * charge.
+ */
+export const CHAT_FAIR_USE_DAILY: Record<string, number> = {
+  explorer: 10,
+  everyday: 60,
+  builder: 120,
+  team: 150,
+}
+
+/** The cap applied when a plan is unknown or the billing database is unreachable. */
+export const CHAT_FAIR_USE_FALLBACK = CHAT_FAIR_USE_DAILY.everyday
+
+/**
  * Display-ready strings, so every renderer prints the value directly. The
  * ranges must stay in step with `FEATURE_WEIGHTS`; `tests/credits.test.ts`
  * enforces it.
@@ -90,9 +112,20 @@ export const CREDIT_GUIDE = [
   { task: 'Current web research or file review', credits: '2 to 4 credits' },
   { task: 'Multi-step agent workflow', credits: '3 to 8 credits' },
   { task: 'Generated image', credits: '3 to 6 credits' },
-  { task: 'Four-second promotional video', credits: '12 to 20 credits' },
+  { task: 'Four-second promotional video', credits: '6 to 24 credits' },
 ] as const
 
 export function findBillingPlan(slug: string) {
   return BILLING_PLANS.find((plan) => plan.slug === slug)
 }
+
+/**
+ * The free monthly allowance, as one number.
+ *
+ * It was being described six different ways across four pages — "Five free
+ * every month", "5 free credits monthly", "Get 5 credits every month", "Five
+ * credits a month, free, no card", "the five free credits" — mixing numerals
+ * with words for the same fact. One source, one numeral, and it follows the
+ * Explorer plan if that ever changes.
+ */
+export const FREE_MONTHLY_CREDITS = findBillingPlan('explorer')?.includedCredits ?? 5

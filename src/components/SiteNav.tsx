@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
 import { BrandMark } from '@/components/BrandMark'
+import { startCtaLabel } from '@/components/StartCta'
 import { PUBLIC_NAV_LINKS } from '@/lib/brand'
 import { isSupabaseAuthConfigured } from '@/lib/supabase/config'
 
@@ -58,7 +59,7 @@ function SiteNavActions({ signedIn }: { signedIn: boolean }) {
 
   return signedIn ? (
     <div className="landing-account-actions landing-account-signed-in">
-      <Link href="/app" className="landing-open">Open workspace</Link>
+      <Link href="/app" className="landing-open">{startCtaLabel(true)}</Link>
     </div>
   ) : (
     <div className="landing-account-actions"><SignedOutActions /></div>

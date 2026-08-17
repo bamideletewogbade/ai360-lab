@@ -5,6 +5,8 @@ import Image from 'next/image'
 import { useState } from 'react'
 import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
+import { StartCta } from '@/components/StartCta'
+import { FREE_MONTHLY_CREDITS } from '@/lib/billing/catalog'
 import { FEATURE_WEIGHTS } from '@/lib/billing/credits'
 import styles from '@/app/marketing.module.css'
 
@@ -271,9 +273,9 @@ export function WhatYouCanMake() {
 
       <section className={styles.cta}>
         <h2>Bring the thing you have been putting off.</h2>
-        <p>Five credits every month, free, no card. Enough to finish something real before you decide anything.</p>
+        <p>{FREE_MONTHLY_CREDITS} free credits every month, no card. Enough to finish something real before you decide anything.</p>
         <div className={styles.ctaRow}>
-          <Link href="/app" className={styles.primary}>Try it now</Link>
+          <StartCta className={styles.primary} />
           <Link href="/how-it-works" className={styles.secondary}>See how it works</Link>
         </div>
       </section>

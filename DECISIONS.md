@@ -1,5 +1,259 @@
 # Decision and incident log
 
+## 2026-08-17 · Decision · The type scale was built a quarter too small
+
+**Why.** The product looked better at 125% browser zoom, and the reason was
+measurable rather than a matter of taste. On the landing page at 1280px, **76 of
+166 text elements sat below 12px**, the smallest at **7px**, with body copy at
+**15px**. Across all fifteen stylesheets, **432 of 883 `font-size` declarations
+were under 12px**. Browser zoom multiplied everything into a legible band; the
+CSS had simply been authored a quarter too small.
+
+**What.** A codemod raised every `font-size` on a curve — heaviest at the small
+end where the problem was, almost nothing for display sizes already large:
+
+| Original | Factor |
+| --- | --- |
+| under 10px | ×1.32 |
+| 10–11px | ×1.26 |
+| 12–15px | ×1.16 |
+| 16–23px | ×1.09 |
+| 24px and up | ×1.03 |
+
+with a hard floor of 12px. Body copy is now 17px. `clamp()` sizes had every
+term scaled, viewport units included, so fluid headings keep their curve.
+
+**Only `font-size` was touched.** Spacing, padding and layout geometry are
+untouched, which is why this cannot reflow a grid or introduce overflow — it is
+a typographic correction, not a zoom. Verified at 375, 768, 1024, 1280 and
+1440px across the landing, pricing, how-it-works, what-you-can-make, terms,
+changelog and the workspace: no text under 12px anywhere, no horizontal
+overflow, no clipped text, and the workspace composer at 17px so iOS no longer
+zooms on focus.
+
+**Line length followed.** Larger text shortens the measure, which fixed most of
+it; three places still ran long and are now capped — the hero guest note (90
+characters at tablet width), the pricing footnote (94) and the workflow caption
+(88). The two fixed in `ch` rather than pixels, so the measure tracks the type
+size from here on.
+
+**Wording.** The free allowance was described six ways across four pages ("Five
+free every month", "5 free credits monthly", "Get 5 credits every month", "Five
+credits a month, free, no card", "the five free credits"). It now comes from
+`FREE_MONTHLY_CREDITS`, derived from the Explorer plan. How-it-works also still
+promised "Try it without an account" without qualification; it now says what is
+true — asking and learning work as a guest, research and Studio need a free
+account.
+
+**Revisit if.** The remaining half of the 125% effect is spacing, which zoom also
+scaled. That carries real layout risk and was deliberately left for its own pass.
+
+## 2026-08-17 · Decision · Pilot language is gone from anything a customer is charged under
+
+**Why.** Checkout is open, ExpressPay is live and a real payment has been taken,
+but the paid surfaces still described a private trial: "One-month pilot access",
+"Join the Everyday pilot", "Request Team pilot", "no automatic renewal *during
+the pilot*". Asking someone for GH₵125 while calling it a pilot invites the fair
+question of whether the product is finished — and two statements had gone from
+cautious to simply untrue.
+
+**What changed.** The word is gone from the pricing page, checkout, the
+low-credit email, the assistant's own product-knowledge block and the terms. The
+constraints behind it are unchanged and still stated plainly, because they are
+real: one month per payment, nothing renews automatically, no annual billing
+yet, Team onboarding is assisted. "Pay one month at a time" says the same thing
+without implying the product is provisional.
+
+**Two corrections in the terms**, which had drifted into being wrong rather than
+merely cautious: prices were described as "a pilot proposal until checkout is
+activated" (checkout is activated), and "one-time top-ups are not sold during
+the first pilot" (they are sold, from the credit page).
+
+**Left alone deliberately.** The closed read-only browser pilot is a genuine
+unlaunched pilot, and the changelog's "Pilot" release status is a feature
+maturity label. Neither is billing language.
+
+**Also.** `CHAT_FAIR_USE_DAILY` and the top-up sizes are now read from the
+catalogue in the product-knowledge block too — the assistant was quoting its own
+hand-typed copy of both, which is the product itself misquoting the price.
+
+## 2026-08-17 · Decision · The page is "Pricing", the things on it are "plans"
+
+**Why.** The navigation said "Plans", the URL was `/pricing`, the metadata title
+said "AI plans and pricing", and the page itself sold plans, top-ups, per-task
+credit costs, payment methods and refund terms. Three names for one page, and
+the softest of them under-described most of its content. Someone scanning a
+navigation bar for what something costs looks for "pricing".
+
+**What.** The nav and footer label is now "Pricing". The route stays `/pricing`
+— sitemaps, emails and search results already point at it, and renaming a live
+URL to fix a label is the expensive way round. "Plan" remains the right word for
+the products on the page: Everyday plan, "Choose Builder".
+
+**Also fixed: every published number now comes from the engine that charges it.**
+The page was quoting figures typed by hand — example task costs (2/4/6 credits,
+of which two were already wrong against `FEATURE_WEIGHTS`), the wallet
+illustration, the top-up sizes, and the daily chat caps. `CHAT_FAIR_USE_DAILY`
+moved out of the chat route into the catalogue so the enforced cap and the
+published cap are one value. The free plan's button now uses the shared
+`StartCta`, so a signed-in visitor is no longer told to "start free" again.
+
+**Guardrail.** A pricing page may not hold its own copy of a price. If a number
+is shown to a customer, it is read from the module that charges them — this is
+the third time drifted constants have surfaced this week.
+
+## 2026-08-17 · Decision · The landing page promises only what a visitor can actually have
+
+**Why.** Walking the homepage as a signed-out visitor: click starter 02 "Make a
+decision", click "Take the first step", and the first thing AI360 ever says is
+an error card with a reference UUID — `POST /api/agent → 401`, "Sign in to use
+this." Three of the four hero starters did this, and four of the six outcome
+cards, because `agent` and `studio` are expensive scopes that require an
+account. That guard is right. The copy above it was not: "Start free, no card"
+in the hero and "Try it without an account" on How-it-works.
+
+**What changed.**
+
+- **The free doors lead.** Starters are ordered chat first, and anything behind
+  the account carries a "Free account" badge *before* it is clicked. The guest
+  note now says what is true: free to try with no account, and an account is
+  needed to keep work and to use research and Studio.
+- **One CTA component owns the verb.** Eight hand-written labels pointed at
+  `/app` — "Take the first step", "Start with your goal", "Start with a goal",
+  "Start now", "Try it now", "Open AI360", "Open workspace", "Continue as a
+  guest". `StartCta` now decides label, destination and the send-or-prefill
+  behaviour in one place: "Start free" signed out, "Open workspace" signed in.
+- **The empty button does something.** Clicking it with an empty box used to
+  open an empty box somewhere else. It now reads "Show me an example" and runs a
+  real question on the free chat path, so a visitor sees the product work in
+  seconds without an account.
+- **Pre-written words no longer submit as a goal.** A starter drops in an
+  opening like "Research my options … for: "; submitting it untouched sent a
+  dangling half-question. The rule is now consistent site-wide: **what the
+  person typed runs, what we pre-wrote waits in the box.** The button says
+  "Finish the sentence" and returns focus instead of navigating.
+
+**Guardrail.** A call to action is a promise about the next screen. "Take the
+first step" is only honest when the next thing that happens is a first step —
+so gating and copy are one decision, never two.
+
+**Found on the way, not fixed.** Every marketing page is served with a second,
+hidden copy of itself inside React's streaming container (`<div hidden
+id="S:0">`) — on production, two `main.landing-shell`, duplicate `#landing-goal`
+ids and 12 outcome cards instead of 6, about 17.7KB of the 66KB document. It is
+systemic rather than landing-specific and deserves its own investigation.
+
+## 2026-08-17 · Decision · Studio is a workspace, and video has two honest prices
+
+**Why.** Two problems, one surface. The studio opened on a full-bleed autoplaying
+hero with the prompt below the fold and the person's own work behind a third
+tab — marketing furniture inside a workspace, and expensive on a phone on a
+metered connection. Separately, an audit against live provider prices
+(`scripts/audit-media-pricing.mjs`) found the pricing was profitable but not
+fair: every render silently used the standard engine at ~19 credits when a
+draft engine at ~7 credits of cost was already in the catalogue and never
+offered.
+
+**What changed in the studio.**
+
+- **Composer first, work always visible.** One prompt box with a mode switch
+  (Image / Video); the person's own output sits beside it on desktop and below
+  it on a phone. No tab to navigate to see what you just made. The hero is gone.
+- **Controls that name the destination.** Shapes read "Status, TikTok",
+  "Instagram, Jiji", "YouTube, Facebook", "Flyer, print" — not bare ratios —
+  and video can now be rendered 9:16, which is where most of this work is
+  actually posted. Starters are a market product shot, a food plate, a shop
+  front, a brand pattern and a poster background, because those are the jobs
+  people here are paying to get done.
+- **Mobile is the primary case.** Single column, a sticky action bar above the
+  safe-area inset, horizontally scrollable starters, 44px tap targets, 16px
+  prompt text so iOS does not zoom, and no autoplaying video under data-saver.
+- **The price is on screen.** Balance and per-feature cost come from
+  `/api/credits`, so the studio never hardcodes a number the credit engine
+  could drift away from.
+
+**What changed in pricing.**
+
+- **A quote decides the hold.** `estimateCredits` used to hold
+  `max(published reserve, quoted)`, so a 7-credit draft clip still reserved 16
+  and charged 12 — the cheap engine cost nearly what the dear one did. With a
+  real quote, the quote and the feature floor are the only inputs.
+- **Video floor 12 → 6, ceiling 20 → 24.** The floor was set for the dearest
+  engine. The ceiling sets the model budget, and at 20 credits the standard
+  engine sat 7% under it — one small provider price rise from being unsellable.
+  At 24 it has 23% headroom. Published guidance moves to "6 to 24 credits".
+- **Two tiers offered, not three.** Draft and standard are real choices. The
+  premium engine costs $0.80 a clip against a $0.41 ceiling, so offering it
+  would only produce a refusal at the moment of confirming.
+- **Cost telemetry was inflated ~50×.** The status poll recorded the provider's
+  running job cost on every check: 150 polls of three renders read as $47.80 of
+  spend against about $0.96 of real cost. Only a terminal status records it now,
+  and only once. This is the number pricing decisions are made from.
+
+**Economics, measured.** A credit costs GH₵0.26 landed and sells for GH₵0.86
+(Team) to GH₵1.25 (smallest top-up) — 70–79% gross margin, and every paid plan
+stays inside the 25% AI-cost target at full utilisation. An image costs
+$0.019–$0.034 (2 credits of cost) and charges 3. A draft clip costs $0.12 (7)
+and now charges about 7; a standard clip costs $0.32 (19) and charges 19.
+Margin comes from the plan markup, not from marking up the render.
+
+**Guardrail.** If a cheaper engine exists and the interface never offers it,
+the pricing is not fair however healthy the margin is. And a usage figure that
+a poll can write more than once is not a cost figure.
+
+## 2026-08-17 · Incident · Private media storage was never configured in production
+
+**Symptom.** Video renders completed at the provider — the clip existed and was
+billable on OpenRouter — but Media Studio stayed on "Rendering your motion
+video…" indefinitely. Reported as "videos generate on OpenRouter but it's stuck
+rendering in prod".
+
+**Root cause.** `SUPABASE_SECRET_KEY` and/or `SUPABASE_PRIVATE_BUCKET` were
+never set in the Hostinger runtime, so `persistGeneratedMedia` threw *Private
+media storage is not configured.* on every delivery. `lab_assets` was empty:
+**no generated media had ever been stored in production.** The status handler
+treats a failed delivery as transient, keeps the job `running` and returns a
+502, so the client backed off and polled forever — the correct behaviour for a
+passing fault, applied to a permanent one.
+
+Three things hid it:
+
+1. **Images appeared to work.** `/api/studio/image` falls back to a base64 data
+   URL when storage fails, so the only visible casualty was video.
+2. **The real error was never on the job.** Video recorded the generic "could
+   not be saved yet; the next poll retries delivery", so the cause was only in
+   host logs. Image jobs recorded the true message — which is how it was found.
+3. **`/api/ready` reported ready.** Readiness checked auth, database, gateway
+   and payments, but never the bucket the paid deliverable is stored in.
+
+**Fix.**
+
+- **A missing configuration is terminal.** `MediaStorageNotConfiguredError` is
+  typed, and delivery that fails on it — or that is still failing 30 minutes
+  after the provider finished — marks the job `failed`, refunds the whole hold
+  and tells the person, instead of polling forever.
+- **Video records the real reason** on the job, as image already did.
+- **Settlement can no longer break a poll.** `settleReservation` in the status
+  path was unguarded; a throw there turned every later poll into a 500 the
+  client retried forever, so even a delivered clip could read as "Rendering…".
+- **`/api/ready` now has a `media_storage` check**, required in production.
+- **`scripts/diagnose-video-jobs.mjs`** (durable jobs, holds, provider status,
+  bucket write probe) and **`scripts/diagnose-video-delivery.mjs`** (replays the
+  download → upload → rows path against a stuck job, rolling back by default)
+  make the failing stage visible in one command.
+
+**Guardrail.** If a deliverable only exists once it is stored, storage is a
+required readiness check, not an assumption. A retry loop must be able to tell a
+fault that will pass from a fault that will not, and a fallback that hides a
+broken dependency on one surface (image data URLs) will let it ship broken on
+every other.
+
+**Still to do.** Set `SUPABASE_SECRET_KEY` and `SUPABASE_PRIVATE_BUCKET`
+(`ai360-private`) in hPanel and redeploy — the code fix ends the endless spinner
+but only the environment fix makes renders deliverable. Two 2026-08-15 video
+jobs were settled at 19 credits each with no stored output and are owed either
+delivery or a refund.
+
 ## 2026-08-16 · Decision · Observability: Sentry for errors/traces, Axiom for logs
 
 **Why.** Logs were readable only in Hostinger's runtime viewer — no field

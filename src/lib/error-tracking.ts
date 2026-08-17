@@ -22,6 +22,10 @@ export function reportErrorEvent(input: {
   extra?: Record<string, unknown>;
 }) {
   if (!process.env.SENTRY_DSN && !process.env.NEXT_PUBLIC_SENTRY_DSN) return;
+  // `captureMessage` only exists once the SDK is initialized; in a bare
+  // process (tests, workers) it may be absent even with a DSN set, and
+  // observability must never take the app down.
+  if (typeof Sentry.captureMessage !== "function") return;
   Sentry.captureMessage(input.message || input.event, {
     level: "error",
     tags: {

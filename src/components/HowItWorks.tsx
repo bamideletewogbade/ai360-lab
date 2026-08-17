@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
+import { StartCta } from '@/components/StartCta'
 import { WorkflowDemo } from '@/components/WorkflowDemo'
+import { FREE_MONTHLY_CREDITS } from '@/lib/billing/catalog'
 import styles from '@/app/marketing.module.css'
 
 const STEPS = [
@@ -90,8 +92,12 @@ export function HowItWorks() {
             <small>Sensitive credentials remain secured while AI360 handles the work.</small>
           </div>
           <div className={styles.heroStat}>
-            <b>Try it without an account</b>
-            <small>Start as a guest, then create an account whenever you want to keep your work.</small>
+            {/* Precise on purpose: asking and learning genuinely need no
+                account, but research and Studio do, and saying otherwise sent
+                people into a sign-in wall one click after being told it was
+                free. */}
+            <b>Ask anything without an account</b>
+            <small>Questions and explanations work straight away as a guest. Research and Studio need a free account, and keeping your work does too.</small>
           </div>
         </div>
       </header>
@@ -135,7 +141,7 @@ export function HowItWorks() {
             <p>A task cannot cost more than the amount reserved in front of you, even if it turns out to be more expensive to run.</p>
           </div>
           <div className={styles.darkCell}>
-            <b>Five free every month</b>
+            <b>{FREE_MONTHLY_CREDITS} free credits every month</b>
             <p>They arrive automatically and reset at the start of each month. No card, and no bill for going over.</p>
           </div>
           <div className={styles.darkCell}>
@@ -162,9 +168,9 @@ export function HowItWorks() {
 
       <section className={styles.cta}>
         <h2>The only way to judge it is to use it.</h2>
-        <p>Five credits a month, free, no card. Bring something real and see how far it gets.</p>
+        <p>{FREE_MONTHLY_CREDITS} free credits every month, no card. Bring something real and see how far it gets.</p>
         <div className={styles.ctaRow}>
-          <Link href="/app" className={styles.primary}>Start now</Link>
+          <StartCta className={styles.primary} />
           <Link href="/what-you-can-make" className={styles.secondary}>See what people make</Link>
         </div>
       </section>
