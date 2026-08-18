@@ -36,8 +36,8 @@
 .kicker, .eyebrow { margin: 0 0 20px; color: var(--grey); font-size: 1rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 .kicker { display: flex; align-items: center; gap: 9px; }
 .kicker span { color: var(--ink); font-size: 1.0625rem; }
-.story h1 { max-width: 650px; margin: 0; color: var(--charcoal); font-family: var(--font-heading); font-size: clamp(3.625rem, 6.18vw, 7.4375rem); font-weight: 700; line-height: .92; letter-spacing: -.065em; }
-.lead { max-width: 590px; margin: 28px 0 43px; color: var(--grey); font-size: clamp(1.1875rem, 1.363vw, 1.4375rem); line-height: 1.7; }
+.story h1 { max-width: 650px; margin: 0; color: var(--charcoal); font-family: var(--font-heading); font-size: clamp(3rem, 5vw, 6rem); font-weight: 700; line-height: .92; letter-spacing: -.065em; }
+.lead { max-width: 590px; margin: 28px 0 43px; color: var(--grey); font-size: clamp(1rem, 1.2vw, 1.125rem); line-height: 1.7; }
 .benefits { border-top: 1px solid rgba(86, 89, 92, .28); }
 .benefits article { display: grid; grid-template-columns: 38px 1fr; gap: 14px; align-items: center; min-height: 80px; border-bottom: 1px solid rgba(86, 89, 92, .28); animation: auth-row-in .55s cubic-bezier(.22, 1, .36, 1) both; }
 .benefits article:nth-child(1) { animation-delay: .12s; }
@@ -208,7 +208,7 @@
   .shell { grid-template-columns: 1fr; overflow: visible; }
   .brand { position: relative; top: auto; left: auto; margin: 24px 24px 0; }
   .story { min-height: auto; padding: 70px 24px 58px; border-right: 0; border-bottom: 1px solid rgba(86, 89, 92, .3); }
-  .story h1 { font-size: clamp(3.3125rem, 12.36vw, 6.1875rem); }
+  .story h1 { font-size: clamp(3rem, 10vw, 4.75rem); }
   .benefits { display: none; }
   .lead { margin-bottom: 25px; }
   .continuityCard { display: none; }

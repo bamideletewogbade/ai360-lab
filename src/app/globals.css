@@ -17,10 +17,10 @@
   --topbar: 66px;
   --thread: 1120px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  /* The UI is built in absolute pixels, so a single comfortable "zoom" is the
-     one honest way to give the whole workspace room to breathe. Tune here.
-     1 = 100%, 1.1 = a comfortable 110%. */
-  --app-zoom: 1.1;
+  /* Keep the product at the browser's native scale. People who need larger
+     type can still use browser zoom without an extra application zoom being
+     multiplied on top of it. */
+  --app-zoom: 1;
   color-scheme: light;
 }
 
@@ -231,7 +231,7 @@ body {
   background: var(--paper);
   color: var(--black);
   font-family: var(--font-body);
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
@@ -1735,7 +1735,7 @@ button {
 }
 
 /* Apps & Outcomes Directory Page */
-.apps-directory-container {
+.outcomes-container {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -1745,21 +1745,21 @@ button {
   color: var(--black);
   box-sizing: border-box;
 }
-.apps-header {
+.outcomes-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
-.apps-eyebrow {
+.outcomes-eyebrow {
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--grey);
 }
-.apps-header h1 {
+.outcomes-header h1 {
   font-family: var(--font-heading);
   font-size: 29px;
   font-weight: 800;
@@ -1767,59 +1767,30 @@ button {
   color: var(--black);
   letter-spacing: -0.02em;
 }
-.apps-intro {
+.outcomes-intro {
   font-size: 16px;
   color: var(--charcoal);
   max-width: 720px;
   line-height: 1.5;
   margin: 0;
 }
-.upload-outcome-btn {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border: 1px solid var(--black);
-  border-radius: 10px;
-  background: var(--black);
-  color: var(--paper);
-  font-size: 15px;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    transform 0.16s ease,
-    background 0.16s ease,
-    box-shadow 0.16s ease;
-}
-.upload-outcome-btn:hover,
-.upload-outcome-btn:focus-visible {
-  background: var(--charcoal);
-  border-color: var(--charcoal);
-  color: var(--paper);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
-  outline: 0;
-}
-.upload-toast {
-  padding: 10px 16px;
-  margin-bottom: 20px;
-  border-radius: 10px;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #047857;
-  font-size: 15px;
-  font-weight: 650;
-}
-.apps-filter-bar {
+.outcomes-filter-row {
   display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
   border-bottom: 1px solid var(--line);
   padding-bottom: 12px;
 }
-.apps-filter-bar button {
+.outcomes-filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.outcomes-filter-bar button,
+.outcomes-status-toggle button {
   padding: 7px 16px;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -1830,30 +1801,55 @@ button {
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.apps-filter-bar button:hover,
-.apps-filter-bar button:focus-visible {
+.outcomes-filter-bar button:hover,
+.outcomes-filter-bar button:focus-visible,
+.outcomes-status-toggle button:hover,
+.outcomes-status-toggle button:focus-visible {
   background: var(--white);
   border-color: var(--line-dark);
   color: var(--black);
   outline: 0;
 }
-.apps-filter-bar button.active {
+.outcomes-filter-bar button.active,
+.outcomes-status-toggle button.active {
   background: var(--black);
   color: var(--paper);
   border-color: var(--black);
 }
-.apps-filter-bar button.active:hover,
-.apps-filter-bar button.active:focus-visible {
+.outcomes-filter-bar button.active:hover,
+.outcomes-filter-bar button.active:focus-visible,
+.outcomes-status-toggle button.active:hover,
+.outcomes-status-toggle button.active:focus-visible {
   background: var(--charcoal);
   border-color: var(--charcoal);
   color: var(--paper);
 }
-.apps-grid {
+.outcomes-status-toggle {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.outcomes-guest-note {
+  font-size: 14px;
+  color: var(--grey);
+  margin: 0 0 20px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--warm-white);
+}
+.outcomes-empty {
+  font-size: 15px;
+  color: var(--grey);
+  padding: 40px 0;
+  text-align: center;
+}
+.outcomes-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 22px;
 }
-.apps-card {
+.outcomes-card {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -1866,12 +1862,12 @@ button {
     transform 0.18s ease,
     box-shadow 0.18s ease;
 }
-.apps-card:hover {
+.outcomes-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
   border-color: var(--line-dark);
 }
-.apps-card-top {
+.outcomes-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1885,53 +1881,59 @@ button {
   font-weight: 800;
   letter-spacing: 0.05em;
 }
-.format-badge.format-pack {
-  background: #e0e7ff;
-  color: #3730a3;
-}
-.format-badge.format-pdf {
+.format-badge.format-document {
   background: #fee2e2;
   color: #991b1b;
 }
-.format-badge.format-docx {
-  background: #dbeafe;
-  color: #1e40af;
-}
-.format-badge.format-png {
+.format-badge.format-image {
   background: #fef3c7;
   color: #92400e;
 }
-.apps-card-date {
-  font-size: 14px;
+.format-badge.format-video {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.format-badge.format-project {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+.outcomes-card-status {
+  font-size: 13px;
+  font-weight: 650;
   color: var(--grey);
 }
-.apps-card h3 {
+.outcomes-card h3 {
   font-size: 17px;
   font-weight: 750;
   margin: 0 0 6px;
   color: var(--black);
   line-height: 1.3;
 }
-.apps-card p {
+.outcomes-card p {
   font-size: 14px;
   color: var(--charcoal);
   margin: 0 0 16px;
   line-height: 1.45;
 }
-.apps-card-footer {
+.outcomes-card-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
-.apps-card-size {
+.outcomes-card-source {
   font-size: 14px;
   font-weight: 600;
   color: var(--grey);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.apps-download-btn {
+.outcomes-download-btn {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
@@ -1944,8 +1946,8 @@ button {
   border-radius: 6px;
   transition: background 0.14s ease;
 }
-.apps-download-btn:hover,
-.apps-download-btn:focus-visible {
+.outcomes-download-btn:hover,
+.outcomes-download-btn:focus-visible {
   background: var(--warm-white);
   color: var(--black);
   outline: 0;
@@ -2835,6 +2837,134 @@ button {
   color: var(--grey);
 }
 
+/* Gallery shelves ---------------------------------------------------------
+   The navigator feels like the edge of a contact sheet: a strong range label,
+   slim numbered rails, and generous arrows. It is deliberately not a row of
+   generic pagination pills competing with the media filters above. */
+.ms-pagination {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 22px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.ms-page-status {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 108px;
+}
+.ms-page-range {
+  color: var(--black);
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.ms-page-range small {
+  color: var(--grey);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.ms-page-name {
+  color: var(--grey);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.ms-page-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.ms-page-arrow {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--black);
+  font-family: inherit;
+  font-size: 19px;
+  cursor: pointer;
+  transition:
+    border-color 0.16s var(--ease),
+    background 0.16s var(--ease),
+    color 0.16s var(--ease),
+    transform 0.16s var(--ease);
+}
+.ms-page-arrow:hover:not(:disabled) {
+  border-color: var(--black);
+  background: var(--black);
+  color: var(--paper);
+  transform: translateY(-1px);
+}
+.ms-page-arrow:focus-visible,
+.ms-page-track button:focus-visible {
+  outline: 2px solid var(--black);
+  outline-offset: 3px;
+}
+.ms-page-arrow:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.ms-page-track {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 7px 2px;
+  scrollbar-width: none;
+}
+.ms-page-track::-webkit-scrollbar {
+  display: none;
+}
+.ms-page-track button {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 42px;
+  height: 28px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-top: 2px solid var(--line-dark);
+  background: transparent;
+  color: var(--soft-grey);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    width 0.18s var(--ease),
+    border-color 0.18s var(--ease),
+    color 0.18s var(--ease);
+}
+.ms-page-track button:hover {
+  border-top-color: var(--grey);
+  color: var(--grey);
+}
+.ms-page-track button.is-active {
+  width: 66px;
+  border-top-color: var(--black);
+  color: var(--black);
+}
+.ms-page-track button span {
+  padding-top: 5px;
+}
+
 /* There is no longer a width at which the layout splits into two columns: the
    gallery is full width everywhere and the dock sits under it. That also
    removes the old 620–1040px dead zone, where a tall stacked composer pushed
@@ -2920,6 +3050,38 @@ button {
   }
   .ms-quote-actions button {
     flex: 1;
+  }
+  .ms-pagination {
+    align-items: center;
+    gap: 12px;
+  }
+  .ms-page-status {
+    min-width: 76px;
+  }
+  .ms-page-range {
+    font-size: 16px;
+  }
+  .ms-page-range small {
+    font-size: 12px;
+  }
+  .ms-page-name {
+    font-size: 9px;
+  }
+  .ms-page-controls {
+    flex: 1;
+  }
+  .ms-page-arrow {
+    width: 44px;
+    height: 44px;
+  }
+  .ms-page-track {
+    flex: 1;
+  }
+  .ms-page-track button {
+    width: 30px;
+  }
+  .ms-page-track button.is-active {
+    width: 44px;
   }
 }
 
@@ -6468,7 +6630,7 @@ button {
 .project-kickoff-head h1 {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: clamp(39px, 5.15vw, 64px);
+  font-size: clamp(34px, 4.4vw, 56px);
   line-height: 1;
   letter-spacing: -0.06em;
 }
@@ -6712,7 +6874,7 @@ button {
 }
 .studio-intro h1 {
   max-width: 560px;
-  font-size: clamp(43px, 5.253vw, 72px);
+  font-size: clamp(38px, 4.5vw, 60px);
 }
 .studio-intro > p {
   max-width: 520px;
@@ -7006,7 +7168,7 @@ button {
   align-items: center;
 }
 .build-intro h1 {
-  font-size: clamp(43px, 4.944vw, 68px);
+  font-size: clamp(38px, 4.25vw, 58px);
 }
 .studio-build-room {
   position: relative;
@@ -7426,7 +7588,7 @@ button {
 .studio-dashboard-head h1 {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: clamp(41px, 4.635vw, 66px);
+  font-size: clamp(36px, 4.1vw, 56px);
   letter-spacing: -0.05em;
   line-height: 0.95;
 }
@@ -7903,7 +8065,7 @@ button {
 }
 .pulse-score > span {
   font-family: var(--font-heading);
-  font-size: clamp(64px, 7.21vw, 103px);
+  font-size: clamp(56px, 6vw, 84px);
   letter-spacing: -0.08em;
   line-height: 0.8;
 }
@@ -9663,10 +9825,10 @@ button {
     padding-right: max(15px, env(safe-area-inset-right));
     padding-left: max(15px, env(safe-area-inset-left));
   }
-  .apps-directory-container {
+  .outcomes-container {
     padding: 28px 24px 48px;
   }
-  .apps-grid {
+  .outcomes-grid {
     grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   }
   .studio-conversation-start {
@@ -10328,24 +10490,24 @@ button {
   .approval-dialog {
     padding-bottom: env(safe-area-inset-bottom);
   }
-  .apps-directory-container {
+  .outcomes-container {
     padding: 22px 14px max(36px, env(safe-area-inset-bottom));
   }
-  .apps-header {
+  .outcomes-header {
     align-items: stretch;
     flex-direction: column;
     gap: 16px;
     margin-bottom: 20px;
   }
-  .apps-header h1 {
+  .outcomes-header h1 {
     font-size: clamp(26px, 8.24vw, 31px);
   }
-  .upload-outcome-btn {
-    min-height: 44px;
-    justify-content: center;
-    width: 100%;
+  .outcomes-filter-row {
+    align-items: stretch;
+    flex-direction: column;
   }
-  .apps-filter-bar {
+  .outcomes-filter-bar,
+  .outcomes-status-toggle {
     margin-right: -14px;
     margin-left: -14px;
     padding-right: 14px;
@@ -10353,20 +10515,22 @@ button {
     overflow-x: auto;
     scrollbar-width: none;
   }
-  .apps-filter-bar::-webkit-scrollbar {
+  .outcomes-filter-bar::-webkit-scrollbar,
+  .outcomes-status-toggle::-webkit-scrollbar {
     display: none;
   }
-  .apps-filter-bar button {
+  .outcomes-filter-bar button,
+  .outcomes-status-toggle button {
     min-height: 44px;
     flex: 0 0 auto;
     white-space: nowrap;
   }
-  .apps-grid,
+  .outcomes-grid,
   .library-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 14px;
   }
-  .apps-card {
+  .outcomes-card {
     padding: 18px;
   }
   .composer-textarea,
@@ -10491,7 +10655,7 @@ button {
     padding: 23px 20px;
   }
   .pulse-score > span {
-    font-size: 66px;
+    font-size: 58px;
   }
   .pulse-track b {
     font-size: 12px;
@@ -10994,7 +11158,7 @@ button {
   max-width: 790px;
   margin: 17px 0 16px;
   font-family: var(--font-heading);
-  font-size: clamp(49px, 6.489vw, 91px);
+  font-size: clamp(42px, 5.2vw, 72px);
   line-height: 0.92;
   letter-spacing: -0.07em;
 }
@@ -11391,9 +11555,7 @@ button {
   font-family: inherit;
   text-align: left;
   cursor: pointer;
-  transition:
-    border-color 0.16s var(--ease),
-    transform 0.16s var(--ease);
+  transition: border-color 0.16s var(--ease), transform 0.16s var(--ease);
 }
 .project-chat-item:hover {
   border-color: var(--black);
@@ -11747,12 +11909,12 @@ button {
     right: -10px;
     width: min(270px, calc(100vw - 20px));
   }
-  .apps-card-footer {
+  .outcomes-card-footer {
     align-items: flex-start;
     flex-direction: column;
     gap: 8px;
   }
-  .apps-download-btn {
+  .outcomes-download-btn {
     min-height: 40px;
     margin-left: -10px;
   }
@@ -11863,7 +12025,9 @@ button {
   background: var(--white);
   color: var(--black);
   text-decoration: none;
-  transition: border-color 0.16s var(--ease), transform 0.16s var(--ease);
+  transition:
+    border-color 0.16s var(--ease),
+    transform 0.16s var(--ease);
 }
 .message-file:hover,
 .message-file:focus-visible {
@@ -11943,7 +12107,7 @@ button {
 .project-document .response-content p, .project-document .response-content li { max-width: 72ch; }
 .project-stage-section[data-project-stage="build"] .project-knowledge { margin-top: 0; }
 .studio-intake.build-active { align-items: stretch; }
-.studio-intake.build-active .build-intro h1 { max-width: 680px; font-size: clamp(42px, 5.15vw, 68px); }
+.studio-intake.build-active .build-intro h1 { max-width: 680px; font-size: clamp(38px, 4.25vw, 58px); }
 .studio-intake.build-active .build-intro p { max-width: 620px; }
 
 @media (max-width: 760px) {

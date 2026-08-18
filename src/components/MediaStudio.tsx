@@ -359,6 +359,12 @@ const MAX_CONSECUTIVE_ERRORS = 10;
 /** After a long failure streak, keep the job but slow polling to one check every five minutes. */
 const SLOW_RETRY_MS = 5 * 60_000;
 
+/**
+ * Four pieces make one deliberate gallery shelf: a complete row on a typical
+ * laptop, two tidy rows on a phone, and never an endless wall of output.
+ */
+const GALLERY_PAGE_SIZE = 4;
+
 function readStoredVideoJob(): VideoJob | null {
   try {
     const raw = window.sessionStorage.getItem(VIDEO_JOB_STORAGE);
@@ -459,6 +465,7 @@ export function MediaStudio() {
   const [generating, setGenerating] = useState(false);
   const [gallery, setGallery] = useState<MediaItem[]>(EXAMPLE_GALLERY);
   const [galleryFilter, setGalleryFilter] = useState<"all" | MediaKind>("all");
+  const [galleryPage, setGalleryPage] = useState(1);
   const [toastNotice, setToastNotice] = useState("");
   const [toastError, setToastError] = useState(false);
   const [videoQuote, setVideoQuote] = useState<VideoQuote | null>(null);
@@ -497,6 +504,7 @@ export function MediaStudio() {
     aspectRatio: string;
   } | null>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const resultsRef = useRef<HTMLElement>(null);
 
   // The prompt starts as a comfortable writing surface and grows with longer
   // descriptions. People should be able to review a useful prompt before they
@@ -677,6 +685,7 @@ export function MediaStudio() {
     // controls. Filters are reset first so the new card cannot land off-screen.
     setPendingImage({ prompt: prompt.trim(), aspectRatio: imageAspect });
     setGalleryFilter("all");
+    setGalleryPage(1);
     setToastNotice("Making your visual… this takes a few seconds.");
     setToastError(false);
     try {
@@ -721,6 +730,7 @@ export function MediaStudio() {
       };
       setGallery((previous) => [newItem, ...previous]);
       setGalleryFilter("all");
+      setGalleryPage(1);
       showToast("Your visual is ready — it is in your work below.", false);
       void loadCredits();
     } catch (cause) {
@@ -852,6 +862,7 @@ export function MediaStudio() {
       // The render now has a placeholder card in the gallery; make sure the
       // active filter cannot hide it.
       setGalleryFilter("all");
+      setGalleryPage(1);
       setToastNotice("");
       scheduleVideoPoll(job, 20_000);
       void loadCredits();
@@ -947,6 +958,7 @@ export function MediaStudio() {
         setGallery((previous) => [newItem, ...previous]);
         clearVideoJob();
         setGalleryFilter("all");
+        setGalleryPage(1);
         showToast("Your video is ready — it is in your work below.", false);
         void loadCredits();
         return;
@@ -1112,6 +1124,46 @@ export function MediaStudio() {
       : null;
   const pendingVisible =
     pending && (galleryFilter === "all" || galleryFilter === pending.kind);
+  const galleryItemCount = visible.length + (pendingVisible ? 1 : 0);
+  const galleryPageCount = Math.max(
+    1,
+    Math.ceil(galleryItemCount / GALLERY_PAGE_SIZE),
+  );
+  // A filter can make the current page disappear. Clamp in render rather than
+  // repairing state in an effect, which would briefly draw an empty shelf.
+  const currentGalleryPage = Math.min(galleryPage, galleryPageCount);
+  const pendingSlot = pendingVisible ? 1 : 0;
+  const pageGalleryStart = Math.max(
+    0,
+    (currentGalleryPage - 1) * GALLERY_PAGE_SIZE - pendingSlot,
+  );
+  const pageGallerySlots =
+    GALLERY_PAGE_SIZE - (currentGalleryPage === 1 ? pendingSlot : 0);
+  const pageItems = visible.slice(
+    pageGalleryStart,
+    pageGalleryStart + pageGallerySlots,
+  );
+  const pageRangeStart = galleryItemCount
+    ? (currentGalleryPage - 1) * GALLERY_PAGE_SIZE + 1
+    : 0;
+  const pageRangeEnd = Math.min(
+    currentGalleryPage * GALLERY_PAGE_SIZE,
+    galleryItemCount,
+  );
+
+  const changeGalleryPage = (nextPage: number) => {
+    const page = Math.min(Math.max(nextPage, 1), galleryPageCount);
+    if (page === currentGalleryPage) return;
+    setGalleryPage(page);
+    window.requestAnimationFrame(() => {
+      resultsRef.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        block: "start",
+      });
+    });
+  };
 
   /**
    * What the collapsed dock says about the current settings. Folding the
@@ -1253,7 +1305,7 @@ export function MediaStudio() {
           before the controls preserves the established generation code while
           CSS gives the primary task the correct first position. */}
       <div className="ms-stage" id="media-studio-workspace">
-        <section className="ms-results" aria-label="Your work">
+        <section className="ms-results" aria-label="Your work" ref={resultsRef}>
           <div className="ms-results-head">
             <h2>
               {mine.length ? "Your work" : "Made in this studio"}
@@ -1269,7 +1321,10 @@ export function MediaStudio() {
                   type="button"
                   aria-pressed={galleryFilter === value}
                   className={galleryFilter === value ? "is-active" : ""}
-                  onClick={() => setGalleryFilter(value)}
+                  onClick={() => {
+                    setGalleryFilter(value);
+                    setGalleryPage(1);
+                  }}
                 >
                   {value === "all"
                     ? "All"
@@ -1317,7 +1372,7 @@ export function MediaStudio() {
                   </div>
                 </article>
               ) : null}
-              {visible.map((item, index) => (
+              {pageItems.map((item, index) => (
                 <article
                   className={`ms-card${item.example ? " is-example" : ""}`}
                   key={item.id}
@@ -1389,6 +1444,65 @@ export function MediaStudio() {
               Nothing here yet. Write a sentence below and make your first one.
             </p>
           )}
+
+          {galleryItemCount > GALLERY_PAGE_SIZE ? (
+            <nav className="ms-pagination" aria-label="Gallery pages">
+              <div className="ms-page-status" aria-live="polite">
+                <span className="ms-page-range">
+                  {pageRangeStart}–{pageRangeEnd}
+                  <small> of {galleryItemCount}</small>
+                </span>
+                <span className="ms-page-name">
+                  Shelf {String(currentGalleryPage).padStart(2, "0")} /{" "}
+                  {String(galleryPageCount).padStart(2, "0")}
+                </span>
+              </div>
+              <div className="ms-page-controls">
+                <button
+                  type="button"
+                  className="ms-page-arrow"
+                  onClick={() => changeGalleryPage(currentGalleryPage - 1)}
+                  disabled={currentGalleryPage === 1}
+                  aria-label="Previous gallery page"
+                >
+                  <span aria-hidden="true">←</span>
+                </button>
+                <div
+                  className="ms-page-track"
+                  aria-label="Choose a gallery page"
+                >
+                  {Array.from({ length: galleryPageCount }, (_, index) => {
+                    const page = index + 1;
+                    return (
+                      <button
+                        type="button"
+                        key={page}
+                        className={
+                          page === currentGalleryPage ? "is-active" : ""
+                        }
+                        onClick={() => changeGalleryPage(page)}
+                        aria-label={`Gallery page ${page}`}
+                        aria-current={
+                          page === currentGalleryPage ? "page" : undefined
+                        }
+                      >
+                        <span>{String(page).padStart(2, "0")}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  className="ms-page-arrow"
+                  onClick={() => changeGalleryPage(currentGalleryPage + 1)}
+                  disabled={currentGalleryPage === galleryPageCount}
+                  aria-label="Next gallery page"
+                >
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </nav>
+          ) : null}
         </section>
       </div>
 

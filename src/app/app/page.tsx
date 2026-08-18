@@ -11,7 +11,7 @@ import {
   type LanguageCode, type SpeechInputCode,
 } from '@/lib/languages'
 import { StudioWorkspace } from '@/components/StudioWorkspace'
-import { AppsDirectory } from '@/components/AppsDirectory'
+import { Library } from '@/components/Library'
 import { MediaStudio } from '@/components/MediaStudio'
 import { AccountControls } from '@/components/AccountControls'
 import { BrandMark } from '@/components/BrandMark'
@@ -196,12 +196,12 @@ const MODE_META: Record<Experience, {
     intro: 'Bring a goal, files, conversations, working drafts and ready outputs together. Use projects for research, planning, learning, writing, creative work or business.',
   },
   apps: {
-    label: 'Apps & Outcomes',
-    short: 'Deliverables & Showcase',
-    description: 'Project outcomes and exported apps',
-    eyebrow: 'App & Outcome Directory',
-    heading: <>Your published outcomes<br />and project apps.</>,
-    intro: 'Explore and manage generated deliverables, document exports, and project outcomes created across your workspace.',
+    label: 'Library',
+    short: 'Everything you have made',
+    description: 'Documents, media and project work',
+    eyebrow: 'Workspace library',
+    heading: <>Everything you&rsquo;ve made<br />in one place.</>,
+    intro: 'Every document, image, video and project outcome created across your workspace, kept together and easy to find again.',
   },
   media: {
     label: 'Media Studio',
@@ -1686,14 +1686,14 @@ function LabWorkspace({
     : experience === 'media'
       ? 'Media Studio'
       : experience === 'apps'
-        ? 'Apps & outcomes'
+        ? 'Library'
         : 'Chats'
   const workspaceSubtitle = experience === 'studio'
     ? 'Build and improve lasting work'
     : experience === 'media'
       ? 'Create images and short video'
       : experience === 'apps'
-        ? 'Ready-made ways to get work done'
+        ? 'Everything you have made'
         : experience === 'agent'
           ? 'Research is on'
           : 'Ask, write and research'
@@ -1767,9 +1767,9 @@ function LabWorkspace({
             onClick={() => { selectExperience('apps'); setSidebarOpen(false) }}
           >
             <span className="nav-menu-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
             </span>
-            <span>Apps & Outcomes</span>
+            <span>Library</span>
           </button>
         </nav>
 
@@ -1879,7 +1879,7 @@ function LabWorkspace({
             onStartConversation={startProjectChat}
           />
         ) : experience === 'apps' ? (
-          <AppsDirectory />
+          <Library signedIn={signedIn} workspaceScope={workspaceScope} onOpenProject={openProjectWorkspace} />
         ) : experience === 'media' ? (
           <MediaStudio />
         ) : (

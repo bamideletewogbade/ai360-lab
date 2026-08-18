@@ -58,7 +58,7 @@
 .intro h2 {
   max-width: 720px;
   margin: 17px 0 24px;
-  font-size: clamp(2.75rem, 6.386vw, 6.375rem);
+  font-size: clamp(2.5rem, 4.5vw, 4rem);
   font-weight: 620;
   letter-spacing: -0.068em;
   line-height: 0.92;
@@ -150,7 +150,7 @@
   .shell { padding-right: max(18px, env(safe-area-inset-right)); padding-bottom: max(34px, env(safe-area-inset-bottom)); padding-left: max(18px, env(safe-area-inset-left)); }
   .lead { gap: 36px; }
   .logo { margin-bottom: 42px; }
-  .intro h2 { font-size: clamp(2.75rem, 14.935vw, 4.625rem); }
+  .intro h2 { font-size: clamp(2.5rem, 11vw, 3.5rem); }
   .actions { flex-direction: column; }
   .primaryAction, .secondaryAction { width: 100%; }
   .addressCard { min-height: 260px; border-radius: 14px; }

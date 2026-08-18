@@ -4,8 +4,8 @@
 .state a,.return { color:#171819; font-weight:800; }
 .card { padding:clamp(26px,6vw,68px); border:1px solid #d9d6ce; border-radius:24px; background:#f7f6f2; box-shadow:0 30px 90px rgba(16,17,18,.08); }
 .eyebrow { margin:0 0 18px; color:#5c5f61; font-size: 13px; font-weight:850; letter-spacing:.13em; text-transform:uppercase; }
-.card h1 { margin:0; font-family:var(--font-heading); font-size: clamp(47px,7.21vw,78px); line-height:1; letter-spacing:-.06em; }
-.intro { max-width:620px; margin:18px 0 28px; color:#55585a; font-size: 17px; line-height:1.7; }
+.card h1 { margin:0; font-family:var(--font-heading); font-size: clamp(40px,5.5vw,64px); line-height:1; letter-spacing:-.06em; }
+.intro { max-width:620px; margin:18px 0 28px; color:#55585a; font-size: 16px; line-height:1.7; }
 .reference { display:inline-grid; gap:3px; padding:12px 15px; border:1px solid #d7d4cc; border-radius:11px; background:white; }
 .reference span,.update span { color:#6b6e70; font-size: 12px; font-weight:850; letter-spacing:.1em; text-transform:uppercase; }
 .reference strong { overflow-wrap:anywhere; font-size: 15px; }

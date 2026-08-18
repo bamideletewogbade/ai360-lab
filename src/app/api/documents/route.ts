@@ -1,7 +1,8 @@
 import type { NextRequest } from 'next/server'
 import { rateLimit, resolveRequester } from '@/lib/guardrails'
 import { errorDetails, requestLogger } from '@/lib/observability'
-import { readGeneratedDocument } from '@/lib/export/document-store'
+import { isDocumentStoreConfigured, listGeneratedDocuments, readGeneratedDocument } from '@/lib/export/document-store'
+import { isPostgresConfigured } from '@/lib/postgres'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -27,6 +28,24 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: 'Sign in to download this file.', requestId: log.requestId }, {
       status: 401, headers: log.headers(),
     })
+  }
+
+  if (request.nextUrl.searchParams.get('list') === '1') {
+    if (!isPostgresConfigured() || !isDocumentStoreConfigured()) {
+      log.finish(200, { outcome: 'list_not_configured' })
+      return Response.json({ documents: [] }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
+    }
+    try {
+      const documents = await listGeneratedDocuments(requester.context)
+      log.finish(200, { outcome: 'list', count: documents.length })
+      return Response.json({ documents }, { headers: log.headers({ 'Cache-Control': 'no-store' }) })
+    } catch (error) {
+      log.error('documents.list_failed', errorDetails(error))
+      log.finish(500, { outcome: 'list_error' })
+      return Response.json({ error: 'Your documents could not be loaded.', requestId: log.requestId }, {
+        status: 500, headers: log.headers(),
+      })
+    }
   }
 
   const assetId = request.nextUrl.searchParams.get('assetId') || ''

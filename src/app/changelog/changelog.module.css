@@ -28,7 +28,7 @@
 .hero h1 {
   max-width: 960px;
   margin: 0;
-  font-size: clamp(3.3125rem, 8.24vw, 8.125rem);
+  font-size: clamp(3rem, 6.5vw, 6rem);
   font-weight: 620;
   letter-spacing: -.07em;
   line-height: .91;
@@ -38,7 +38,7 @@
   max-width: 760px;
   margin: 35px 0 0;
   color: #555953;
-  font-size: clamp(1.0625rem, 1.853vw, 1.375rem);
+  font-size: clamp(1rem, 1.5vw, 1.125rem);
   line-height: 1.65;
 }
 
@@ -86,7 +86,7 @@
 .releaseBody h2 {
   max-width: 780px;
   margin: 0;
-  font-size: clamp(2.0625rem, 4.12vw, 4.25rem);
+  font-size: clamp(2rem, 3.5vw, 3.5rem);
   font-weight: 620;
   letter-spacing: -.055em;
   line-height: 1;
@@ -104,7 +104,7 @@
   color: #f5f3ed;
   background: #151717;
 }
-.note h2 { max-width: 760px; margin: 0; font-size: clamp(2.1875rem, 5.15vw, 4.9375rem); letter-spacing: -.06em; line-height: .98; }
+.note h2 { max-width: 760px; margin: 0; font-size: clamp(2rem, 4.2vw, 4rem); letter-spacing: -.06em; line-height: .98; }
 .note > p:last-child { max-width: 700px; margin: 26px 0 0; color: #b8bbb7; line-height: 1.7; }
 
 @media (max-width: 720px) {

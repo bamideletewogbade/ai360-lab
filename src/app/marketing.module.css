@@ -7,9 +7,9 @@
 .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: clamp(40px, 6vw, 96px); align-items: center; padding: clamp(64px, 8vw, 116px) clamp(24px, 6vw, 96px); border-bottom: 1px solid var(--line); background: var(--warm-white); }
 .kicker { display: flex; align-items: center; gap: 9px; margin: 0 0 20px; color: var(--grey); font-size: 14px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
 .kicker span { color: var(--black); }
-.hero h1 { margin: 0; font-family: var(--font-heading); font-size: clamp(43px, 4.944vw, 76px); line-height: .98; letter-spacing: -.055em; }
+.hero h1 { margin: 0; font-family: var(--font-heading); font-size: clamp(40px, 4.4vw, 64px); line-height: .98; letter-spacing: -.055em; }
 .hero h1 em { font-style: normal; color: var(--grey); }
-.lead { max-width: 620px; margin: 26px 0 0; color: var(--grey); font-size: 19px; line-height: 1.68; }
+.lead { max-width: 620px; margin: 26px 0 0; color: var(--grey); font-size: 17px; line-height: 1.68; }
 .heroAside { display: grid; gap: 12px; }
 .heroStat { display: grid; gap: 4px; padding: 22px 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--white); }
 .heroStat b { font-family: var(--font-heading); font-size: 27px; letter-spacing: -.04em; }
@@ -132,7 +132,7 @@
 }
 @media (max-width: 480px) {
   .hero, .section, .cta { padding-right: max(18px, env(safe-area-inset-right)); padding-left: max(18px, env(safe-area-inset-left)); }
-  .hero h1 { font-size: clamp(41px, 13.39vw, 58px); }
+  .hero h1 { font-size: clamp(38px, 11vw, 52px); }
   .lead, .sectionHead p, .audienceIntro, .limit p, .cta p { font-size: 17px; }
   .tabs { flex-wrap: nowrap; margin-right: -18px; margin-left: -18px; padding: 0 18px 4px; overflow-x: auto; scrollbar-width: none; }
   .tabs::-webkit-scrollbar { display: none; }

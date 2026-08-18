@@ -122,6 +122,41 @@ export async function persistGeneratedDocument(input: {
   }
 }
 
+export type GeneratedDocumentSummary = {
+  assetId: string
+  filename: string
+  format: ExportFormat
+  mimeType: string
+  byteSize: number
+  createdAt: string
+  projectId: string | null
+  conversationId: string | null
+}
+
+/** Every document the assistant has produced for this workspace, newest first — the Library's document source. */
+export async function listGeneratedDocuments(context: WorkspaceAuthContext, limit = 100): Promise<GeneratedDocumentSummary[]> {
+  const sql = getPostgres()
+  const rows = await sql<{
+    id: string; project_id: string | null; conversation_id: string | null
+    mime_type: string; byte_size: string; metadata: { filename?: string; format?: string }; created_at: string
+  }[]>`
+    select id, project_id, conversation_id, mime_type, byte_size, metadata, created_at
+      from public.lab_assets
+     where workspace_key = ${context.workspace.key} and asset_kind = 'document'
+       and status = 'ready' and deleted_at is null
+     order by created_at desc limit ${Math.min(200, Math.max(1, limit))}`
+  return rows.map((row) => ({
+    assetId: row.id,
+    filename: row.metadata?.filename || 'ai360-document',
+    format: (row.metadata?.format as ExportFormat) || 'pdf',
+    mimeType: row.mime_type,
+    byteSize: Number(row.byte_size),
+    createdAt: row.created_at,
+    projectId: row.project_id,
+    conversationId: row.conversation_id,
+  }))
+}
+
 export async function readGeneratedDocument(context: WorkspaceAuthContext, assetId: string) {
   const sql = getPostgres()
   const [asset] = await sql<{
