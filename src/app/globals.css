@@ -1968,19 +1968,16 @@ button {
   width: 100%;
   display: flex;
   flex-direction: column;
-  /* The studio does not scroll — the stage inside it does. That is what keeps
-     the dock pinned. */
-  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: var(--paper);
 }
 
-/* The stage: the person's own work, given the whole width. */
+/* The stage follows the creation panel and grows naturally with the gallery. */
 .ms-stage {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 18px max(18px, env(safe-area-inset-right)) 24px
+  order: 2;
+  flex: 0 0 auto;
+  padding: 10px max(18px, env(safe-area-inset-right)) 40px
     max(18px, env(safe-area-inset-left));
 }
 .ms-results {
@@ -1990,63 +1987,35 @@ button {
   margin-inline: auto;
 }
 
-/* Header ------------------------------------------------------------------ */
-.ms-topbar {
-  /* Fixed row of the studio column — the stage below it does the scrolling,
-     so this no longer needs to be sticky, and it must not be squashed when
-     the dock is open on a short window. */
-  flex: 0 0 auto;
-  z-index: 5;
+/* Creation panel --------------------------------------------------------- */
+.ms-compose-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 14px max(18px, env(safe-area-inset-left)) 13px
-    max(18px, env(safe-area-inset-right));
-  background: color-mix(in srgb, var(--paper) 88%, transparent);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--line);
+  gap: 20px;
 }
-.ms-identity {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-width: 0;
+.ms-compose-kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--clay);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
 }
-.ms-mark {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  border-radius: 11px;
-  background: var(--black);
-  color: var(--paper);
-}
-.ms-mark svg {
-  width: 18px;
-  height: 18px;
-  fill: currentColor;
-  stroke: none;
-}
-.ms-identity h1 {
+.ms-compose-head h1 {
   margin: 0;
-  font-family: var(--font-heading);
-  font-size: 19px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
   color: var(--black);
+  font-family: var(--font-heading);
+  font-size: clamp(21px, 2vw, 27px);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
 }
-.ms-identity p {
-  margin: 1px 0 0;
-  font-size: 14px;
+.ms-compose-head p {
+  margin: 6px 0 0;
   color: var(--grey);
-}
-.ms-topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  font-size: 14px;
+  line-height: 1.45;
 }
 .ms-mode {
   display: flex;
@@ -2200,28 +2169,20 @@ button {
   color: var(--grey);
 }
 
-/* The dock ----------------------------------------------------------------
-   Anything that can grow — the options panel, a video quote — lives in a
-   scrolling area above the bar. The bar itself never moves, so the primary
-   action cannot be pushed off screen the way the old sticky panel pushed it. */
+/* Creation workspace ------------------------------------------------------
+   The composer is the first useful surface in the page. Optional controls and
+   a video quote expand below it, keeping the prompt stable and in view. */
 .ms-dock {
-  /* Shrinkable on purpose. On a short window the options panel would otherwise
-     hold the dock at its full height and push the button past the bottom edge;
-     giving way here lets .ms-dock-extras absorb the loss and scroll, while
-     .ms-bar stays whole. */
-  flex: 0 1 auto;
-  min-height: 0;
+  order: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  max-height: 76%;
-  border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--paper) 92%, transparent);
-  backdrop-filter: blur(12px);
+  padding: 22px max(18px, env(safe-area-inset-right)) 18px
+    max(18px, env(safe-area-inset-left));
 }
 .ms-dock-extras {
-  flex: 0 1 auto;
-  min-height: 0;
-  overflow-y: auto;
+  order: 2;
+  flex: 0 0 auto;
 }
 .ms-dock-panel,
 .ms-quote,
@@ -2234,18 +2195,25 @@ button {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 16px max(18px, env(safe-area-inset-left)) 4px
-    max(18px, env(safe-area-inset-right));
+  margin-top: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
 }
 
 /* Composer bar ------------------------------------------------------------ */
 .ms-bar {
+  order: 1;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px max(18px, env(safe-area-inset-right))
-    max(12px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--white);
+  box-shadow: 0 18px 42px rgb(30 27 22 / 0.07);
 }
 .ms-bar-row {
   display: flex;
@@ -2269,8 +2237,9 @@ button {
 .ms-prompt {
   width: 100%;
   /* Grown to fit its content by the component, up to this ceiling. */
-  max-height: 168px;
-  padding: 13px 14px;
+  min-height: 118px;
+  max-height: 220px;
+  padding: 15px 16px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--white);
@@ -2279,7 +2248,7 @@ button {
   /* 16px+ keeps iOS from zooming the whole page on focus. */
   font-size: 17px;
   line-height: 1.55;
-  resize: none;
+  resize: vertical;
   overflow-y: auto;
   transition:
     border-color 0.16s var(--ease),
@@ -2678,16 +2647,13 @@ button {
 .ms-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr));
-  gap: 14px;
-  /* Rows sized to each card rather than to the tallest in the row. Without
-     this a 1:1 card stretched its 16:9 neighbours to match, leaving large
-     dead gaps wherever shapes were mixed. */
-  align-items: start;
+  gap: 16px;
+  align-items: stretch;
 }
 .ms-card {
   display: flex;
   flex-direction: column;
-  align-self: start;
+  height: 100%;
   border: 1px solid var(--line);
   border-radius: 15px;
   background: var(--white);
@@ -2712,17 +2678,11 @@ button {
 }
 .ms-card-media {
   position: relative;
-  aspect-ratio: 16 / 9;
+  min-height: 0;
+  flex: 0 0 auto;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
   background: var(--warm-white);
-}
-.ms-card-media[data-ratio="1:1"] {
-  aspect-ratio: 1 / 1;
-}
-.ms-card-media[data-ratio="9:16"] {
-  aspect-ratio: 9 / 16;
-}
-.ms-card-media[data-ratio="2:3"] {
-  aspect-ratio: 2 / 3;
 }
 .ms-card-media img,
 .ms-card-media video {
@@ -2756,6 +2716,7 @@ button {
   stroke-width: 1.8;
 }
 .ms-card-body {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2778,6 +2739,7 @@ button {
   flex-direction: column;
   align-items: stretch;
   gap: 9px;
+  margin-top: auto;
 }
 .ms-card-meta {
   font-size: 14px;
@@ -2884,37 +2846,32 @@ button {
 }
 
 @media (max-width: 620px) {
-  .ms-topbar {
-    padding-block: 11px;
-    gap: 10px;
-  }
-  /* The workspace header directly above already reads "Media Studio / Create
-     images and short video", so repeating the name here only cost a row of
-     vertical space that the work itself should have. */
-  .ms-identity {
-    display: none;
-  }
-  .ms-topbar-right {
-    width: 100%;
-    justify-content: space-between;
+  .ms-compose-head {
+    flex-direction: column;
+    gap: 14px;
   }
   .ms-filters button {
     padding: 0 10px;
   }
   .ms-mode {
-    flex: 1;
+    width: 100%;
   }
   .ms-mode button {
     flex: 1;
     justify-content: center;
   }
   .ms-stage {
-    padding: 14px 14px 20px;
+    padding: 6px 14px 28px;
   }
-  /* A phone keyboard already takes half the screen; cap the dock so the work
-     behind it never disappears completely. */
   .ms-dock {
-    max-height: 68%;
+    padding: 14px;
+  }
+  .ms-bar {
+    padding: 16px;
+    border-radius: 17px;
+  }
+  .ms-prompt {
+    min-height: 132px;
   }
   .ms-chips {
     grid-template-columns: repeat(2, minmax(0, 1fr));

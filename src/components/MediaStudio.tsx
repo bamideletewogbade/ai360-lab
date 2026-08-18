@@ -498,13 +498,14 @@ export function MediaStudio() {
   } | null>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
-  // The prompt box grows with what is written in it, up to a ceiling, so a long
-  // description is visible without turning the dock into a wall.
+  // The prompt starts as a comfortable writing surface and grows with longer
+  // descriptions. People should be able to review a useful prompt before they
+  // spend credits, rather than composing through a one-line slot.
   useEffect(() => {
     const field = promptRef.current;
     if (!field) return;
     field.style.height = "auto";
-    field.style.height = `${Math.min(field.scrollHeight, 168)}px`;
+    field.style.height = `${Math.min(field.scrollHeight, 220)}px`;
   }, [prompt, mode]);
 
   useEffect(() => {
@@ -1170,59 +1171,6 @@ export function MediaStudio() {
 
   return (
     <div className="media-studio">
-      {/* A workspace opens on the work, not on a poster. The header stays one
-          compact line so the prompt is the first thing in reach on a phone. */}
-      <header className="ms-topbar">
-        <div className="ms-identity">
-          <span className="ms-mark">
-            <StudioIcon name="spark" />
-          </span>
-          <div>
-            <h1>Studio</h1>
-            <p>Make images and short videos from a sentence.</p>
-          </div>
-        </div>
-        <div className="ms-topbar-right">
-          {/* The workspace header already carries a live credit pill that
-              refreshes on focus and after each run. A second copy here showed
-              the same number twice on one screen and, being fetched once on
-              mount, went stale the moment a render settled. One indicator, and
-              it is the one that updates. */}
-          <div
-            className="ms-mode"
-            role="tablist"
-            aria-label="What do you want to make?"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!isVideo}
-              aria-controls="media-studio-workspace"
-              tabIndex={!isVideo ? 0 : -1}
-              className={!isVideo ? "is-active" : ""}
-              onClick={() => setMode("image")}
-              onKeyDown={onModeKeyDown}
-            >
-              <StudioIcon name="image" />
-              <span>Image</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={isVideo}
-              aria-controls="media-studio-workspace"
-              tabIndex={isVideo ? 0 : -1}
-              className={isVideo ? "is-active" : ""}
-              onClick={() => setMode("video")}
-              onKeyDown={onModeKeyDown}
-            >
-              <StudioIcon name="video" />
-              <span>Video</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
       {toastNotice ? (
         <div
           className={`ms-toast${toastError ? " is-error" : ""}`}
@@ -1301,10 +1249,9 @@ export function MediaStudio() {
         </section>
       ) : null}
 
-      {/* The work fills the page and scrolls on its own; the composer is docked
-          below it and never scrolls away. This is the inversion the old layout
-          had backwards — controls held the prime width while the gallery, the
-          reason for the page, was squeezed into the remainder. */}
+      {/* The gallery follows the creation panel visually. Keeping it in the DOM
+          before the controls preserves the established generation code while
+          CSS gives the primary task the correct first position. */}
       <div className="ms-stage" id="media-studio-workspace">
         <section className="ms-results" aria-label="Your work">
           <div className="ms-results-head">
@@ -1445,10 +1392,9 @@ export function MediaStudio() {
         </section>
       </div>
 
-      {/* The dock. Everything that can push the button off screen lives in a
-          scrolling area above it, so the primary action is reachable at every
-          window size — the failure the old sticky side panel had, where a tall
-          composer put its own button below the fold. */}
+      {/* A creation workspace, not a one-line dock. The page-level header above
+          already names Media Studio, so this panel starts with the task and the
+          Image / Video choice instead of repeating a second page title. */}
       <div className="ms-dock">
         <div className="ms-dock-extras">
           {optionsOpen ? (
@@ -1608,6 +1554,50 @@ export function MediaStudio() {
         </div>
 
         <div className="ms-bar">
+          <div className="ms-compose-head">
+            <div>
+              <span className="ms-compose-kicker">Create</span>
+              <h1>{isVideo ? "Describe your video" : "Describe your image"}</h1>
+              <p>
+                {isVideo
+                  ? "Set the scene, action, camera movement and mood."
+                  : "Include the subject, setting, style and any text placement."}
+              </p>
+            </div>
+            <div
+              className="ms-mode"
+              role="tablist"
+              aria-label="What do you want to make?"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!isVideo}
+                aria-controls="media-studio-workspace"
+                tabIndex={!isVideo ? 0 : -1}
+                className={!isVideo ? "is-active" : ""}
+                onClick={() => setMode("image")}
+                onKeyDown={onModeKeyDown}
+              >
+                <StudioIcon name="image" />
+                <span>Image</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={isVideo}
+                aria-controls="media-studio-workspace"
+                tabIndex={isVideo ? 0 : -1}
+                className={isVideo ? "is-active" : ""}
+                onClick={() => setMode("video")}
+                onKeyDown={onModeKeyDown}
+              >
+                <StudioIcon name="video" />
+                <span>Video</span>
+              </button>
+            </div>
+          </div>
+
           {/* Starting points sit right at the prompt while it is empty, then
               get out of the way — the blank-page problem is only a problem
               before there is something written. */}
@@ -1634,7 +1624,7 @@ export function MediaStudio() {
             id="ms-prompt"
             ref={promptRef}
             className="ms-prompt"
-            rows={1}
+            rows={4}
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={onPromptKeyDown}
