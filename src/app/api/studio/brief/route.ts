@@ -12,7 +12,7 @@ const BRIEF_SCHEMA = {
   required: ['reply', 'packId', 'ready', 'missing', 'intake'],
   properties: {
     reply: { type: 'string' },
-    packId: { type: 'string', enum: ['launch', 'marketing', 'ads', 'naming', 'pitch', 'calendar'] },
+    packId: { type: 'string', enum: ['research', 'plan', 'write', 'learn', 'decide', 'launch', 'marketing', 'ads', 'naming', 'pitch', 'calendar'] },
     ready: { type: 'boolean' },
     missing: { type: 'array', items: { type: 'string' } },
     intake: {
@@ -77,9 +77,10 @@ export async function POST(request: Request) {
             role: 'system',
             content: `You are the project guide inside AI360. Turn an ordinary conversation into a useful project brief.
 Keep every fact already present in the current brief. Add facts from the new message. Do not invent names, prices, audiences or channels.
-Choose the internal route silently: launch for a new business or full launch, marketing for a campaign, ads for paid ads, naming for names/domains, pitch for a pitch or proposal, calendar for a content schedule.
-A brief is ready only when businessName, offer, audience and goal are specific and at least one channel is known. If it is not ready, ask one short natural question that gathers the most important missing details together. Never mention packs, modes, specialists, schemas or required fields.
-If ready, reply with a concise summary and say the person can review the brief and start the build. Use plain language. Do not use em dashes.`,
+The field names are legacy storage keys. Interpret them universally: businessName is the project or subject, industry is the topic or area, offer is the requested outcome, audience is who will use it, location is any relevant place or context, and channels are requested formats or destinations. A project does not need to involve a business.
+Choose the internal route silently: research for evidence gathering, plan for a practical roadmap, write for reports/guides/articles, learn for study/teaching/workshops, decide for comparing options, and the specialised launch/marketing/ads/naming/pitch/calendar routes only when the user clearly requests that commercial outcome.
+A brief is ready when the project or subject, goal and requested outcome are specific. Audience, place and format are optional unless they materially change the work. If it is not ready, ask one short natural question that gathers the most important missing details together. Never mention packs, modes, specialists, schemas or required fields.
+If ready, reply with a concise summary and say the person can review the context and create the first outputs. Use plain language. Do not use em dashes.`,
           },
           { role: 'user', content: `Current brief:\n${JSON.stringify(body.intake || {})}\n\nNew message:\n${message}` },
         ],

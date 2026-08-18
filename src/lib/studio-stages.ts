@@ -1,17 +1,16 @@
 /**
  * The destinations inside a project.
  *
- * Four of these are a pipeline — brief, build, review, deliverables — and carry
- * a step number and a Done/Now/Next state. Chats is not: a project's
- * conversations are ongoing work, not a stage you finish and leave behind, so it
- * is marked `pipeline: false` and renders without a number or a status.
+ * The stored ids predate the current information architecture and are retained
+ * so existing projects keep opening correctly. The labels are universal
+ * workspace destinations, not an industry-specific production pipeline.
  */
 export const PROJECT_STAGES = [
-  { id: 'chats', label: 'Chats', description: 'Work in this project', pipeline: false },
-  { id: 'brief', label: 'Brief', description: 'Goal and context', pipeline: true },
-  { id: 'build', label: 'Build', description: 'Work in progress', pipeline: true },
-  { id: 'review', label: 'Review', description: 'Check and approve', pipeline: true },
-  { id: 'deliverables', label: 'Deliverables', description: 'Use and export', pipeline: true },
+  { id: 'brief', label: 'Overview', description: 'Goal and direction', pipeline: true },
+  { id: 'chats', label: 'Chats', description: 'Think and create', pipeline: false },
+  { id: 'review', label: 'Work', description: 'Drafts and decisions', pipeline: true },
+  { id: 'build', label: 'Files', description: 'Sources and context', pipeline: true },
+  { id: 'deliverables', label: 'Outputs', description: 'Ready to use', pipeline: true },
 ] as const
 
 export type ProjectStage = (typeof PROJECT_STAGES)[number]['id']

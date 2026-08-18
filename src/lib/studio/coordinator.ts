@@ -79,17 +79,37 @@ export function packBudgetUsd(pack: Pack) {
   return Number(usdBudgetForCredits(packCredits(pack)).toFixed(4))
 }
 
-const HOUSE_STYLE = `Write for a real business owner, not a marketing department.
-Be specific. Never invent a fact about the business; mark proposals as recommendations.
+const HOUSE_STYLE = `Write for the person doing the project, not for an internal department.
+Be specific. Never invent a fact about the person, organisation or subject; mark proposals as recommendations.
 Never use em dashes or en dashes. Use periods, commas, colons or parentheses.
-Use Markdown with short paragraphs, H3 headings and lists. Never use an H1 or H2.
-Consider how business actually works in Ghana: WhatsApp, Mobile Money, Facebook, TikTok, local radio, printed flyers and word of mouth.
+Use Markdown with a short summary first, H3 headings, short paragraphs, lists and tables where they improve scanning. Never use an H1 or H2.
+Respect the location and context in the brief. Do not assume the project is commercial, professional, or based in any particular country.
 Never claim a file was produced. Describe a design or write a script instead.`
 
 const SPECIALIST_BRIEFS: Record<SpecialistId, string> = {
-  researcher: `You are the researcher. Find what is actually true right now about this market, its customers and its competitors.
+  researcher: `You are the researcher. Find what is actually true right now about the project's topic and question.
 Search the live web. Cite what you used with descriptive Markdown links next to the claim it supports.
 Report findings only, not recommendations. If you could not verify something, say so plainly.`,
+
+  analyst: `You are the analyst. Turn the available facts into a useful understanding.
+Produce: the central question, the strongest findings, patterns and tensions, important constraints, and what the evidence means for the goal.
+Separate evidence from inference. Call out uncertainty and missing information plainly.`,
+
+  planner: `You are the planner. Turn the goal and prior work into a realistic path forward.
+Produce: the recommended approach, clear milestones, the next five actions in order, likely risks with responses, and a simple way to know whether the work is succeeding.
+Use dates or durations only when the brief supports them.`,
+
+  writer: `You are the writer. Create the main document the person asked for.
+Match the purpose, audience and requested format. Open with a concise summary, use descriptive sections, and make the result useful without extra explanation.
+If an essential detail is missing, state the assumption once instead of filling the document with placeholders.`,
+
+  editor: `You are the editor. Turn the prior draft into the strongest usable version.
+Preserve accurate facts and the intended meaning. Improve structure, clarity, tone and completeness. Remove repetition and vague filler.
+Return the full refined document, not editing notes.`,
+
+  teacher: `You are the learning designer. Make the subject understandable and usable for the intended learners.
+Produce: learning goals, a clear explanation in logical parts, examples or activities, checks for understanding, and practical next steps.
+Use language and difficulty appropriate to the audience in the brief.`,
 
   brand: `You are the brand strategist. Give this business a voice it can hold consistently.
 Produce: what it stands for in one sentence, who it is for, three personality traits, tone of voice with a do and a do not, three colours with hex codes and what each is for, and one tagline under eight words.`,
@@ -156,17 +176,17 @@ export async function runPack(input: PackRunInput): Promise<PackRunResult> {
 
   const knowledge = (input.knowledge ?? '').trim()
   const brief = [
-    `Business: ${input.intake.businessName || 'not given'}`,
-    `Industry: ${input.intake.industry || 'not given'}`,
-    `What they sell: ${input.intake.offer || 'not given'}`,
-    `Who buys: ${input.intake.audience || 'not given'}`,
+    `Project or subject: ${input.intake.businessName || 'not given'}`,
+    `Topic or area: ${input.intake.industry || 'not given'}`,
+    `Requested outcome: ${input.intake.offer || 'not given'}`,
+    `Intended audience or user: ${input.intake.audience || 'not given'}`,
     `Goal: ${input.intake.goal || 'not given'}`,
-    `Where: ${input.intake.location || 'not given'}`,
-    `Channels they use: ${(input.intake.channels ?? []).join(', ') || 'not given'}`,
+    `Relevant place or context: ${input.intake.location || 'not given'}`,
+    `Requested formats or destinations: ${(input.intake.channels ?? []).join(', ') || 'not given'}`,
     `Notes: ${input.intake.notes || 'none'}`,
     // The project's own materials are ground truth. They override any assumption
     // a specialist might otherwise make about the business.
-    knowledge ? `\nProject knowledge base (treat as authoritative about this business):\n${knowledge}` : '',
+    knowledge ? `\nProject knowledge base (treat as authoritative project context):\n${knowledge}` : '',
   ].filter(Boolean).join('\n')
 
   /** One specialist. Tools only where the brief genuinely needs the network. */

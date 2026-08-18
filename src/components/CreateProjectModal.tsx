@@ -78,14 +78,14 @@ export function CreateProjectModal({
             className="create-project-input"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. Hibiscus drink launch"
+            placeholder="e.g. Solar plan for the school"
             maxLength={255}
             aria-label="Project name"
           />
 
           <p className="create-project-hint" id="create-project-hint">
             <span aria-hidden="true">◇</span>
-            A project keeps your files, brief and chats in one place. Use it for ongoing work, or just to keep things tidy.
+            A project keeps a lasting goal, its files, chats, working drafts and finished outputs together. It can be about anything.
           </p>
 
           <div className="create-project-actions">

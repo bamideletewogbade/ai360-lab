@@ -8,10 +8,10 @@ test('chats is a destination in a project, not a pipeline step', () => {
   assert.equal(chats.pipeline, false)
 })
 
-test('the pipeline keeps exactly its four finishable stages', () => {
+test('the project hub puts universal work destinations in a useful order', () => {
   assert.deepEqual(
-    PROJECT_STAGES.filter((stage) => stage.pipeline).map((stage) => stage.id),
-    ['brief', 'build', 'review', 'deliverables'],
+    PROJECT_STAGES.map((stage) => stage.label),
+    ['Overview', 'Chats', 'Work', 'Files', 'Outputs'],
   )
 })
 

@@ -3499,7 +3499,7 @@ button {
   justify-content: space-between;
   gap: 12px;
 }
-.project-start-actions span {
+.project-start-actions > span {
   flex: 1;
   min-width: 180px;
   color: var(--grey);
@@ -11960,4 +11960,50 @@ button {
   .message-file {
     min-height: 56px;
   }
+}
+
+/* Project workspace overrides must remain last so the flexible tab interface
+   wins over the legacy numbered-pipeline styles above. */
+.project-tabs { position: sticky; top: 0; padding: 5px; border-radius: 13px; }
+.project-tabs ol { display: flex; gap: 3px; }
+.project-tabs li { flex: 1 1 0; }
+.project-tabs li::after { display: none; }
+.project-tabs button { min-height: 48px; display: flex; justify-content: center; gap: 8px; padding: 7px 12px; text-align: center; }
+.project-tabs .stage-copy small { display: none; }
+.project-tabs .stage-copy b { font-size: 13px; }
+.project-tabs .stage-state { min-width: 22px; padding: 3px 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 10%, transparent); font-size: 10px; letter-spacing: 0; }
+.project-tabs li.active button { box-shadow: none; }
+.project-activity-details { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
+.project-activity-details > summary { min-height: 48px; display: flex; align-items: center; padding: 0 15px; color: var(--charcoal); cursor: pointer; font-size: 13px; font-weight: 750; }
+.project-activity-details .project-build-record { margin: 0 10px 10px; padding: 0; border: 0; }
+.project-document { max-width: 900px; margin: 0 auto; border: 1px solid var(--line); border-radius: 14px; background: var(--white); overflow: hidden; }
+.project-document-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 16px 18px; border-bottom: 1px solid var(--line); background: var(--warm-white); }
+.project-document-head b, .project-document-head small { display: block; }
+.project-document-head b { font-size: 14px; }
+.project-document-head small, .project-document-head > span:last-child { margin-top: 3px; color: var(--grey); font-size: 11px; line-height: 1.45; }
+.project-document .response-content { max-width: 760px; margin: 0 auto; padding: clamp(20px, 4vw, 42px); font-size: 14px; line-height: 1.72; }
+.project-document .response-content h3 { margin-top: 2em; scroll-margin-top: 90px; }
+.project-document .response-content p, .project-document .response-content li { max-width: 72ch; }
+.project-stage-section[data-project-stage="build"] .project-knowledge { margin-top: 0; }
+.studio-intake.build-active { align-items: stretch; }
+.studio-intake.build-active .build-intro h1 { max-width: 680px; font-size: clamp(42px, 5.15vw, 68px); }
+.studio-intake.build-active .build-intro p { max-width: 620px; }
+
+@media (max-width: 760px) {
+  .project-tabs { margin-inline: -4px; overflow-x: auto; scrollbar-width: none; }
+  .project-tabs::-webkit-scrollbar { display: none; }
+  .project-tabs ol { width: max-content; }
+  .project-tabs li { flex: 0 0 auto; }
+  .project-tabs button { min-width: 104px; min-height: 48px; }
+  .project-document-head { display: block; }
+  .project-document-head > span:last-child { display: block; margin-top: 8px; }
+  .project-document .response-content { padding: 20px 16px 28px; font-size: 14px; }
+  .project-activity-details .project-build-record { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px) {
+  .project-stage-heading { grid-template-columns: 28px minmax(0, 1fr); }
+  .project-stage-heading > em { grid-column: 2; justify-self: start; }
+  .active-project-intro, .project-next-action { min-height: 0; }
+  .project-completion-card { min-height: 118px; }
 }

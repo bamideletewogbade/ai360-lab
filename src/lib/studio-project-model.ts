@@ -97,7 +97,12 @@ export type StudioProject = {
 }
 
 const SECTION_PRESENTATION: Record<SpecialistId, Pick<StudioAsset, 'title' | 'type' | 'channel' | 'purpose'>> = {
-  researcher: { title: 'Market research', type: 'strategy', channel: 'Research', purpose: 'Current evidence and useful market context' },
+  researcher: { title: 'Research findings', type: 'strategy', channel: 'Research', purpose: 'Current evidence and reliable sources' },
+  analyst: { title: 'Analysis', type: 'strategy', channel: 'Project', purpose: 'Patterns, implications and tradeoffs from the available evidence' },
+  planner: { title: 'Practical plan', type: 'strategy', channel: 'Project', purpose: 'Milestones, priorities and concrete next actions' },
+  writer: { title: 'Working draft', type: 'messaging', channel: 'Document', purpose: 'The main piece of writing, structured for its intended use' },
+  editor: { title: 'Refined version', type: 'messaging', channel: 'Document', purpose: 'A clearer, more complete version ready for review' },
+  teacher: { title: 'Learning material', type: 'strategy', channel: 'Learning', purpose: 'Clear explanations, activities and checks for understanding' },
   brand: { title: 'Brand direction', type: 'strategy', channel: 'Brand', purpose: 'A consistent promise, voice and visual direction' },
   campaign: { title: 'Campaign plan', type: 'strategy', channel: 'Campaign', purpose: 'The idea, channels, timing and measures' },
   copy: { title: 'Ready-to-use copy', type: 'messaging', channel: 'Multiple channels', purpose: 'Copy ready to review, adapt and send' },
@@ -165,7 +170,7 @@ export function createPackProject(input: {
       summary: input.pack.outcome,
       audience: input.intake.audience,
       personality: [],
-      voice: 'Defined in the project deliverables',
+      voice: 'Defined in the project outputs',
       colors: [],
       tagline: input.pack.name,
       valueProposition: input.intake.offer,
@@ -174,7 +179,7 @@ export function createPackProject(input: {
       name: `${input.intake.businessName} ${input.pack.name}`,
       objective: input.intake.goal,
       bigIdea: input.pack.outcome,
-      callToAction: 'Review and approve the deliverables',
+      callToAction: 'Review and approve the outputs',
       channels: input.intake.channels,
       successMeasures: input.pack.deliverables,
     },

@@ -21,7 +21,7 @@ test('specialist sections become reviewable versioned deliverables', () => {
   ], 100)
 
   assert.equal(assets.length, 2)
-  assert.equal(assets[0].title, 'Market research')
+  assert.equal(assets[0].title, 'Research findings')
   assert.equal(assets[1].title, 'Campaign plan')
   assert.equal(assets[0].version, 1)
   assert.equal(assets[0].versions?.[0].reason, 'created')
@@ -57,4 +57,3 @@ test('an improved deliverable keeps the prior version', () => {
   assert.equal(improved.content, 'Second draft')
   assert.deepEqual(improved.versions?.map((version) => version.content), ['First draft', 'Second draft'])
 })
-

@@ -64,7 +64,7 @@ const DRAFT_STORAGE_KEY = 'ai360-studio-draft-v1'
 const LEGACY_STORAGE_KEY = 'ai360-studio-project-v1'
 const VIEW_KEY = 'ai360-studio-view-v2'
 const IMPORT_ACK_KEY = 'ai360-studio-guest-import-v1'
-const CHANNELS = ['WhatsApp', 'Instagram', 'Facebook', 'TikTok', 'SMS', 'Email', 'Google Business', 'Print']
+const CHANNELS = ['Document', 'Spreadsheet', 'Presentation', 'Web', 'Email', 'WhatsApp', 'Social', 'Print']
 const ASSET_ICONS: Record<StudioAsset['type'], string> = {
   strategy: '01',
   messaging: 'Aa',
@@ -103,7 +103,7 @@ function projectMarkdown(project: StudioProject) {
   return [
     `# ${project.campaign.name}`,
     '',
-    `Prepared for ${project.intake.businessName}`,
+    `Project: ${project.intake.businessName}`,
     '',
     `## ${project.pack ? 'Project overview' : 'Campaign overview'}`,
     '',
@@ -111,11 +111,11 @@ function projectMarkdown(project: StudioProject) {
     '',
     `**${project.pack ? 'Outcome' : 'Big idea'}:** ${project.campaign.bigIdea}`,
     '',
-    `**Call to action:** ${project.campaign.callToAction}`,
+    `**Next action:** ${project.campaign.callToAction}`,
     '',
-    `**Channels:** ${project.campaign.channels.join(', ')}`,
+    `**Formats or destinations:** ${project.campaign.channels.join(', ') || 'Not specified'}`,
     '',
-    `**Progress:** ${approved} of ${project.assets.length} deliverables approved`,
+    `**Progress:** ${approved} of ${project.assets.length} outputs ready`,
     '',
     ...(!project.pack ? [
       '## Brand foundation',
@@ -192,7 +192,7 @@ function StudioBuildRoom({
         <span>
           <span className="studio-kicker">{complete ? 'Build complete' : `${pack.name} · Live progress`}</span>
           <h2>{complete ? 'Your project is ready to review.' : 'The work is moving through its stages.'}</h2>
-          <p>{complete ? 'Opening the completed project.' : reviewNote || activeSpecialist?.working || 'Preparing the specialist team'}.</p>
+          <p>{complete ? 'Opening the completed project.' : reviewNote || activeSpecialist?.working || 'Preparing the work'}.</p>
         </span>
       </header>
 
@@ -217,7 +217,7 @@ function StudioBuildRoom({
                 <small>{specialist.working}</small>
               </span>
               <span className="relay-handoff">
-                {status === 'complete' ? <><i>→</i>deliverable ready</> : status === 'failed' ? specialist.detail || 'not produced' : status === 'active' ? <span className="relay-dots"><i /><i /><i /></span> : 'queued'}
+                {status === 'complete' ? <><i>→</i>output ready</> : status === 'failed' ? specialist.detail || 'not produced' : status === 'active' ? <span className="relay-dots"><i /><i /><i /></span> : 'queued'}
               </span>
             </div>
           )
@@ -227,7 +227,7 @@ function StudioBuildRoom({
       <footer className="build-room-foot">
         <span className="studio-spinner" aria-hidden="true" />
         <span>
-          <b>{complete ? `${sectionsCount} deliverables ready` : activeSpecialist ? `${activeSpecialist.label} is working` : 'Preparing the project'}</b>
+          <b>{complete ? `${sectionsCount} outputs ready` : activeSpecialist ? `${activeSpecialist.label} is working` : 'Preparing the project'}</b>
           <small>{complete ? 'One moment while Create prepares your workspace.' : `Elapsed ${elapsed}s. Progress shown here comes from the real build.`}</small>
         </span>
       </footer>
@@ -309,8 +309,8 @@ export function StudioWorkspace({
   const [buildingProject, setBuildingProject] = useState(false)
   const [buildComplete, setBuildComplete] = useState(false)
   const [buildElapsed, setBuildElapsed] = useState(0)
-  const [selectedPackId, setSelectedPackId] = useState<PackId>('launch')
-  const [buildSpecialists, setBuildSpecialists] = useState<ProjectSpecialist[]>(initialProjectSpecialists(PACKS[0]))
+  const [selectedPackId, setSelectedPackId] = useState<PackId>('plan')
+  const [buildSpecialists, setBuildSpecialists] = useState<ProjectSpecialist[]>(initialProjectSpecialists(findPack('plan') ?? PACKS[0]))
   const [buildSectionsCount, setBuildSectionsCount] = useState(0)
   const [buildReviewNote, setBuildReviewNote] = useState('')
   const [briefInput, setBriefInput] = useState('')
@@ -609,10 +609,8 @@ export function StudioWorkspace({
     const effectiveName = intake.businessName || intake.offer || intake.goal
     const checks = [
       Boolean(effectiveName),
-      Boolean(intake.offer || intake.goal),
-      Boolean(intake.audience || intake.goal),
-      Boolean(intake.goal || intake.offer),
-      intake.channels.length > 0 || Boolean(intake.goal),
+      Boolean(intake.offer),
+      Boolean(intake.goal),
     ]
     return checks.filter(Boolean).length
   }, [intake])
@@ -643,12 +641,12 @@ export function StudioWorkspace({
       return
     }
     const resolvedName = intake.businessName.trim() || intake.offer.trim() || effectiveGoal.trim().slice(0, 32) || 'Project Workspace'
-    if (!intake.businessName) {
-      updateIntake('businessName', resolvedName)
+    const requestIntake: Intake = {
+      ...intake,
+      businessName: intake.businessName || resolvedName,
+      channels: intake.channels.length ? intake.channels : ['Document'],
     }
-    if (!intake.channels.length) {
-      updateIntake('channels', ['Web', 'Digital'])
-    }
+    setIntake(requestIntake)
     setBusy(true)
     setBuildingProject(true)
     setBuildComplete(false)
@@ -660,7 +658,6 @@ export function StudioWorkspace({
     setBuildSpecialists(specialistState)
     const id = requestId()
     try {
-      const requestIntake = intake
       const response = await fetch('/api/studio/pack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Request-Id': id, 'Idempotency-Key': id },
@@ -705,7 +702,7 @@ export function StudioWorkspace({
       const container = projects.find((item) => item.id === draftId)
       const generated = createPackProject({
         id: container?.id || requestId(),
-        intake,
+        intake: requestIntake,
         pack: selectedPack,
         sections: result.sections,
         sources: result.sources,
@@ -1145,7 +1142,7 @@ export function StudioWorkspace({
     setGuestProjects([])
   }
 
-  function beginProject(packId: PackId = 'launch') {
+  function beginProject(packId: PackId = 'plan') {
     const pack = findPack(packId) ?? PACKS[0]
     setProject(null)
     setView('kickoff')
@@ -1231,7 +1228,7 @@ export function StudioWorkspace({
     }
     setDraftId(startingProject.id)
     setIntake(startingIntake)
-    setSelectedPackId('launch')
+    setSelectedPackId('plan')
     setProject(null)
     setView('kickoff')
     setBriefInput('')
@@ -1279,10 +1276,10 @@ export function StudioWorkspace({
     const visible = pool.filter(matches)
     const canGhost = projectFilter !== 'archived' && !query
     const presets: Array<{ label: string; prompt: string }> = [
-      { label: 'Startup launch', prompt: 'Help me build a complete startup launch package including business model, brand brief, and marketing plan for: ' },
-      { label: 'Growth and marketing', prompt: 'Create a digital marketing and growth campaign for: ' },
-      { label: 'Brand identity', prompt: 'Define the brand identity, positioning, voice, and visual direction for: ' },
-      { label: 'Proposal', prompt: 'Draft an executive summary and financial proposal for: ' },
+      { label: 'Research', prompt: 'Research this question and give me a clear, sourced understanding: ' },
+      { label: 'Plan', prompt: 'Turn this goal into a practical plan with milestones and next steps: ' },
+      { label: 'Write', prompt: 'Help me write and refine this document: ' },
+      { label: 'Learn or teach', prompt: 'Create a clear learning experience for this subject: ' },
     ]
     return (
       <main className="studio-main" ref={mainRef}>
@@ -1361,7 +1358,7 @@ export function StudioWorkspace({
                 <button type="button" className="project-card ghost" onClick={() => setShowCreateModal(true)}>
                   <span className="ghost-plus"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></span>
                   <b>New project</b>
-                  <small>Name it, then add files, a brief and chats</small>
+                  <small>Bring a goal, files, conversations and outputs together</small>
                 </button>
               ) : null}
             </div>
@@ -1375,7 +1372,7 @@ export function StudioWorkspace({
                 ? 'Try a different search, or start something new.'
                 : projectFilter === 'archived'
                   ? 'Projects you archive will rest here, never lost.'
-                  : 'A project keeps your files, brief and chats in one place. Name one to begin.'}</p>
+                  : 'Use a project for any lasting effort: research, planning, learning, writing, creative work or business.'}</p>
               {projectFilter !== 'archived' ? (
                 <button className="new-project-primary-btn" onClick={() => setShowCreateModal(true)}>New project <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button>
               ) : null}
@@ -1386,7 +1383,7 @@ export function StudioWorkspace({
               builds a full pack in one shot, for people who want that. */}
           <div className="library-quickstart">
             <button type="button" className="quickstart-toggle" onClick={() => setShowQuickStart((value) => !value)} aria-expanded={showQuickStart}>
-              <span>Quick start<em>Describe a goal and AI360 builds a full pack</em></span>
+              <span>Quick start<em>Describe an outcome and AI360 creates the first useful work</em></span>
               <svg className={showQuickStart ? 'quickstart-chevron open' : 'quickstart-chevron'} viewBox="0 0 20 20" aria-hidden="true"><path d="m5 8 5 5 5-5" /></svg>
             </button>
             {showQuickStart ? (
@@ -1405,7 +1402,7 @@ export function StudioWorkspace({
                       if (briefInput.trim()) { setView('kickoff'); void continueBrief() }
                     }
                   }}
-                  placeholder="e.g. Help me launch a catering business for tech offices in Accra"
+                  placeholder="e.g. Research solar options for my school and recommend a practical next step"
                   aria-label="Describe your goal"
                 />
                 <div className="quickstart-foot">
@@ -1421,7 +1418,7 @@ export function StudioWorkspace({
                     ))}
                   </div>
                   <button type="submit" className="composer-submit-btn" disabled={!briefInput.trim()}>
-                    <span>Build</span>
+                    <span>Create</span>
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>
                   </button>
                 </div>
@@ -1441,15 +1438,12 @@ export function StudioWorkspace({
         </div>
         <div className="studio-intake build-active">
           <section className="studio-intro build-intro">
-            <span className="studio-kicker">Create · {selectedPack.name}</span>
-            <h1>The right team.<br />One complete outcome.</h1>
-            <p>
-              Each specialist works on one part of the project. Later stages receive
-              the work already completed, so the result stays coherent.
-            </p>
+            <span className="studio-kicker">Creating · {selectedPack.name}</span>
+            <h1>Building your first useful outputs.</h1>
+            <p>AI360 is using the goal, context and files in this project. You can review and improve every result when it is ready.</p>
             <div className="studio-outcomes">
               {selectedPack.stages.map((stage, index) => (
-                <span key={`${selectedPack.id}-${index}`}><b>{String(index + 1).padStart(2, '0')}</b>{stage.specialists.length > 1 ? 'Build together' : 'Build next part'}</span>
+                <span key={`${selectedPack.id}-${index}`}><b>{String(index + 1).padStart(2, '0')}</b>{stage.specialists.length > 1 ? 'Working together' : 'Creating next part'}</span>
               ))}
             </div>
           </section>
@@ -1473,7 +1467,7 @@ export function StudioWorkspace({
         <div className="project-kickoff">
           <header className="project-kickoff-head">
             <button className="studio-back" onClick={openDashboard}>Projects</button>
-            <div><span className="studio-kicker">New project</span><h1>Start with the goal.</h1><p>Talk naturally. AI360 turns the conversation into a brief you can see and correct.</p></div>
+            <div><span className="studio-kicker">New project</span><h1>Start with the outcome.</h1><p>Describe what you want to achieve. AI360 will clarify only the context that changes the work.</p></div>
           </header>
 
           <ProjectStageNavigator phase="briefing" activeStage="brief" />
@@ -1482,7 +1476,7 @@ export function StudioWorkspace({
             <section className="brief-conversation" aria-label="Project setup conversation">
               <div className="brief-turn assistant">
                 <span>AI360</span>
-                <p>What are you trying to make, launch or improve? A rough idea is enough to start.</p>
+                <p>What are you working toward? It can be research, a plan, something you want to write, a decision, a lesson, a creative idea, or business work.</p>
               </div>
               {briefTurns.map((turn) => (
                 <div className={`brief-turn ${turn.role}`} key={turn.id}><span>{turn.role === 'user' ? 'You' : 'AI360'}</span><p>{turn.content}</p></div>
@@ -1501,26 +1495,26 @@ export function StudioWorkspace({
             </section>
 
             <aside className="live-brief">
-              <div className="live-brief-head"><span><b>Live brief</b><small>{readiness} of 5 essentials clear</small></span><span className="studio-readiness"><i style={{ width: `${readiness * 20}%` }} /></span></div>
+              <div className="live-brief-head"><span><b>Project context</b><small>{readiness} of 3 essentials clear</small></span><span className="studio-readiness"><i style={{ width: `${readiness * (100 / 3)}%` }} /></span></div>
               <dl>
-                <div><dt>Business</dt><dd>{intake.businessName || 'Not clear yet'}</dd></div>
-                <div><dt>Offer</dt><dd>{intake.offer || 'Not clear yet'}</dd></div>
-                <div><dt>Audience</dt><dd>{intake.audience || 'Not clear yet'}</dd></div>
+                <div><dt>Project or subject</dt><dd>{intake.businessName || 'Not clear yet'}</dd></div>
+                <div><dt>What to produce</dt><dd>{intake.offer || 'Not clear yet'}</dd></div>
                 <div><dt>Goal</dt><dd>{intake.goal || 'Not clear yet'}</dd></div>
-                <div><dt>Where it will be used</dt><dd>{intake.channels.length ? intake.channels.join(', ') : 'Not clear yet'}</dd></div>
+                <div><dt>Audience</dt><dd>{intake.audience || 'Optional'}</dd></div>
+                <div><dt>Format or destination</dt><dd>{intake.channels.length ? intake.channels.join(', ') : 'AI360 can choose'}</dd></div>
               </dl>
               <details className="brief-edit">
                 <summary>Review or correct details</summary>
                 <div>
-                  <label>Business name<input value={intake.businessName} onChange={(event) => updateIntake('businessName', event.target.value)} /></label>
-                  <label>Offer<textarea rows={2} value={intake.offer} onChange={(event) => updateIntake('offer', event.target.value)} /></label>
+                  <label>Project or subject<input value={intake.businessName} onChange={(event) => updateIntake('businessName', event.target.value)} /></label>
+                  <label>What should it produce?<textarea rows={2} value={intake.offer} onChange={(event) => updateIntake('offer', event.target.value)} /></label>
                   <label>Audience<textarea rows={2} value={intake.audience} onChange={(event) => updateIntake('audience', event.target.value)} /></label>
                   <label>Goal<textarea rows={2} value={intake.goal} onChange={(event) => updateIntake('goal', event.target.value)} /></label>
-                  <fieldset><legend>Channels</legend>{CHANNELS.map((channel) => <button type="button" className={intake.channels.includes(channel) ? 'selected' : ''} onClick={() => toggleChannel(channel)} key={channel}>{channel}</button>)}</fieldset>
+                  <fieldset><legend>Formats or destinations</legend>{CHANNELS.map((channel) => <button type="button" className={intake.channels.includes(channel) ? 'selected' : ''} onClick={() => toggleChannel(channel)} key={channel}>{channel}</button>)}</fieldset>
                 </div>
               </details>
               {error ? <div className="studio-error">{error}</div> : null}
-              <button className="studio-create" onClick={createProject} disabled={busy || readiness < 5}>Build this project <span>→</span></button>
+              <button className="studio-create" onClick={createProject} disabled={busy || readiness < 3}>Create first outputs <span>→</span></button>
               <p className="studio-form-note">About {packCredits(selectedPack)} credits. You review the work before anything is published.</p>
             </aside>
           </div>
@@ -1564,7 +1558,7 @@ export function StudioWorkspace({
         <section className="active-project-hero">
           <div className="active-project-intro">
             <div className="project-inline-heading active-inline-heading">
-              <span className="workspace-eyebrow"><i /> {project.pack?.name || 'Project workspace'}</span>
+              <span className="workspace-eyebrow"><i /> Active project</span>
               <span className="inline-project-actions">
                 <button type="button" onClick={() => beginProject()}>New project</button>
               </span>
@@ -1573,18 +1567,18 @@ export function StudioWorkspace({
             <p>{project.campaign.objective || project.campaign.bigIdea || 'Your work, context and finished outcomes live together here.'}</p>
             <div className="active-project-meta">
               <span>Updated {new Date(project.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-              <span>{project.assets.length} outcome{project.assets.length === 1 ? '' : 's'}</span>
-              <span>{project.sources?.length || 0} research source{project.sources?.length === 1 ? '' : 's'}</span>
+              <span>{project.assets.length} work item{project.assets.length === 1 ? '' : 's'}</span>
+              <span>{project.sources?.length || 0} source{project.sources?.length === 1 ? '' : 's'}</span>
             </div>
           </div>
 
           <div className="project-next-action">
             <div>
               <span className="workspace-eyebrow">Best next step</span>
-              <h2>{nextReviewAsset ? `Review ${nextReviewAsset.title}` : 'Your work is ready to take with you'}</h2>
+              <h2>{nextReviewAsset ? `Open ${nextReviewAsset.title}` : 'Your outputs are ready to use'}</h2>
               <p>{nextReviewAsset
-                ? `${project.assets.length - approvedCount} ${project.assets.length - approvedCount === 1 ? 'outcome needs' : 'outcomes need'} your decision. Open the next one, improve anything that is off, then approve it.`
-                : 'Everything is approved. Download individual files or export the complete project.'}</p>
+                ? `${project.assets.length - approvedCount} ${project.assets.length - approvedCount === 1 ? 'item is' : 'items are'} still in draft. Read what matters, improve anything that is off, and mark useful work as ready.`
+                : 'Everything is marked ready. Download individual files or export the complete project.'}</p>
             </div>
             <button
               type="button"
@@ -1597,7 +1591,7 @@ export function StudioWorkspace({
                 }
               }}
             >
-              {nextReviewAsset ? 'Continue the work' : 'Open deliverables'} <span aria-hidden="true">→</span>
+              {nextReviewAsset ? 'Continue the work' : 'Open outputs'} <span aria-hidden="true">→</span>
             </button>
           </div>
 
@@ -1607,7 +1601,7 @@ export function StudioWorkspace({
             </div>
             <div>
               <b>{approvedCount} of {project.assets.length} ready</b>
-              <small>{approvedCount === project.assets.length ? 'Every outcome is approved.' : 'Approval marks work as ready to use.'}</small>
+              <small>{approvedCount === project.assets.length ? 'Every output is ready.' : 'Mark work ready when it is useful to you.'}</small>
             </div>
           </div>
         </section>
@@ -1679,7 +1673,7 @@ export function StudioWorkspace({
         <section className="project-stage-section" id="project-stage-brief" data-project-stage="brief">
           <div className="project-stage-heading">
             <span>01</span>
-            <div><b>Approved brief</b><small>The goal and context that guided this project.</small></div>
+            <div><b>Project overview</b><small>The outcome, context and current direction in one place.</small></div>
           </div>
           {/* The completion figure is already on the hero dial directly above.
               Repeating it here — and again as "x of y ready" beside the dial —
@@ -1689,9 +1683,6 @@ export function StudioWorkspace({
           <div><span>{project.pack ? 'Outcome' : 'Big idea'}</span><b>{project.campaign.bigIdea}</b></div>
           <div><span>{project.pack ? 'Build status' : 'Primary action'}</span><b>{project.run ? `${project.run.producedSections} deliverables · ${project.run.review?.passed ? 'quality checked' : project.run.status}` : project.campaign.callToAction}</b></div>
           </div>
-          {/* Knowledge is context for the brief, so it belongs on this screen
-              rather than floating between two unrelated stages. */}
-          <ProjectKnowledge projectId={project.id} signedIn={signedIn} />
         </section>
         ) : null}
 
@@ -1699,9 +1690,12 @@ export function StudioWorkspace({
         <section className="project-stage-section" id="project-stage-build" data-project-stage="build">
           <div className="project-stage-heading">
             <span>02</span>
-            <div><b>Build record</b><small>What AI360 completed and how the work was checked.</small></div>
-            <em>{project.run?.review?.passed ? 'Quality checked' : project.run?.status === 'partial' ? 'Needs attention' : 'Build complete'}</em>
+            <div><b>Files and context</b><small>Sources, notes and reference material available across this project.</small></div>
+            <em>Project memory</em>
           </div>
+          <ProjectKnowledge projectId={project.id} signedIn={signedIn} />
+          <details className="project-activity-details">
+            <summary>Creation activity</summary>
           <div className="project-build-record">
             {(project.run?.specialists ?? [
               { id: 'brand', label: 'Direction', working: 'The project direction was shaped from the brief.', status: 'complete' as const },
@@ -1715,6 +1709,7 @@ export function StudioWorkspace({
               </div>
             ))}
           </div>
+          </details>
         </section>
         ) : null}
 
@@ -1722,8 +1717,8 @@ export function StudioWorkspace({
         <section className="project-stage-section" id="project-stage-review" data-project-stage="review">
           <div className="project-stage-heading">
             <span>03</span>
-            <div><b>Review and approve</b><small>Open each item, request changes and approve only what is ready.</small></div>
-            <em>{approvedCount} of {project.assets.length} approved</em>
+            <div><b>Project work</b><small>Open a draft, read its structure, improve it and mark it ready when it is useful.</small></div>
+            <em>{approvedCount} of {project.assets.length} ready</em>
           </div>
 
         <div className={`project-layout${project.pack ? ' pack-project' : ''}`}>
@@ -1749,8 +1744,8 @@ export function StudioWorkspace({
 
           <section className="asset-board">
             <div className="asset-board-head">
-              <span><b>{project.pack ? 'Project deliverables' : 'Production checklist'}</b><small>Review, improve and approve each deliverable.</small></span>
-              <span>{project.assets.length} deliverables</span>
+              <span><b>Work in this project</b><small>Each item opens as a structured document, with actions kept close to the work.</small></span>
+              <span>{project.assets.length} item{project.assets.length === 1 ? '' : 's'}</span>
             </div>
             <div className="asset-list">
               {project.assets.map((asset) => {
@@ -1762,7 +1757,7 @@ export function StudioWorkspace({
                     <button className="asset-summary" onClick={() => setExpandedId(expanded ? '' : asset.id)}>
                       <span className="asset-icon">{ASSET_ICONS[asset.type] || 'Aa'}</span>
                       <span><b>{asset.title}</b><small>{asset.channel} · Version {asset.version ?? 1} · {asset.purpose}</small></span>
-                      <span className="asset-status">{asset.status === 'approved' ? '✓ Approved' : 'Draft'}</span>
+                      <span className="asset-status">{asset.status === 'approved' ? '✓ Ready' : 'Draft'}</span>
                       <span className="asset-chevron">{expanded ? '−' : '+'}</span>
                     </button>
                     {expanded && (
@@ -1774,7 +1769,13 @@ export function StudioWorkspace({
                             onChange={(event) => updateAsset(asset.id, { content: event.target.value, status: 'draft' })}
                           />
                         ) : (
-                          <ResponseContent content={asset.content} />
+                          <div className="project-document">
+                            <div className="project-document-head">
+                              <span><b>{asset.title}</b><small>{asset.purpose}</small></span>
+                              <span>{asset.content.length.toLocaleString()} characters</span>
+                            </div>
+                            <ResponseContent content={asset.content} />
+                          </div>
                         )}
                         {media ? (
                           <div className={`generated-media ${media.status}`}>
@@ -1846,7 +1847,7 @@ export function StudioWorkspace({
                             disabled={media?.status === 'generating' || media?.status === 'pending' || media?.status === 'in_progress'}
                             onClick={() => updateAsset(asset.id, { status: asset.status === 'approved' ? 'draft' : 'approved' })}
                           >
-                            {asset.status === 'approved' ? '✓ Approved' : 'Approve asset'}
+                            {asset.status === 'approved' ? '✓ Ready' : 'Mark ready'}
                           </button>
                           {canRender && asset.status === 'approved' ? (
                             <button
@@ -1914,7 +1915,7 @@ export function StudioWorkspace({
         <section className="project-stage-section project-deliverables" id="project-stage-deliverables" data-project-stage="deliverables">
           <div className="project-stage-heading">
             <span>04</span>
-            <div><b>Deliverables</b><small>Approved work, generated files and complete project exports.</small></div>
+            <div><b>Ready outputs</b><small>Finished work, generated files and complete project exports.</small></div>
             <em>{approvedAssets.length} ready</em>
           </div>
           {approvedAssets.length ? (
@@ -1925,7 +1926,7 @@ export function StudioWorkspace({
                   <article key={asset.id}>
                     <span className="asset-icon">{ASSET_ICONS[asset.type] || 'Aa'}</span>
                     <div><b>{asset.title}</b><small>{asset.channel} · Version {asset.version ?? 1}</small></div>
-                    <span className="deliverable-state">{media?.status === 'completed' ? 'File ready' : 'Approved'}</span>
+                    <span className="deliverable-state">{media?.status === 'completed' ? 'File ready' : 'Ready'}</span>
                     <div className="deliverable-actions">
                       <button onClick={() => { setExpandedId(asset.id); goToProjectStage('review') }}>Open</button>
                       <button onClick={() => navigator.clipboard.writeText(asset.content)}>Copy</button>
@@ -1937,13 +1938,13 @@ export function StudioWorkspace({
             </div>
           ) : (
             <div className="deliverables-empty">
-              <span>Nothing has been approved yet.</span>
-              <p>Review the work above. Approved items will collect here automatically, ready to copy, download or export.</p>
-              <button onClick={() => goToProjectStage('review')}>Go to review</button>
+              <span>No outputs are marked ready yet.</span>
+              <p>Open the work, improve what needs changing, then mark useful items ready. They will collect here automatically.</p>
+              <button onClick={() => goToProjectStage('review')}>Open work</button>
             </div>
           )}
           <div className="project-export-bar">
-            <span><b>Export the complete project</b><small>Take the brief, sources and every deliverable with you.</small></span>
+            <span><b>Export the complete project</b><small>Take the overview, sources and every output with you.</small></span>
             <div>
               <button onClick={() => exportPack('pdf')} disabled={Boolean(exporting)}>{exporting === 'pdf' ? 'Creating…' : 'Export PDF'}</button>
               <button onClick={() => exportPack('docx')} disabled={Boolean(exporting)}>{exporting === 'docx' ? 'Creating…' : 'Export Word'}</button>
@@ -2092,9 +2093,9 @@ function ProjectCard({ project, onOpen, archived = false }: { project: StudioPro
   const total = completion.total
   const status = archived ? 'archived' : total === 0 ? 'draft' : completion.percent === 100 ? 'ready' : 'progress'
   const statusLabel = archived ? 'Archived' : status === 'ready' ? 'Ready' : status === 'draft' ? 'Draft' : 'In progress'
-  const subtitle = project.pack?.name || project.intake.industry || project.intake.location || 'Project'
+  const subtitle = project.pack?.name || project.intake.industry || project.intake.location || 'Flexible workspace'
   const description = project.campaign.objective || project.intake.goal
-    || 'A new project. Add files, a brief and chats to bring it to life.'
+    || 'A home for the context, conversations, work and outputs that belong together.'
   const mark = (project.intake.businessName || project.campaign.name || 'Pr').slice(0, 2).toUpperCase()
   return (
     <button className={`project-card${archived ? ' archived' : ''}`} onClick={onOpen}>
@@ -2107,7 +2108,7 @@ function ProjectCard({ project, onOpen, archived = false }: { project: StudioPro
       <span className="project-card-meta">
         <i className="meta-chip">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M20 6 9 17l-5-5"/></svg>
-          {total} deliverable{total === 1 ? '' : 's'}
+          {total} work item{total === 1 ? '' : 's'}
         </i>
         <em className="meta-when">{archived ? 'Restore ↥' : relativeTime(project.updatedAt)}</em>
       </span>

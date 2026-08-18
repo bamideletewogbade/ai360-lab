@@ -50,7 +50,7 @@ const assetSchema = z.object({
   purpose: z.string().max(5_000),
   content: z.string().max(250_000),
   status: z.enum(['draft', 'approved']).optional(),
-  specialistId: z.enum(['researcher', 'brand', 'campaign', 'copy', 'namer', 'domains', 'ads', 'calendar', 'pitch']).optional(),
+  specialistId: z.enum(['researcher', 'analyst', 'planner', 'writer', 'editor', 'teacher', 'brand', 'campaign', 'copy', 'namer', 'domains', 'ads', 'calendar', 'pitch']).optional(),
   version: z.number().int().positive().optional(),
   versions: z.array(z.object({
     version: z.number().int().positive(),
@@ -60,10 +60,10 @@ const assetSchema = z.object({
   })).max(20).optional(),
 })
 
-const specialistIdSchema = z.enum(['researcher', 'brand', 'campaign', 'copy', 'namer', 'domains', 'ads', 'calendar', 'pitch'])
+const specialistIdSchema = z.enum(['researcher', 'analyst', 'planner', 'writer', 'editor', 'teacher', 'brand', 'campaign', 'copy', 'namer', 'domains', 'ads', 'calendar', 'pitch'])
 
 const projectPackSchema = z.object({
-  id: z.enum(['launch', 'marketing', 'ads', 'naming', 'pitch', 'calendar']),
+  id: z.enum(['research', 'plan', 'write', 'learn', 'decide', 'launch', 'marketing', 'ads', 'naming', 'pitch', 'calendar']),
   name: z.string().min(1).max(255),
   outcome: z.string().max(2_000),
   bestFor: z.string().max(2_000),

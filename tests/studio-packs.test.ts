@@ -20,6 +20,13 @@ test('Create offers more than one outcome, and each says who it is for', () => {
   assert.equal(isPackId('everything'), false)
 })
 
+test('the default project routes cover work beyond business and marketing', () => {
+  for (const id of ['research', 'plan', 'write', 'learn', 'decide'] as const) {
+    assert.ok(findPack(id), `${id} must be available to a general-purpose project`)
+  }
+  assert.equal(PACKS[0].id, 'research', 'the first route must not assume a business launch')
+})
+
 test('every specialist a pack names actually exists', () => {
   for (const pack of PACKS) {
     for (const id of packSpecialists(pack)) {

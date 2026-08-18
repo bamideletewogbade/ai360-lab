@@ -3,10 +3,10 @@
 import { ProjectKnowledge } from '@/components/ProjectKnowledge'
 
 const STARTING_POINTS = [
-  { label: 'Plan and launch', prompt: 'Help me plan and launch ' },
-  { label: 'Write something', prompt: 'Help me write and finish ' },
-  { label: 'Research a decision', prompt: 'Research the options and help me decide about ' },
-  { label: 'Build a campaign', prompt: 'Create a practical campaign for ' },
+  { label: 'Research a topic', prompt: 'Research this topic and give me a clear, sourced understanding: ' },
+  { label: 'Make a plan', prompt: 'Turn this goal into a practical plan with milestones and next steps: ' },
+  { label: 'Write something', prompt: 'Help me write and refine: ' },
+  { label: 'Learn or teach', prompt: 'Create a clear learning experience for: ' },
 ]
 
 /**
@@ -46,19 +46,19 @@ export function ProjectStart({
           className="project-start-form"
           onSubmit={(event) => { event.preventDefault(); if (ready) onSubmit() }}
         >
-          <label htmlFor="project-goal">What should this project produce?</label>
+          <label htmlFor="project-goal">What outcome are you working toward?</label>
           <textarea
             id="project-goal"
             rows={5}
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            placeholder="For example: turn my catering idea into a plan, price the offer, and prepare what I need to find my first customers."
+            placeholder="For example: research solar options for my school, compare the tradeoffs, and recommend a practical next step."
             autoFocus
           />
           <div className="project-start-actions">
             <span>A rough idea is enough. AI360 asks only what changes the work.</span>
             <button type="submit" disabled={!ready}>
-              {busy ? 'Starting…' : 'Start the work'} <span aria-hidden="true">→</span>
+              {busy ? 'Starting…' : 'Create first outputs'} <span aria-hidden="true">→</span>
             </button>
           </div>
         </form>

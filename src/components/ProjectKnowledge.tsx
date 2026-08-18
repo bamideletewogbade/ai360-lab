@@ -71,8 +71,8 @@ export function ProjectKnowledge({ projectId, signedIn }: { projectId: string; s
     <section className="project-knowledge" aria-label="Project knowledge base">
       <div className="knowledge-head">
         <div>
-          <b>Knowledge base</b>
-          <small>Add your brand notes, price lists or briefs. Everything you add here grounds the work in this project.</small>
+          <b>Project files</b>
+          <small>Add notes, data, source material or a brief. Everything here becomes shared context for this project.</small>
         </div>
         {signedIn ? <span className="knowledge-count">{files.length} file{files.length === 1 ? '' : 's'}</span> : null}
       </div>
@@ -94,7 +94,7 @@ export function ProjectKnowledge({ projectId, signedIn }: { projectId: string; s
             />
             <span className="knowledge-drop-icon" aria-hidden="true">＋</span>
             <span>{busy ? 'Adding…' : 'Drop a file or click to add'}</span>
-            <small>Text, Markdown, CSV or JSON, up to 2 MB. PDF and Word coming next.</small>
+            <small>Text, Markdown, CSV or JSON, up to 2 MB. PDF and Word support is next.</small>
           </label>
 
           {error ? <p className="knowledge-error">{error}</p> : null}
@@ -113,7 +113,7 @@ export function ProjectKnowledge({ projectId, signedIn }: { projectId: string; s
               ))}
             </ul>
           ) : (
-            <p className="knowledge-empty">No files yet. What you add becomes context the specialists can use.</p>
+            <p className="knowledge-empty">No files yet. Add only what is useful context for this project.</p>
           )}
         </>
       ) : (

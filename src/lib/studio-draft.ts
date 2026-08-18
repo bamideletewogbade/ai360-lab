@@ -33,7 +33,7 @@ const intakeSchema = z.object({
 export const studioDraftSchema = z.object({
   id: z.string().min(1).max(64),
   updatedAt: z.number().int().nonnegative(),
-  packId: z.enum(['launch', 'marketing', 'ads', 'naming', 'pitch', 'calendar']),
+  packId: z.enum(['research', 'plan', 'write', 'learn', 'decide', 'launch', 'marketing', 'ads', 'naming', 'pitch', 'calendar']),
   intake: intakeSchema,
   turns: z.array(z.object({
     id: z.string().min(1).max(64),

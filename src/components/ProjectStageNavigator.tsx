@@ -2,8 +2,6 @@
 
 import {
   PROJECT_STAGES,
-  projectStageStatuses,
-  type PipelineStage,
   type ProjectPhase,
   type ProjectStage,
 } from '@/lib/studio-stages'
@@ -24,38 +22,44 @@ export function ProjectStageNavigator({
   count?: number
   onSelect?: (stage: ProjectStage) => void
 }) {
-  const statuses = projectStageStatuses({ phase, approved, total })
+  if (phase !== 'project') {
+    const current = phase === 'briefing' ? 0 : 1
+    const steps = [
+      { label: 'Context', description: 'Clarify the goal' },
+      { label: 'Create', description: 'Build the first outputs' },
+      { label: 'Review', description: 'Keep, improve or export' },
+    ]
+    return (
+      <nav className="project-stage-nav project-creation-nav" aria-label="Project creation progress">
+        <ol>
+          {steps.map((step, index) => (
+            <li className={index < current ? 'complete' : index === current ? 'active' : 'upcoming'} key={step.label}>
+              <div className="stage-control" aria-current={index === current ? 'step' : undefined}>
+                <span className="stage-number" aria-hidden="true">{index < current ? '✓' : String(index + 1).padStart(2, '0')}</span>
+                <span className="stage-copy"><b>{step.label}</b><small>{step.description}</small></span>
+                <span className="stage-state">{index < current ? 'Done' : index === current ? 'Now' : 'Next'}</span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </nav>
+    )
+  }
 
   return (
-    <nav className="project-stage-nav" aria-label="Project stages">
+    <nav className="project-stage-nav project-tabs" aria-label="Project sections">
       <ol>
         {PROJECT_STAGES.map((stage) => {
-          // Only the pipeline stages are numbered, and they are numbered among
-          // themselves — Chats sits alongside them without taking a step number.
-          const step = PROJECT_STAGES.filter((entry) => entry.pipeline).findIndex((entry) => entry.id === stage.id)
-          const status = stage.pipeline ? statuses[stage.id as PipelineStage] : undefined
           const active = activeStage === stage.id
           const content = (
             <>
-              {status ? (
-                <span className="stage-number" aria-hidden="true">{status === 'complete' ? '✓' : String(step + 1).padStart(2, '0')}</span>
-              ) : (
-                <span className="stage-number stage-number-plain" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.9 9.9 0 0 1-2.8-.4L3 21l1.9-5a8.2 8.2 0 0 1-.9-3.7 8.4 8.4 0 0 1 8.4-8.4 8.4 8.4 0 0 1 8.6 8z" />
-                  </svg>
-                </span>
-              )}
               <span className="stage-copy"><b>{stage.label}</b><small>{stage.description}</small></span>
-              {status ? (
-                <span className="stage-state">{status === 'complete' ? 'Done' : status === 'current' ? 'Now' : 'Next'}</span>
-              ) : (
-                <span className="stage-state">{count > 0 ? `${count}` : 'New'}</span>
-              )}
+              {stage.id === 'chats' && count > 0 ? <span className="stage-state">{count}</span> : null}
+              {stage.id === 'deliverables' && total > 0 ? <span className="stage-state">{approved}/{total}</span> : null}
             </>
           )
           return (
-            <li className={`${status ?? 'ongoing'}${active ? ' active' : ''}`} key={stage.id}>
+            <li className={active ? 'active' : ''} key={stage.id}>
               {onSelect ? (
                 <button type="button" aria-current={active ? 'step' : undefined} onClick={() => onSelect(stage.id)}>{content}</button>
               ) : (

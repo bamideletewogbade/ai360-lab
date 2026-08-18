@@ -188,12 +188,12 @@ const MODE_META: Record<Experience, {
     intro: 'Set a goal and let AI360 research the web, inspect your materials, reason through the work and return a checked deliverable.',
   },
   studio: {
-    label: 'Create',
-    short: 'Ongoing business projects',
-    description: 'Projects and ready-to-use assets',
+    label: 'Projects',
+    short: 'Ongoing work, together',
+    description: 'Context, chats, work and outputs',
     eyebrow: 'Project workspace',
-    heading: <>Build the assets that<br />move your business.</>,
-    intro: 'Go from a brand brief to a coordinated launch pack, then review, refine, approve and produce each asset.',
+    heading: <>Keep lasting work<br />clear and moving.</>,
+    intro: 'Bring a goal, files, conversations, working drafts and ready outputs together. Use projects for research, planning, learning, writing, creative work or business.',
   },
   apps: {
     label: 'Apps & Outcomes',
