@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI360 — Management Brief</title>
+<style>
+  /* AI360 identity, from the tokens the product ships. */
+  :root {
+    --ink: #101112;
+    --charcoal: #292b2d;
+    --grey: #56595c;
+    --soft: #b8babd;
+    --paper: #f7f6f2;
+    --raised: #ffffff;
+    --band: #e9e5dc;
+    --line: rgba(86,89,92,.30);
+    --green: #436a55;
+    --green-deep: #315c45;
+    --green-bg: #e7efe9;
+    --gold: #d29f18;
+    --amber: #a6633e;
+    --amber-bg: #f6ece3;
+    --red: #8f3a34;
+    --red-bg: #f6e7e5;
+  }
+  @page { size: A4; margin: 16mm 15mm 17mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "DM Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 10.4pt; line-height: 1.55;
+  }
+  h1, h2, h3, .wordmark b, .stat b, .money b { font-family: "Plus Jakarta Sans", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
+
+  .cover { min-height: 248mm; display: flex; flex-direction: column; page-break-after: always; }
+  .wordmark { display: flex; align-items: baseline; gap: .5rem; font-weight: 800; letter-spacing: -.02em; }
+  .wordmark b { font-size: 14pt; }
+  .wordmark span { padding-left: .55rem; border-left: 1px solid var(--line); color: var(--grey); font-size: 8pt; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+  .cover h1 { margin: 30mm 0 0; font-size: 42pt; font-weight: 800; letter-spacing: -.045em; line-height: .99; }
+  .cover h1 em { color: var(--grey); font-style: normal; }
+  .cover .standfirst { max-width: 128mm; margin: 8mm 0 0; color: var(--grey); font-size: 13.5pt; line-height: 1.45; }
+  .pills { display: flex; flex-wrap: wrap; gap: 2.5mm; margin-top: 9mm; }
+  .pill { display: inline-block; padding: 1.4mm 3.4mm; border-radius: 8mm; font-size: 8.6pt; font-weight: 750; }
+  .ok { background: var(--green-bg); color: var(--green-deep); }
+  .warn { background: var(--amber-bg); color: var(--amber); }
+  .bad { background: var(--red-bg); color: var(--red); }
+  .neutral { background: var(--band); color: var(--charcoal); }
+  .cover .foot { margin-top: auto; padding-top: 5mm; border-top: 1px solid var(--ink); color: var(--grey); font-size: 9pt; }
+
+  h2 { margin: 0 0 4mm; padding-bottom: 2.5mm; border-bottom: 1px solid var(--ink); font-size: 18pt; font-weight: 750; letter-spacing: -.03em; }
+  h3 { margin: 7mm 0 3mm; font-size: 12pt; font-weight: 750; letter-spacing: -.02em; }
+  p { margin: 0 0 3mm; max-width: 172mm; }
+  .lede { color: var(--grey); font-size: 11.4pt; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.8mm; }
+  strong { font-weight: 700; }
+  section { page-break-inside: auto; }
+  .brk { page-break-before: always; }
+  .avoid { page-break-inside: avoid; }
+
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3.5mm; margin-bottom: 4mm; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-bottom: 4mm; }
+  .stat { padding: 4.5mm; border: 1px solid var(--line); background: var(--raised); }
+  .stat b { display: block; font-size: 22pt; font-weight: 800; letter-spacing: -.035em; line-height: 1.05; }
+  .stat span { display: block; margin-top: 1.5mm; color: var(--grey); font-size: 8.8pt; line-height: 1.4; }
+  .card { padding: 4.5mm; border: 1px solid var(--line); background: var(--raised); }
+  .card b { display: block; font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; font-size: 10.6pt; }
+  .card p { margin: 2mm 0 0; color: var(--grey); font-size: 9.4pt; }
+
+  table { width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 9.6pt; page-break-inside: avoid; }
+  th { padding: 2.6mm 3mm; border-bottom: 1px solid var(--ink); color: var(--grey); font-size: 7.8pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; text-align: left; }
+  td { padding: 2.6mm 3mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .ba { border: 1px solid var(--line); background: var(--raised); margin-bottom: 4mm; page-break-inside: avoid; }
+  .ba > b { display: block; padding: 3mm 4mm; border-bottom: 1px solid var(--line); background: var(--band); font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; font-size: 10.4pt; }
+  .ba > div { display: grid; grid-template-columns: 1fr 1fr; }
+  .ba .was, .ba .now { padding: 4mm; font-size: 9.4pt; }
+  .ba .was { border-right: 1px solid var(--line); }
+  .ba .lbl { display: block; margin-bottom: 1.8mm; font-size: 7.4pt; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+  .ba .was .lbl { color: var(--amber); }
+  .ba .now .lbl { color: var(--green-deep); }
+
+  .band { padding: 6mm; background: var(--ink); color: var(--paper); margin-bottom: 4mm; }
+  .band h3 { margin-top: 0; color: var(--paper); }
+  .band p { color: var(--soft); }
+  .band strong { color: var(--paper); }
+
+  .ask { padding: 5mm; border: 1px solid var(--ink); border-left: 3.5mm solid var(--gold); background: var(--raised); margin-bottom: 4mm; page-break-inside: avoid; }
+  .ask b { display: block; font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; font-size: 11pt; }
+  .ask p { margin: 2mm 0 0; color: var(--charcoal); font-size: 9.8pt; }
+
+  footer { margin-top: 9mm; padding-top: 3.5mm; border-top: 1px solid var(--line); color: var(--soft); font-size: 8.4pt; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="wordmark"><b>AI360</b><span>Management brief · 17 August 2026</span></div>
+  <h1>It works, it takes money,<br><em>and it now delivers.</em></h1>
+  <p class="standfirst">
+    Where AI360 stands this week, in plain terms: what has been earned, what it
+    costs to run, who is using it, and what went wrong and how we found it.
+  </p>
+  <div class="pills">
+    <span class="pill ok">Live at ai360.africa</span>
+    <span class="pill ok">Payments open</span>
+    <span class="pill ok">First payment collected</span>
+    <span class="pill ok">Video delivery proven</span>
+    <span class="pill ok">Receipts sending</span>
+  </div>
+  <div class="foot">
+    Prepared for management by the AI360 engineering team.<br>
+    A detailed technical companion document is available on request.
+  </div>
+</div>
+
+<section>
+  <h2>Where we are</h2>
+  <p class="lede">
+    Someone can arrive at AI360, create an account, do real work, choose a plan,
+    pay with a Ghanaian card or Mobile Money, and return to an active
+    subscription. We have proved that whole path with real money — and as of
+    today, a person can also walk away with a finished video.
+  </p>
+
+  <div class="grid3">
+    <div class="stat"><b>11</b><span>accounts created. None since 14 August.</span></div>
+    <div class="stat"><b>GH₵125</b><span>collected. One subscription active.</span></div>
+    <div class="stat"><b>Yes</b><span>video generation now works end to end.</span></div>
+  </div>
+
+  <div class="ask" style="border-left-color:var(--green)">
+    <b>Today's milestone: the studio delivered.</b>
+    <p>
+      A four-second cinematic clip was generated, saved and played back from a
+      real account. The same run confirmed the credit hold settled correctly at
+      the quoted price. This was the last unproven promise in the product, and it
+      is now closed.
+    </p>
+  </div>
+
+  <div class="band">
+    <h3>The one sentence that matters</h3>
+    <p>
+      <strong>The hard engineering is largely behind us; the demand question is
+      entirely ahead of us.</strong> The platform can take payment, measure usage,
+      recover from its own failures and account honestly for what it spends. It
+      has eleven accounts and one payment. Every remaining question is about
+      whether people in Accra will use it and pay for it — and none of those can
+      be answered by building more.
+    </p>
+  </div>
+</section>
+
+<section class="brk">
+  <h2>Money</h2>
+
+  <h3>What we earn on what we sell</h3>
+  <p>
+    Customers buy credits, either bundled in a monthly plan or as a one-off
+    top-up. A credit costs us about <strong>GH₵0.26</strong> in AI and processing
+    charges. Here is what one sells for.
+  </p>
+  <table>
+    <thead><tr><th>What the customer buys</th><th class="n">Price</th><th class="n">Credits</th><th class="n">Cost to us per credit</th><th class="n">Real cost to us</th><th class="n">We keep</th></tr></thead>
+    <tbody>
+      <tr><td>Everyday plan (monthly)</td><td class="n">GH₵125</td><td class="n">120</td><td class="n">GH₵0.26</td><td class="n">GH₵31.20</td><td class="n">75%</td></tr>
+      <tr><td>Builder plan (monthly)</td><td class="n">GH₵350</td><td class="n">400</td><td class="n">GH₵0.26</td><td class="n">GH₵104.00</td><td class="n">70%</td></tr>
+      <tr><td>Top-ups (one-off)</td><td class="n">GH₵50–200</td><td class="n">40–185</td><td class="n">GH₵0.26</td><td class="n">GH₵10.40–48.10</td><td class="n">76–79%</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Even if a subscriber used every credit their plan includes, an Everyday
+    subscription costs us about <strong>GH₵31 against GH₵125 collected</strong>.
+    Top-ups are deliberately dearer per credit than a plan, so nobody is ever
+    better off avoiding a subscription.
+  </p>
+
+  <h3>What we actually spend</h3>
+  <p>
+    Total AI cost for everything the product has ever done is about
+    <strong>GH₵21</strong> — roughly $1.40. That figure is now trustworthy, which
+    it was not last week: our own records had overstated it fifty-fold because a
+    background check was counting the same job over and over. Correcting it
+    matters, because that number is what pricing decisions are made from.
+  </p>
+
+  <div class="ba">
+    <b>Video pricing: we were quietly charging everyone the top rate</b>
+    <div>
+      <div class="was"><span class="lbl">Before</span>
+        Every video used the most expensive engine, at about GH₵20 of credits per
+        four-second clip. A cheaper engine was available and simply never offered
+        to customers.
+      </div>
+      <div class="now"><span class="lbl">Now</span>
+        Customers choose, and <strong>each option shows its own price before they
+        pick it</strong> — the number was previously invisible until the
+        confirmation step. Clips can also be 4, 6 or 8 seconds, priced by the
+        second. A quick 8-second clip costs less than a 4-second best-quality one.
+        We keep a healthy margin on every option.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Users and adoption</h2>
+  <p class="lede">
+    Eleven accounts, all from our own circle, and no new ones since 14 August.
+    That is not a fault in the product — we simply have not started telling
+    anyone about it.
+  </p>
+
+  <table>
+    <thead><tr><th>Step</th><th>Where we are</th><th>Read</th></tr></thead>
+    <tbody>
+      <tr><td>People create an account</td><td>11 accounts, 9 workspaces</td><td><span class="pill ok">working</span></td></tr>
+      <tr><td>They ask something real</td><td>15 conversations, 44 messages</td><td><span class="pill ok">working</span></td></tr>
+      <tr><td>They leave with a finished file</td><td>Proven today</td><td><span class="pill ok">now working</span></td></tr>
+      <tr><td>They pay</td><td>1 of 11</td><td><span class="pill neutral">one controlled test</span></td></tr>
+      <tr><td>They use the research assistant</td><td>Nobody has, once</td><td><span class="pill warn">untested feature</span></td></tr>
+      <tr><td>They come back</td><td>We do not measure this yet</td><td><span class="pill warn">measurement gap</span></td></tr>
+    </tbody>
+  </table>
+  <p>
+    Two honest conclusions. First, the hole in the middle of the funnel is now
+    closed — people can take a finished video away, which until today they could
+    not. Second, we still cannot say whether anyone comes back, because we do not
+    measure it. That is being added, and it is the next thing worth knowing.
+  </p>
+</section>
+
+<section class="brk">
+  <h2>What went wrong, and how we found it</h2>
+  <p class="lede">
+    Three faults surfaced this week. All three were the kind that look fine from
+    the outside, which is the kind worth taking seriously.
+  </p>
+
+  <div class="ba">
+    <b>1 · Finished work was being thrown away</b>
+    <div>
+      <div class="was"><span class="lbl">What happened</span>
+        Every image and video the product ever made — seven attempts — was created
+        correctly and then lost, because the place finished files are saved was
+        never switched on for the live server. Videos sat on "Rendering…" forever.
+        Images looked like they worked because they display from a temporary copy
+        that is never kept.
+      </div>
+      <div class="now"><span class="lbl">What we did</span>
+        Found the cause in production's own records rather than by guesswork. The
+        setting is now in place, the lost clip was recovered and delivered, and a
+        fresh render has since been generated and saved successfully. The product
+        also now fails honestly: if finished work cannot be saved, the person is
+        told and their credits are returned rather than being left waiting.
+      </div>
+    </div>
+  </div>
+
+  <div class="ba">
+    <b>2 · The homepage promised what a visitor could not have</b>
+    <div>
+      <div class="was"><span class="lbl">What happened</span>
+        Three of the four things the homepage invited a new visitor to try required
+        an account. Clicking the main button produced an error message with a
+        reference code as their very first experience of AI360 — while the page
+        said "Start free, no card".
+      </div>
+      <div class="now"><span class="lbl">What we did</span>
+        The free options now lead, and anything needing an account says so before
+        it is clicked. Clicking the button with an empty box now answers a real
+        question instead of doing nothing useful.
+      </div>
+    </div>
+  </div>
+
+  <div class="ba">
+    <b>3 · Everything was a quarter too small to read</b>
+    <div>
+      <div class="was"><span class="lbl">What happened</span>
+        Nearly half the text on the site was smaller than 12 pixels, some as small
+        as 7. The product looked noticeably better when zoomed in — because zoom
+        was compensating for a real design defect.
+      </div>
+      <div class="now"><span class="lbl">What we did</span>
+        Every text size raised on a measured curve, with a minimum floor. Checked
+        at five screen sizes from phone to large desktop. Reading lines are now a
+        comfortable length, and the phone keyboard no longer zooms the page.
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<footer>
+  AI360 · Accra Innovation Centre · Management brief, 17 August 2026 ·
+  All figures read directly from the live system on the date of writing.
+</footer>
+
+</body>
+</html>

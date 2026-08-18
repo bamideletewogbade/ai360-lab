@@ -112,7 +112,7 @@ export const CREDIT_GUIDE = [
   { task: 'Current web research or file review', credits: '2 to 4 credits' },
   { task: 'Multi-step agent workflow', credits: '3 to 8 credits' },
   { task: 'Generated image', credits: '3 to 6 credits' },
-  { task: 'Four-second promotional video', credits: '6 to 24 credits' },
+  { task: 'Four-second promotional video', credits: '6 to 48 credits' },
 ] as const
 
 export function findBillingPlan(slug: string) {

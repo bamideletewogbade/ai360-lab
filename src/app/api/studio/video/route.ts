@@ -15,8 +15,8 @@ import { openCreditGate } from "@/lib/billing/credit-gate";
 import { settleReservation } from "@/lib/billing/credit-repository";
 import {
   estimateCredits,
-  FEATURE_WEIGHTS,
   usdBudgetForCredits,
+  videoCeilingCredits,
 } from "@/lib/billing/credits";
 import {
   defaultMediaIntent,
@@ -56,7 +56,7 @@ export const dynamic = "force-dynamic";
 const DELIVERY_DEADLINE_MS = 30 * 60 * 1_000;
 
 type VideoRequest = {
-  action?: "quote" | "submit" | "status";
+  action?: "quote" | "submit" | "status" | "tiers";
   token?: string;
   jobId?: string;
   projectId?: string;
@@ -111,7 +111,9 @@ async function currentQuote(intent: MediaIntent) {
   const selection = selectVideoModel({
     catalogue,
     tier: intent.qualityTier,
-    budgetUsd: usdBudgetForCredits(FEATURE_WEIGHTS.video.ceiling),
+    // Scales with length, so an eight-second clip is not judged against a
+    // four-second budget and refused for being twice as long.
+    budgetUsd: usdBudgetForCredits(videoCeilingCredits(format.durationSeconds)),
     format,
   });
   if (!isVideoSelection(selection)) {
@@ -292,7 +294,7 @@ export async function POST(request: Request) {
   }
 
   const rateScope =
-    body.action === "quote"
+    body.action === "quote" || body.action === "tiers"
       ? "studio_video_quote"
       : body.action === "status"
         ? "studio_video_status"
@@ -349,6 +351,64 @@ export async function POST(request: Request) {
   }
 
   try {
+    // The price of each quality option, from one catalogue read.
+    //
+    // The studio used to label the options "Cheapest" and "Sharper motion" with
+    // no figures, so the only number on screen was the published range and a
+    // person could pick an engine nearly three times dearer without seeing it.
+    // Every price here is computed from the live provider catalogue, so the card
+    // a customer reads and the amount they are charged cannot drift apart.
+    if (body.action === "tiers") {
+      const intent = requestedIntent(body);
+      const format = {
+        durationSeconds: intent.durationSeconds || 4,
+        resolution: intent.resolution,
+        aspectRatio: intent.aspectRatio,
+        withAudio: intent.audio !== "off",
+      };
+      const response = await fetch(
+        "https://openrouter.ai/api/v1/videos/models",
+        { signal: AbortSignal.timeout(15_000), cache: "no-store" },
+      );
+      if (!response.ok)
+        throw new Error(`Video model catalogue returned ${response.status}`);
+      const catalogue =
+        ((await response.json()) as { data?: VideoModelEntry[] }).data || [];
+      const budgetUsd = usdBudgetForCredits(
+        videoCeilingCredits(format.durationSeconds),
+      );
+      const tiers = (["draft", "standard", "premium"] as const).map((tier) => {
+        const selection = selectVideoModel({
+          catalogue,
+          tier,
+          budgetUsd,
+          format,
+        });
+        if (!isVideoSelection(selection)) {
+          return { tier, available: false as const };
+        }
+        return {
+          tier,
+          available: true as const,
+          model: selection.model,
+          costUsd: selection.costUsd,
+          credits: estimateCredits("video", { quotedUsd: selection.costUsd })
+            .reserve,
+        };
+      });
+      log.finish(200, { outcome: "tiers" });
+      return Response.json(
+        {
+          tiers,
+          duration: format.durationSeconds,
+          resolution: format.resolution,
+          aspectRatio: format.aspectRatio,
+          requestId: log.requestId,
+        },
+        { headers: log.headers({ "Cache-Control": "no-store" }) },
+      );
+    }
+
     if (body.action === "quote") {
       const intent = requestedIntent(body);
       const quote = await currentQuote(intent);

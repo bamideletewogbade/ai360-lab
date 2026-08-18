@@ -9,6 +9,7 @@
  */
 
 import { emailSettings } from '@/lib/email/config'
+import { CREDIT_TOP_UPS, FREE_MONTHLY_CREDITS } from '@/lib/billing/catalog'
 
 export type RenderedEmail = { subject: string; html: string; text: string }
 
@@ -29,6 +30,12 @@ function firstName(name: string | null | undefined) {
 function ghs(amountGhs: number) {
   const value = Number.isFinite(amountGhs) ? amountGhs : 0
   return `GH₵${value.toFixed(2)}`
+}
+
+/** Top-up sizes, read from the catalogue so email never quotes a stale figure. */
+function topUpRange() {
+  const sizes = CREDIT_TOP_UPS.map((topUp) => topUp.credits)
+  return `${sizes[0]}–${sizes[sizes.length - 1]}`
 }
 
 /**
@@ -83,14 +90,15 @@ export function welcomeEmail(data: { name?: string | null }): RenderedEmail {
     heading: `Welcome, ${name}.`,
     bodyHtml:
       paragraph('Your workspace is ready. Everything you create — conversations, projects and files — now stays with you across every device.') +
-      paragraph('You start on the free Explorer plan with monthly credits to try research, documents and voice.'),
+      paragraph(`You are on the free Explorer plan: <strong>${FREE_MONTHLY_CREDITS} free credits every month</strong>, no card. Enough to research something properly, review a document, or make your first image.`) +
+      paragraph('Everyday chat is included and does not use credits at all.'),
     cta: { label: 'Open your workspace', href: `${appUrl}/app` },
   })
   const text = `Welcome, ${name}.
 
 Your AI360 workspace is ready. Your conversations, projects and files now stay with you across every device.
 
-You start on the free Explorer plan with monthly credits to try research, documents and voice.
+You are on the free Explorer plan: ${FREE_MONTHLY_CREDITS} free credits every month, no card. Enough to research something properly, review a document, or make your first image. Everyday chat is included and does not use credits at all.
 
 Open your workspace: ${appUrl}/app`
   return { subject, html, text }
@@ -118,9 +126,15 @@ export function paymentReceiptEmail(data: {
         <tr><td style="padding:12px 16px;color:#56595c;">Plan</td><td style="padding:12px 16px;text-align:right;font-weight:700;">${plan}</td></tr>
         <tr><td style="padding:12px 16px;color:#56595c;border-top:1px solid #efece4;">Amount</td><td style="padding:12px 16px;text-align:right;font-weight:700;border-top:1px solid #efece4;">${escapeHtml(ghs(data.amountGhs))}</td></tr>
         <tr><td style="padding:12px 16px;color:#56595c;border-top:1px solid #efece4;">Credits added</td><td style="padding:12px 16px;text-align:right;font-weight:700;border-top:1px solid #efece4;">${escapeHtml(String(Math.max(0, Math.floor(data.credits))))}</td></tr>
+        <tr><td style="padding:12px 16px;color:#56595c;border-top:1px solid #efece4;">Access</td><td style="padding:12px 16px;text-align:right;font-weight:700;border-top:1px solid #efece4;">One month</td></tr>
+        <tr><td style="padding:12px 16px;color:#56595c;border-top:1px solid #efece4;">Renewal</td><td style="padding:12px 16px;text-align:right;font-weight:700;border-top:1px solid #efece4;">Never automatic</td></tr>
         <tr><td style="padding:12px 16px;color:#56595c;border-top:1px solid #efece4;">Reference</td><td style="padding:12px 16px;text-align:right;font-family:monospace;font-size:13px;border-top:1px solid #efece4;">${escapeHtml(data.orderId.slice(0, 64))}</td></tr>
       </table>
     </td></tr>` +
+    // The access period and the no-renewal promise are stated on the pricing
+    // page and in the terms; a receipt that omits them is the one document the
+    // customer keeps, missing the term that matters most to them.
+    paragraph('This buys one month of access. Nothing renews automatically — you will only be charged again if you choose to pay again.') +
     paragraph('Keep this email as your receipt.')
   const html = layout({ heading: 'Payment confirmed', bodyHtml: rows, cta: { label: 'Go to your workspace', href: `${appUrl}/app` } })
   const text = `Payment confirmed
@@ -130,7 +144,11 @@ Thanks, ${name}. Your ${data.planName} plan is active.
 Plan: ${data.planName}
 Amount: ${ghs(data.amountGhs)}
 Credits added: ${Math.max(0, Math.floor(data.credits))}
+Access: One month
+Renewal: Never automatic
 Reference: ${data.orderId.slice(0, 64)}
+
+This buys one month of access. Nothing renews automatically — you will only be charged again if you choose to pay again.
 
 Keep this email as your receipt.
 Workspace: ${appUrl}/app`
@@ -154,14 +172,17 @@ export function lowCreditEmail(data: {
     heading: 'Running low on credits',
     bodyHtml:
       paragraph(`Hi ${name}, you have <strong>${available} credit${available === 1 ? '' : 's'}</strong> left on your ${escapeHtml(data.planName.slice(0, 60))} plan.`) +
-      paragraph('AI360 will not create a surprise overage charge. You can move to a larger plan, or buy another month of access, whenever you are ready.'),
+      paragraph(`Nothing stops working and there is no surprise bill. When you need more, a one-time top-up adds ${topUpRange()} credits and never expires, or a larger plan gives you more credits for your money each month.`) +
+      paragraph('Everyday chat carries on as normal — it does not use credits.'),
     cta: { label: 'See pricing', href: `${appUrl}/pricing` },
   })
   const text = `Running low on credits
 
 Hi ${name}, you have ${available} credit${available === 1 ? '' : 's'} left on your ${data.planName} plan.
 
-AI360 will not create a surprise overage charge. To compare plans: ${appUrl}/pricing`
+Nothing stops working and there is no surprise bill. When you need more, a one-time top-up adds ${topUpRange()} credits and never expires, or a larger plan gives you more credits for your money each month. Everyday chat carries on as normal — it does not use credits.
+
+Compare plans: ${appUrl}/pricing`
   return { subject, html, text }
 }
 

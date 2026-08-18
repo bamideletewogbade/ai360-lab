@@ -22,6 +22,7 @@ import { rateLimit, rejectLargeRequest, resolveRequester } from '@/lib/guardrail
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { recordUsageEventSafe } from '@/lib/usage'
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
+import { buildXlsx, sheetsFromBlocks } from '@/lib/export/xlsx'
 
 export const runtime = 'nodejs'
 
@@ -530,6 +531,33 @@ export async function POST(request: Request) {
         headers: log.headers({
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="${safeFilename(title, 'pdf')}"`,
+          'Cache-Control': 'no-store',
+        }),
+      })
+    }
+    if (body.format === 'xlsx') {
+      const sheets = sheetsFromBlocks(blocks)
+      // A spreadsheet with no table in it would be an empty grid. Saying so is
+      // more useful than handing back a file the person then has to open to
+      // discover it holds nothing.
+      if (!sheets.length) {
+        log.finish(422, { outcome: 'no_tabular_content' })
+        return Response.json({
+          error: 'There is no table in this content to put in a spreadsheet. Ask for the information as a table, then export it.',
+          requestId: log.requestId,
+        }, { status: 422, headers: log.headers() })
+      }
+      const file = await buildXlsx(sheets)
+      await recordUsageEventSafe({
+        requestId: log.requestId, route: '/api/export', feature: 'export.xlsx',
+        latencyMs: Math.round(performance.now() - startedAt), outcome: 'success',
+        metadata: { inputCharacters: content.length, outputBytes: file.byteLength, sheetCount: sheets.length },
+      })
+      log.finish(200, { outcome: 'success', format: 'xlsx', outputBytes: file.byteLength, sheetCount: sheets.length })
+      return new Response(new Uint8Array(file), {
+        headers: log.headers({
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="${safeFilename(title, 'xlsx')}"`,
           'Cache-Control': 'no-store',
         }),
       })

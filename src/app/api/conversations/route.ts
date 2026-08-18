@@ -26,6 +26,8 @@ const conversationSchema = z.object({
   updatedAt: z.number().int().nonnegative(),
   model: z.enum(['auto', 'gemini', 'claude', 'kimi', 'gpt']),
   experience: z.enum(['chat', 'agent', 'studio']).optional(),
+  /** Set when this conversation lives inside a project. */
+  projectId: z.string().min(1).max(64).nullish(),
 })
 
 const syncSchema = z.object({ conversations: z.array(conversationSchema).max(100) })
@@ -35,6 +37,7 @@ type ConversationRow = {
   title: string
   model: string
   experience: 'chat' | 'agent' | 'studio'
+  project_id: string | null
   client_updated_at: string
 }
 
@@ -60,7 +63,7 @@ export async function GET() {
     const result = await sql.begin(async (tx) => {
       await ensureWorkspaceRecord(tx, context)
       const conversationRows = await tx<ConversationRow[]>`
-        select id, title, model, experience, client_updated_at
+        select id, title, model, experience, project_id, client_updated_at
           from public.lab_conversations
          where workspace_key = ${context.workspace.key}
          order by client_updated_at desc limit 100`
@@ -81,6 +84,7 @@ export async function GET() {
         title: row.title,
         model: row.model,
         experience: row.experience,
+        projectId: row.project_id ?? undefined,
         updatedAt: Number(row.client_updated_at),
         messages: (grouped.get(row.id) || []).map(({ id, role, content, metadata }) => ({
           id, role, content, ...(metadata ?? {}),
@@ -118,15 +122,26 @@ export async function PUT(request: Request) {
       }
 
       for (const conversation of parsed.data.conversations) {
+        // The project link is resolved through a lookup rather than inserted
+        // directly. A client can legitimately hold a project chat before that
+        // project has synced, and a raw value would then violate the foreign
+        // key and roll back this whole transaction — losing every conversation
+        // in the batch. Resolving to null instead keeps the conversation and
+        // only drops the link, which the next sync repairs.
         await tx`
           insert into public.lab_conversations
-            (id, owner_id, workspace_key, title, model, experience, client_updated_at)
+            (id, owner_id, workspace_key, title, model, experience, project_id, client_updated_at)
           values (${conversation.id}, ${context.userId}, ${context.workspace.key}, ${conversation.title},
-                  ${conversation.model}, ${conversation.experience || 'chat'}, ${conversation.updatedAt})
+                  ${conversation.model}, ${conversation.experience || 'chat'},
+                  (select project.id from public.lab_studio_projects project
+                    where project.workspace_key = ${context.workspace.key}
+                      and project.id = ${conversation.projectId ?? null}),
+                  ${conversation.updatedAt})
           on conflict (workspace_key, id) do update set
             title = excluded.title,
             model = excluded.model,
             experience = excluded.experience,
+            project_id = excluded.project_id,
             client_updated_at = excluded.client_updated_at,
             updated_at = now()`
         await tx`

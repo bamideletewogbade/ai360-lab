@@ -149,9 +149,7 @@
 /* Says what is behind the account before it is clicked, not after. */
 .landing-starters .starter-gate { margin-left: 2px; padding: 2px 7px; border-radius: 999px; background: rgba(66,106,84,.12); color: #426a54; font-size: 0.8125rem; font-style: normal; font-weight: 800; letter-spacing: .02em; }
 .landing-starters button:hover .starter-gate, .landing-starters button.selected .starter-gate { background: rgba(247,246,242,.16); color: var(--warm-white); }
-/* Capped to the same measure as the lead and the composer. Without a limit this
-   line ran to 90 characters at tablet width, well past comfortable reading. */
-.landing-guest-note { display: flex; align-items: center; gap: 7px; max-width: 610px; margin: 13px 0 0; color: var(--institutional-grey); font-size: 0.9375rem; line-height: 1.55; }
+.landing-guest-note { display: flex; align-items: center; gap: 7px; margin: 13px 0 0; color: var(--institutional-grey); font-size: 0.9375rem; }
 .landing-guest-note i { width: 6px; height: 6px; border-radius: 50%; background: #426a54; box-shadow: 0 0 0 4px rgba(66,106,84,.1); }
 .landing-guest-note a { color: var(--ai-black); font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
 

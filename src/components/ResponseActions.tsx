@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  downloadDocument, hasTabularContent, EXPORT_LABELS, type ExportFormat,
+} from '@/lib/export/download'
 
 type ResponseActionsProps = {
   content: string
@@ -10,13 +13,35 @@ type ResponseActionsProps = {
   onListen: () => void
   onRetry: () => void
   feedback: ReactNode
+  /** Names the downloaded file; falls back to a generic document name. */
+  title?: string
 }
 
-export function ResponseActions({ content, canListen, canRetry, busy, onListen, onRetry, feedback }: ResponseActionsProps) {
+export function ResponseActions({ content, canListen, canRetry, busy, onListen, onRetry, feedback, title }: ResponseActionsProps) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [saving, setSaving] = useState<ExportFormat | ''>('')
+  const [saveError, setSaveError] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+
+  // A spreadsheet only makes sense when the answer actually contains a table.
+  const formats: ExportFormat[] = hasTabularContent(content)
+    ? ['pdf', 'docx', 'xlsx']
+    : ['pdf', 'docx']
+
+  async function saveAs(format: ExportFormat) {
+    setSaving(format)
+    setSaveError('')
+    try {
+      await downloadDocument({ title: title || 'AI360 answer', content, format })
+      setOpen(false)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'The document could not be created.')
+    } finally {
+      setSaving('')
+    }
+  }
 
   useEffect(() => {
     if (!open) return
@@ -71,6 +96,23 @@ export function ResponseActions({ content, canListen, canRetry, busy, onListen, 
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 5v6h-6" /></svg>
           <span>Try again</span>
         </button> : null}
+
+        <div className="response-actions-group" role="group" aria-label="Save this answer as a document">
+          <span className="response-actions-label">Save as</span>
+          {formats.map((format) => (
+            <button
+              key={format}
+              type="button"
+              onClick={() => void saveAs(format)}
+              disabled={Boolean(saving)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /><path d="M12 15V3" /></svg>
+              <span>{saving === format ? 'Creating…' : EXPORT_LABELS[format]}</span>
+            </button>
+          ))}
+        </div>
+        {saveError ? <p className="response-actions-error" role="alert">{saveError}</p> : null}
+
         <div className="response-feedback-slot" onClick={() => setOpen(false)}>{feedback}</div>
       </div>
     </div>

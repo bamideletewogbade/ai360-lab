@@ -123,17 +123,43 @@ export const FEATURE_WEIGHTS: Record<CreditFeature, { floor: number; reserve: nu
   // only the fallback for an unquoted estimate. The floor is set for the
   // cheapest engine Studio offers (a 4s draft clip costs about 7 credits), not
   // for the dearest: a floor of 12 charged a draft clip nearly as much as the
-  // best one and erased the reason to choose it. The ceiling is what the model
-  // budget is derived from, and carries deliberate headroom — at 20 credits the
-  // standard engine sat 7% below the limit, so a small provider price rise
-  // would have made video unsellable outright.
-  video: { floor: 6, reserve: 16, ceiling: 24 },
+  // best one and erased the reason to choose it.
+  //
+  // The ceiling is what the model budget is derived from, so it decides which
+  // engines can be offered at all. At 24 credits the premium engine (veo-3.1, a
+  // 47-credit clip) was excluded, which made the premium tier a fiction that
+  // silently resolved to the standard engine. At 48 it is real, and the
+  // quote-driven reserve means nobody is charged the premium rate unless they
+  // choose it and accept the price first.
+  video: { floor: 6, reserve: 16, ceiling: 48 },
   voice: { floor: 1, reserve: 1, ceiling: 2 },
   export: { floor: 0, reserve: 0, ceiling: 0 },
 }
 
 export function isCreditFeature(value: unknown): value is CreditFeature {
   return typeof value === 'string' && value in FEATURE_WEIGHTS
+}
+
+/**
+ * What a second of video may cost.
+ *
+ * A flat per-render ceiling cannot describe video honestly: the same engine
+ * charges by the second, so one cap either refuses an eight-second clip outright
+ * or leaves a four-second one able to spend twice what it should. Twelve credits
+ * a second is exactly today's four-second ceiling of 48, so nothing about a
+ * short clip changes; longer clips simply cost proportionally more.
+ *
+ * The promise that nothing costs more than the person saw is kept by the quote
+ * they accept before the render starts, not by this number. This decides which
+ * engines may be offered for a given length.
+ */
+export const VIDEO_CREDITS_PER_SECOND = 12
+
+export function videoCeilingCredits(durationSeconds?: number) {
+  const seconds = Number.isFinite(durationSeconds) && (durationSeconds as number) > 0
+    ? (durationSeconds as number)
+    : 4
+  return Math.max(FEATURE_WEIGHTS.video.floor, Math.round(VIDEO_CREDITS_PER_SECOND * seconds))
 }
 
 /** Async work keeps its hold long enough to finish in a later polling request. */

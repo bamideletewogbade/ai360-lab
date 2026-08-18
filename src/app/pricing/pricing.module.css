@@ -115,9 +115,7 @@
 .templates{min-height:86px;margin-top:auto}.templates small{color:var(--grey);font-size: 14px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}.featured .templates small{color:var(--on-ink-muted)}.templates p{margin:7px 0 0;color:var(--grey);font-size: 14px;line-height:1.55}
 .plan.featured li,.plan.featured .templates p{color:var(--on-ink-muted)}
 .choose,.start{min-height:48px;margin-top:18px;border:1px solid var(--ink);font-size: 15px;font-weight:800}.choose{background:var(--ink);color:var(--on-ink)}.featured .choose{border-color:var(--on-ink);background:var(--on-ink);color:var(--ink)}.start{background:transparent;color:var(--ink)}
-/* Measured in `ch` so the line length follows the type size instead of being
-   fixed in pixels: at 820px this small note ran to 94 characters a line. */
-.planNote{max-width:64ch;margin:22px auto 0;color:var(--grey);font-size: 14px;line-height:1.65;text-align:center}
+.planNote{max-width:820px;margin:22px auto 0;color:var(--grey);font-size: 14px;line-height:1.65;text-align:center}
 /* Dark by design in both themes. */
 .creditSection { display:grid; grid-template-columns:.85fr 1.15fr; gap:70px; padding:clamp(78px,9vw,132px) clamp(24px,7vw,112px); background:var(--panel); color:var(--panel-ink); }
 .creditIntro>p:last-child,.paymentCopy>p:last-child{max-width:600px;color:var(--panel-muted);font-size: 17px;line-height:1.7}.creditIntro>p:first-child{color:var(--panel-muted)}.creditIntro>p:first-child span{color:var(--panel-ink)}

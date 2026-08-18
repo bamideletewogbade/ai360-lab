@@ -25,6 +25,9 @@ import { scopedStorageKey } from '@/lib/workspace'
 import { newerDraft, studioDraftSchema, type StudioDraft, type StudioBriefTurn } from '@/lib/studio-draft'
 import { currentProjectStage, type ProjectStage } from '@/lib/studio-stages'
 import {
+  downloadDocument, hasTabularContent, EXPORT_LABELS, type ExportFormat,
+} from '@/lib/export/download'
+import {
   defaultMediaIntent,
   MEDIA_CHANNELS,
   mediaIntentSummary,
@@ -236,12 +239,26 @@ function packSpecialistNumber(pack: Pack, id: SpecialistId) {
   return pack.stages.flatMap((stage) => stage.specialists).indexOf(id) + 1
 }
 
+/** One conversation belonging to a project, as listed on the Chats screen. */
+export type ProjectConversation = {
+  id: string
+  title: string
+  projectId: string
+  updatedAt: number
+  messageCount: number
+}
+
 export function StudioWorkspace({
   initialBrief = '',
   signedIn = false,
   workspaceScope = 'guest',
   createSignal = 0,
   homeSignal = 0,
+  openProjectId = '',
+  openProjectSignal = 0,
+  conversations = [],
+  onOpenConversation,
+  onStartConversation,
 }: {
   initialBrief?: string
   signedIn?: boolean
@@ -249,6 +266,21 @@ export function StudioWorkspace({
   createSignal?: number
   /** Bumped when the sidebar "Projects" entry is pressed, to return to the list. */
   homeSignal?: number
+  /**
+   * Open one specific project, named rather than guessed. Returning from a
+   * project chat must land in the project you left; the persisted view alone
+   * restored whichever project happened to be first in the list.
+   */
+  openProjectId?: string
+  openProjectSignal?: number
+  /**
+   * Project chats live in the workspace's conversation store, not here — they
+   * stream, sync and recover exactly like every other conversation. This view
+   * only lists them and asks to open or start one.
+   */
+  conversations?: ProjectConversation[]
+  onOpenConversation?: (conversationId: string) => void
+  onStartConversation?: (projectId: string, projectName: string) => void
 }) {
   const [hydrated, setHydrated] = useState(false)
   const [intake, setIntake] = useState<Intake>(EMPTY_INTAKE)
@@ -454,6 +486,20 @@ export function StudioWorkspace({
     queueMicrotask(() => setView('dashboard'))
   }, [homeSignal])
 
+  // Coming back from a chat that belongs to a project: reopen that exact
+  // project. Waits for hydration, because the request can arrive before the
+  // stored projects have been read.
+  useEffect(() => {
+    if (openProjectSignal <= 0 || !openProjectId || !hydrated) return
+    const target = projects.find((entry) => entry.id === openProjectId)
+    if (!target) return
+    queueMicrotask(() => {
+      setProject(target)
+      setView('project')
+      setActiveProjectStage('chats')
+    })
+  }, [openProjectSignal, openProjectId, hydrated, projects])
+
   useEffect(() => {
     if (!project || !signedIn) return
     let cancelled = false
@@ -571,20 +617,10 @@ export function StudioWorkspace({
     return checks.filter(Boolean).length
   }, [intake])
 
-  useEffect(() => {
-    if (view !== 'project' || !project || !mainRef.current) return
-    const root = mainRef.current
-    const sections = Array.from(root.querySelectorAll<HTMLElement>('[data-project-stage]'))
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((first, second) => second.intersectionRatio - first.intersectionRatio)[0]
-      const stage = visible?.target.getAttribute('data-project-stage') as ProjectStage | null
-      if (stage) setActiveProjectStage(stage)
-    }, { root, rootMargin: '-118px 0px -58% 0px', threshold: [0.05, 0.25, 0.5] })
-    sections.forEach((section) => observer.observe(section))
-    return () => observer.disconnect()
-  }, [project, view])
+  /* The stage rail used to be a scroll-spy over one very long page: every stage
+     was mounted at once and selecting one only scrolled to it. It promised four
+     screens and delivered a single wall of work. The rail now switches the view
+     outright, so a stage is a place you go, one job at a time. */
 
   function updateIntake(field: keyof Intake, value: string | string[]) {
     setIntake((current) => ({ ...current, [field]: value }))
@@ -754,40 +790,44 @@ export function StudioWorkspace({
     setEditingId('')
   }
 
-  async function exportPack(format: 'pdf' | 'docx') {
+  async function exportPack(format: ExportFormat) {
     if (!project) return
-    const id = requestId()
     setExporting(format)
     setError('')
     try {
-      const response = await fetch('/api/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
-        body: JSON.stringify({
-          title: `${project.intake.businessName} ${project.pack?.name || 'Marketing Launch Pack'}`,
-          content: projectMarkdown(project),
-          format,
-        }),
+      await downloadDocument({
+        title: `${project.intake.businessName} ${project.pack?.name || 'Marketing Launch Pack'}`,
+        content: projectMarkdown(project),
+        format,
+        requestId: requestId(),
       })
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        const reference = data.requestId || response.headers.get('X-Request-Id') || id
-        throw new Error(`${data.error || 'The campaign pack could not be exported.'} Reference: ${reference}`)
-      }
-      const blob = await response.blob()
-      const disposition = response.headers.get('Content-Disposition') || ''
-      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `${project.pack?.id || 'marketing-launch-pack'}.${format}`
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
     } catch (cause) {
       console.error('[AI360] Studio export failed', cause)
       setError(cause instanceof Error ? cause.message : 'The campaign pack could not be exported.')
+    } finally {
+      setExporting('')
+    }
+  }
+
+  /**
+   * Save a single deliverable as a document.
+   *
+   * Whole-project export already existed, but the common need is one piece —
+   * the price list, the content calendar — as a file to send to somebody.
+   */
+  async function exportAsset(asset: StudioAsset, format: ExportFormat) {
+    setExporting(`${asset.id}:${format}`)
+    setError('')
+    try {
+      await downloadDocument({
+        title: `${project?.intake.businessName || 'AI360'} ${asset.title}`,
+        content: asset.content,
+        format,
+        requestId: requestId(),
+      })
+    } catch (cause) {
+      console.error('[AI360] Deliverable export failed', cause)
+      setError(cause instanceof Error ? cause.message : 'That deliverable could not be exported.')
     } finally {
       setExporting('')
     }
@@ -1201,10 +1241,16 @@ export function StudioWorkspace({
     void continueBrief(goal, startingIntake)
   }
 
+  /** This project's own conversations, newest first. */
+  const projectChats = useMemo(
+    () => conversations.filter((conversation) => conversation.projectId === project?.id),
+    [conversations, project?.id],
+  )
+
+  /** Switch which stage is on screen, and start it from the top. */
   function goToProjectStage(stage: ProjectStage) {
     setActiveProjectStage(stage)
-    const section = mainRef.current?.querySelector<HTMLElement>(`#project-stage-${stage}`)
-    section?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function openDashboard() {
@@ -1567,31 +1613,85 @@ export function StudioWorkspace({
           activeStage={activeProjectStage}
           approved={approvedCount}
           total={project.assets.length}
+          count={projectChats.length}
           onSelect={goToProjectStage}
         />
 
         {error && <div className="studio-error project-error">{error}</div>}
 
+        {activeProjectStage === 'chats' ? (
+        <section className="project-stage-section" id="project-stage-chats" data-project-stage="chats">
+          <div className="project-stage-heading">
+            <span className="stage-number-plain" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.9 9.9 0 0 1-2.8-.4L3 21l1.9-5a8.2 8.2 0 0 1-.9-3.7 8.4 8.4 0 0 1 8.4-8.4 8.4 8.4 0 0 1 8.6 8z" />
+              </svg>
+            </span>
+            <div>
+              <b>Chats in this project</b>
+              <small>Every chat here already knows the brief and the knowledge you added.</small>
+            </div>
+            <em>{projectChats.length || 'None'}</em>
+          </div>
+
+          <button type="button" className="project-chat-start" onClick={() => onStartConversation?.(project.id, project.campaign.name)}>
+            <span aria-hidden="true">+</span>
+            <span>
+              <b>New chat in this project</b>
+              <small>Ask a question, draft something, or work through a decision.</small>
+            </span>
+          </button>
+
+          {projectChats.length ? (
+            <div className="project-chat-list">
+              {projectChats.map((conversation) => (
+                <button
+                  type="button"
+                  key={conversation.id}
+                  className="project-chat-item"
+                  onClick={() => onOpenConversation?.(conversation.id)}
+                >
+                  <span>
+                    <b>{conversation.title}</b>
+                    <small>
+                      {conversation.messageCount
+                        ? `${conversation.messageCount} message${conversation.messageCount === 1 ? '' : 's'} · ${relativeTime(conversation.updatedAt)}`
+                        : 'Not started yet'}
+                    </small>
+                  </span>
+                  <ArrowUpRightIcon />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="project-chat-empty">
+              No chats yet. Start one above and it will keep this project&rsquo;s goal and files in mind.
+            </p>
+          )}
+        </section>
+        ) : null}
+
+        {activeProjectStage === 'brief' ? (
         <section className="project-stage-section" id="project-stage-brief" data-project-stage="brief">
           <div className="project-stage-heading">
             <span>01</span>
             <div><b>Approved brief</b><small>The goal and context that guided this project.</small></div>
           </div>
+          {/* The completion figure is already on the hero dial directly above.
+              Repeating it here — and again as "x of y ready" beside the dial —
+              put one number on screen three times. The hero owns it now. */}
           <div className="project-summary">
-          <div className="project-progress">
-            <div className="progress-ring" style={{ '--progress': `${progress * 3.6}deg` } as CSSProperties}>
-              <span>{progress}%</span>
-            </div>
-            <span><b>{approvedCount} of {project.assets.length} approved</b><small>Review each asset to complete the pack.</small></span>
-          </div>
           <div><span>Objective</span><b>{project.campaign.objective}</b></div>
           <div><span>{project.pack ? 'Outcome' : 'Big idea'}</span><b>{project.campaign.bigIdea}</b></div>
           <div><span>{project.pack ? 'Build status' : 'Primary action'}</span><b>{project.run ? `${project.run.producedSections} deliverables · ${project.run.review?.passed ? 'quality checked' : project.run.status}` : project.campaign.callToAction}</b></div>
           </div>
+          {/* Knowledge is context for the brief, so it belongs on this screen
+              rather than floating between two unrelated stages. */}
+          <ProjectKnowledge projectId={project.id} signedIn={signedIn} />
         </section>
+        ) : null}
 
-        <ProjectKnowledge projectId={project.id} signedIn={signedIn} />
-
+        {activeProjectStage === 'build' ? (
         <section className="project-stage-section" id="project-stage-build" data-project-stage="build">
           <div className="project-stage-heading">
             <span>02</span>
@@ -1612,7 +1712,9 @@ export function StudioWorkspace({
             ))}
           </div>
         </section>
+        ) : null}
 
+        {activeProjectStage === 'review' ? (
         <section className="project-stage-section" id="project-stage-review" data-project-stage="review">
           <div className="project-stage-heading">
             <span>03</span>
@@ -1717,6 +1819,20 @@ export function StudioWorkspace({
                         <div className="asset-actions">
                           <button onClick={() => navigator.clipboard.writeText(asset.content)}>Copy</button>
                           <button onClick={() => shareAsset(asset)}>Share</button>
+                          {/* Excel is offered only when this deliverable
+                              actually contains a table to fill it with. */}
+                          {(hasTabularContent(asset.content)
+                            ? (['pdf', 'docx', 'xlsx'] as ExportFormat[])
+                            : (['pdf', 'docx'] as ExportFormat[])
+                          ).map((format) => (
+                            <button
+                              key={format}
+                              onClick={() => void exportAsset(asset, format)}
+                              disabled={Boolean(exporting)}
+                            >
+                              {exporting === `${asset.id}:${format}` ? 'Creating…' : EXPORT_LABELS[format]}
+                            </button>
+                          ))}
                           <button onClick={() => editingId === asset.id ? finishManualEdit(asset) : setEditingId(asset.id)}>
                             {editingId === asset.id ? 'Save new version' : 'Edit'}
                           </button>
@@ -1788,7 +1904,9 @@ export function StudioWorkspace({
           </section>
         </div>
         </section>
+        ) : null}
 
+        {activeProjectStage === 'deliverables' ? (
         <section className="project-stage-section project-deliverables" id="project-stage-deliverables" data-project-stage="deliverables">
           <div className="project-stage-heading">
             <span>04</span>
@@ -1825,9 +1943,13 @@ export function StudioWorkspace({
             <div>
               <button onClick={() => exportPack('pdf')} disabled={Boolean(exporting)}>{exporting === 'pdf' ? 'Creating…' : 'Export PDF'}</button>
               <button onClick={() => exportPack('docx')} disabled={Boolean(exporting)}>{exporting === 'docx' ? 'Creating…' : 'Export Word'}</button>
+              {hasTabularContent(projectMarkdown(project)) ? (
+                <button onClick={() => exportPack('xlsx')} disabled={Boolean(exporting)}>{exporting === 'xlsx' ? 'Creating…' : 'Export Excel'}</button>
+              ) : null}
             </div>
           </div>
         </section>
+        ) : null}
       </div>
       {activeAsset ? <span className="sr-only">Selected asset: {activeAsset.title}</span> : null}
       {executionApproval ? (

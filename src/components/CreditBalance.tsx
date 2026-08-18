@@ -6,6 +6,17 @@ import Link from 'next/link'
 type CreditGuide = Array<{ task: string; credits: string }>
 
 /**
+ * Announced by any surface that has just spent or released credits — a finished
+ * render, a settled hold, a completed top-up. Kept as a plain window event so a
+ * feature does not need a reference to the pill in order to keep it honest.
+ */
+export const CREDITS_CHANGED_EVENT = 'ai360:credits-changed'
+
+export function notifyCreditsChanged() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(CREDITS_CHANGED_EVENT))
+}
+
+/**
  * A calm, credit-based usage indicator.
  *
  * The frontier apps show token counts because their audience thinks in tokens.
@@ -48,12 +59,22 @@ export function CreditBalance({ signedIn, busy }: { signedIn: boolean; busy: boo
       .catch(() => { /* the balance is a nicety, never a blocker */ })
   }, [signedIn])
 
-  // Load once, and refresh when the workspace comes back into focus.
+  // Load once, refresh on focus, and refresh whenever something announces that
+  // it has spent or released credits.
+  //
+  // Focus alone was not enough: a video settles in a later polling request, long
+  // after the run that started it stopped looking busy, so the pill kept showing
+  // a pre-render balance until the tab was blurred and refocused. Anything that
+  // moves the balance now says so, and this listens.
   useEffect(() => {
     load()
     const onFocus = () => load()
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    window.addEventListener(CREDITS_CHANGED_EVENT, onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener(CREDITS_CHANGED_EVENT, onFocus)
+    }
   }, [load])
 
   // When a run starts it reserves credits; a short delay lets that hold land,

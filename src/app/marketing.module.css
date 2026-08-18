@@ -84,9 +84,7 @@
 .workflowSystem li { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 15px 0; border-bottom: 1px solid #e0ded8; }
 .workflowSystem li:last-child { border-bottom: 0; }.workflowSystem li > span { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 8px; background: #e9e7e1; font-size: 14px; }.workflowSystem b, .workflowSystem small { display: block; }.workflowSystem b { font-size: 14px; }.workflowSystem small { margin-top: 2px; color: #777a7c; font-size: 13px; }.workflowSystem em { color: #777a7c; font-size: 12px; font-style: normal; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
 .workflowDecision b { display: block; margin: 16px 0 6px; font-family: var(--font-heading); font-size: 21px; }.workflowDecision p { margin: 0; color: #b8babd; font-size: 14px; line-height: 1.6; }.workflowDecision div { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }.workflowDecisionAction { min-height: 34px; display: inline-flex; align-items: center; border: 1px solid #5a5d5f; border-radius: 8px; padding: 0 10px; color: #fff; font-size: 12px; font-weight: 800; }.workflowDecisionAction:last-child { border-color: #f7f6f2; background: #f7f6f2; color: #171819; }
-/* `ch` keeps the caption to a readable measure at every width; fixed to the
-   grid column it ran to 88 characters a line on a tablet. */
-.workflowDemo figcaption { grid-area: caption; max-width: 68ch; margin-top: 20px; margin-inline: auto; color: #aeb0b2; font-size: 14px; line-height: 1.55; text-align: center; }
+.workflowDemo figcaption { grid-area: caption; margin-top: 20px; color: #aeb0b2; font-size: 14px; line-height: 1.55; text-align: center; }
 @keyframes workflow-signal { from { left: 0; opacity: 0; } 15%, 80% { opacity: 1; } to { left: 100%; opacity: 0; } }
 
 /* The five-column demo needs 920px before its own padding. Collapse it before

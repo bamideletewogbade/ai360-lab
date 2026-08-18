@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "welcome",
+    "subject": "Welcome to AI360"
+  },
+  {
+    "kind": "payment_receipt",
+    "subject": "Your AI360 Everyday payment is confirmed"
+  },
+  {
+    "kind": "credit_low_balance",
+    "subject": "Your AI360 credits are running low"
+  },
+  {
+    "kind": "credit_allowance_renewed",
+    "subject": "Your AI360 credits are ready"
+  },
+  {
+    "kind": "feedback_receipt",
+    "subject": "We received your AI360 feedback"
+  },
+  {
+    "kind": "quality_urgent_alert",
+    "subject": "[S1] AI360 urgent review — Incorrect factual claim"
+  }
+]

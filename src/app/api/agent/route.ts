@@ -7,6 +7,7 @@ import { creditsForUsd } from '@/lib/billing/credits'
 import { failRun, runAgent } from '@/lib/agent/runtime'
 import { isAgentDepth, reconcileApprovedPlan, type AgentDepth } from '@/lib/agent/protocol'
 import { DEFAULT_LANGUAGE, isLanguageCode, type LanguageCode } from '@/lib/languages'
+import { projectContextBlock } from '@/lib/studio/project-context'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
     /** The plan the client was shown, echoed back so approvals can be checked against it. */
     proposedPlan?: unknown
     approvedPlan?: unknown
+    projectId?: unknown
   }
   try {
     body = await request.json()
@@ -162,6 +164,9 @@ export async function POST(request: Request) {
   )
   const planOnly = body.planOnly === true && !approvedObjectives.length
   const sessionId = typeof body.sessionId === 'string' ? body.sessionId.slice(0, 256) : undefined
+  const projectId = typeof body.projectId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.projectId)
+    ? body.projectId
+    : ''
   const key = process.env.OPENROUTER_API_KEY
   const encoder = new TextEncoder()
   const attachments = messages.flatMap((message) => message.attachments ?? [])
@@ -236,9 +241,19 @@ export async function POST(request: Request) {
 
         const goal = [...messages].reverse().find((message) => message.role === 'user')?.content ?? ''
         const startedAt = performance.now()
+        // A run started from inside a project carries that project's brief and
+        // files. Read server-side from the caller's own workspace, and passed as
+        // a leading system message so the planner sees it before it decomposes
+        // the goal — a plan built without the brief researches the wrong thing.
+        const projectContext = projectId && requester.workspaceKey
+          ? await projectContextBlock({ workspaceKey: requester.workspaceKey, projectId })
+          : ''
         const run = await runAgent({
           goal,
-          messages: messages.map(providerMessage),
+          messages: [
+            ...(projectContext ? [{ role: 'system' as const, content: projectContext }] : []),
+            ...messages.map(providerMessage),
+          ],
           mode,
           depth,
           language,

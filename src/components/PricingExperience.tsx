@@ -113,7 +113,7 @@ export function PricingExperience() {
                 <ul>{plan.features.map((feature) => <li key={feature}><span>✓</span>{feature}</li>)}</ul>
                 <div className={styles.templates}><small>Example templates</small><p>{plan.templateExamples.join(' · ')}</p></div>
                 {plan.assisted ? (
-                  <a href="mailto:info@accrainnovationcentre.com?subject=AI360%20Team%20plan" className={styles.choose}>
+                  <a href="mailto:info@accrainnovationcenter.com?subject=AI360%20Team%20plan" className={styles.choose}>
                     Talk to us about Team
                   </a>
                 ) : paid ? (

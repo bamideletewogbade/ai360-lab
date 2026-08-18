@@ -114,6 +114,19 @@ type Conversation = {
   updatedAt: number
   model: ChatMode
   experience?: Experience
+  /**
+   * Set when this conversation belongs to a project. It keeps its whole life —
+   * streaming, run recovery, cloud sync — and only gains an owner, which is why
+   * project chats needed no second conversation implementation.
+   */
+  projectId?: string
+  /**
+   * The project's name at the time this chat was started, kept only so the
+   * breadcrumb can be drawn without reaching into the project store — which a
+   * guest's browser may hold entirely locally. A rename leaves this label
+   * stale, which is an acceptable trade for a breadcrumb that always works.
+   */
+  projectName?: string
 }
 
 const STORAGE_KEY = 'ai360-lab-conversations-v2'
@@ -385,6 +398,8 @@ function LabWorkspace({
   // Pressing "Projects" returns to the project list, the way pressing a section
   // you are already in takes you to the top of it.
   const [projectsHomeSignal, setProjectsHomeSignal] = useState(0)
+  /** Which project to reopen when leaving one of its chats. */
+  const [openProjectRequest, setOpenProjectRequest] = useState({ id: '', signal: 0 })
   const [helpOpen, setHelpOpen] = useState(false)
   const [showReturnToLatest, setShowReturnToLatest] = useState(false)
   const [copiedPromptId, setCopiedPromptId] = useState('')
@@ -457,6 +472,18 @@ function LabWorkspace({
     .map((message) => ({ id: message.id, label: promptPreview(message) })), [messages])
   const experience = active?.experience ?? 'chat'
   const modeMeta = MODE_META[experience]
+  const activeProject = active?.projectId ? (active.projectName || 'Project') : ''
+  /** Every project chat, in the shape the project view needs to list them. */
+  const projectConversations = useMemo(() => conversations
+    .filter((conversation) => Boolean(conversation.projectId))
+    .sort((first, second) => second.updatedAt - first.updatedAt)
+    .map((conversation) => ({
+      id: conversation.id,
+      title: displayConversationTitle(conversation.title),
+      projectId: conversation.projectId as string,
+      updatedAt: conversation.updatedAt,
+      messageCount: conversation.messages.length,
+    })), [conversations])
 
   useEffect(() => {
     if (!conversationMenuId) return
@@ -804,6 +831,9 @@ function LabWorkspace({
     return [...conversations]
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .filter((conversation) => conversation.experience !== 'studio')
+      // A project's chats are listed inside that project, not loose in the
+      // sidebar, so opening one place does not scatter work across two.
+      .filter((conversation) => !conversation.projectId)
       .filter((conversation) => !query || conversation.title.toLowerCase().includes(query))
   }, [conversations, search])
 
@@ -1403,6 +1433,9 @@ function LabWorkspace({
           mode,
           language: responseLanguage,
           sessionId: requestConversationId,
+          // Only the id travels. The server reads the brief and files behind it
+          // from this person's own workspace.
+          ...(targetConversation.projectId ? { projectId: targetConversation.projectId } : {}),
           ...(currentExperience === 'agent' ? { depth: agentDepth, planOnly: planFirst } : {}),
         }),
       })
@@ -1525,13 +1558,62 @@ function LabWorkspace({
 
     // Preserve the identity of completed work. Switching modes starts a fresh
     // workspace unless the current conversation is still an untouched draft.
-    if (!messages.length && active.title === 'New conversation') {
+    // A chat that belongs to a project is never recycled this way: it has an
+    // owner, and repurposing it would silently move it out of that project.
+    if (!messages.length && active.title === 'New conversation' && !active.projectId) {
       updateActive((conversation) => ({ ...conversation, experience: nextExperience, updatedAt: Date.now() }))
     } else {
       const next = freshConversation(nextExperience)
       setConversations((items) => [next, ...items])
       setActiveId(next.id)
     }
+    setInput('')
+    setAttachment(null)
+    discardRecording()
+    setSidebarOpen(false)
+  }
+
+  /**
+   * Open an existing project chat. The rendered experience follows the active
+   * conversation, so selecting it is all that is needed — no mode switch, and
+   * none of selectExperience's draft-recycling, which would start a new
+   * conversation rather than open this one.
+   */
+  function openProjectChat(conversationId: string) {
+    setActiveId(conversationId)
+    setInput('')
+    setAttachment(null)
+    discardRecording()
+    setSidebarOpen(false)
+  }
+
+  /**
+   * Leave a project chat and return to the project itself.
+   *
+   * The studio view is reached by making a studio conversation active, so this
+   * reuses an existing one or opens a fresh one. It deliberately does not go
+   * through selectExperience, which recycles an untouched draft — and the chat
+   * being left is very often exactly that.
+   */
+  function openProjectWorkspace(projectId: string) {
+    setOpenProjectRequest((current) => ({ id: projectId, signal: current.signal + 1 }))
+    const studio = conversations.find((conversation) => conversation.experience === 'studio')
+    if (studio) {
+      setActiveId(studio.id)
+    } else {
+      const next = freshConversation('studio')
+      setConversations((items) => [next, ...items])
+      setActiveId(next.id)
+    }
+    setInput('')
+    setSidebarOpen(false)
+  }
+
+  /** Start a new conversation owned by a project. */
+  function startProjectChat(projectId: string, projectName: string) {
+    const next: Conversation = { ...freshConversation('chat'), projectId, projectName }
+    setConversations((items) => [next, ...items])
+    setActiveId(next.id)
     setInput('')
     setAttachment(null)
     discardRecording()
@@ -1765,6 +1847,11 @@ function LabWorkspace({
             workspaceScope={workspaceScope}
             createSignal={createProjectSignal}
             homeSignal={projectsHomeSignal}
+            openProjectId={openProjectRequest.id}
+            openProjectSignal={openProjectRequest.signal}
+            conversations={projectConversations}
+            onOpenConversation={openProjectChat}
+            onStartConversation={startProjectChat}
           />
         ) : experience === 'apps' ? (
           <AppsDirectory />
@@ -1772,6 +1859,20 @@ function LabWorkspace({
           <MediaStudio />
         ) : (
           <>
+          {/* A project chat must say so, and offer the way back. Without this a
+              chat opened from a project looks identical to a loose one, and the
+              project it belongs to becomes unreachable. */}
+          {activeProject ? (
+            <div className="project-chat-context">
+              <button type="button" onClick={() => openProjectWorkspace(active.projectId as string)}>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+                {activeProject}
+              </button>
+              <span>This chat knows the project&rsquo;s brief and files.</span>
+            </div>
+          ) : null}
           <ConversationMinimap
             prompts={conversationPrompts}
             scrollRootRef={scrollRef}
@@ -1958,6 +2059,7 @@ function LabWorkspace({
                     {message.role === 'assistant' && message.content && !message.failure && (
                       <ResponseActions
                         content={message.content}
+                        title={displayConversationTitle(active.title)}
                         canListen={Boolean(browserSpeechLocale(responseLanguage))}
                         canRetry={index === messages.length - 1}
                         busy={busy}

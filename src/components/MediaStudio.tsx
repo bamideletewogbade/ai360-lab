@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { notifyCreditsChanged } from "@/components/CreditBalance";
 
 type MediaKind = "image" | "video";
 type StudioIconName =
@@ -13,7 +14,10 @@ type StudioIconName =
   | "shop"
   | "cloth"
   | "poster"
-  | "city";
+  | "city"
+  | "sliders"
+  | "reuse"
+  | "chevron";
 
 type MediaItem = {
   id: string;
@@ -159,17 +163,41 @@ const IMAGE_LOOKS = [
  * offering it would only produce a refusal at the moment of confirming.
  */
 const VIDEO_TIERS = [
-  {
-    value: "draft",
-    label: "Quick",
-    note: "Cheapest. Great for trying an idea.",
-  },
-  {
-    value: "standard",
-    label: "Best",
-    note: "Sharper motion and detail.",
-  },
+  { value: "draft", label: "Quick", note: "Great for trying an idea." },
+  { value: "standard", label: "Better", note: "Sharper motion and detail." },
+  { value: "premium", label: "Best", note: "The strongest engine we offer." },
 ] as const;
+
+/** Friendly names, so a card reads "Veo 3.1 Lite" rather than a provider slug. */
+const ENGINE_NAMES: Record<string, string> = {
+  "google/veo-3.1-lite": "Veo 3.1 Lite",
+  "google/veo-3.1-fast": "Veo 3.1 Fast",
+  "google/veo-3.1": "Veo 3.1",
+  "kwaivgi/kling-v3.0-std": "Kling 3.0",
+  "kwaivgi/kling-v3.0-pro": "Kling 3.0 Pro",
+  "alibaba/wan-2.7": "Wan 2.7",
+  "alibaba/happyhorse-1.1": "Happyhorse 1.1",
+  "x-ai/grok-imagine-video": "Grok Imagine",
+};
+
+function engineName(model: string) {
+  return ENGINE_NAMES[model] || model.split("/").pop() || model;
+}
+
+/** Live price of each quality option, keyed by tier. */
+type TierPrice = {
+  tier: string;
+  available: boolean;
+  model?: string;
+  credits?: number;
+};
+
+/**
+ * Lengths the Veo family accepts. Not a product choice: the engines take 4, 6 or
+ * 8 seconds and nothing between or beyond, so offering anything else would only
+ * produce a refusal. Price scales per second, and each option shows its own cost.
+ */
+const VIDEO_LENGTHS = [4, 6, 8] as const;
 
 const VIDEO_MOTIONS = [
   { value: "pan", label: "Pan" },
@@ -243,6 +271,21 @@ function StudioIcon({ name }: { name: StudioIconName }) {
     city: (
       <path d="M4 20V9h6v11M10 20V4h6v16M16 20v-8h4v8M2 20h20M7 12h1M13 8h1M13 12h1" />
     ),
+    sliders: (
+      <>
+        <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+        <circle cx="16" cy="7" r="2.2" />
+        <circle cx="10" cy="17" r="2.2" />
+      </>
+    ),
+    reuse: (
+      <>
+        <path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5" />
+        <path d="M20 12a8 8 0 0 1-13.7 5.6L4 15.5" />
+        <path d="M20 4v4.5h-4.5M4 20v-4.5h4.5" />
+      </>
+    ),
+    chevron: <path d="m6 9 6 6 6-6" />,
   };
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -364,6 +407,7 @@ function videoIntent(
   aspectRatio: string,
   motion: string,
   qualityTier: string,
+  durationSeconds: number,
 ) {
   return {
     version: 1,
@@ -372,7 +416,7 @@ function videoIntent(
     channel: channelFor(aspectRatio, "video"),
     aspectRatio,
     resolution: "720p",
-    durationSeconds: 4,
+    durationSeconds,
     qualityTier,
     audio: "off",
     motion:
@@ -392,6 +436,17 @@ function newRequestId(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Identity for a freshly finished piece of work.
+ *
+ * Module scope on purpose: a clock read written inline in the component body is
+ * an impure call in render scope, even when the surrounding function only ever
+ * runs from a fetch handler or a timer.
+ */
+function newMediaId() {
+  return `media-${Date.now()}`;
+}
+
 export function MediaStudio() {
   const [mode, setMode] = useState<MediaKind>("image");
   const [prompt, setPrompt] = useState("");
@@ -399,6 +454,7 @@ export function MediaStudio() {
   const [videoAspect, setVideoAspect] = useState("9:16");
   const [look, setLook] = useState<string>(IMAGE_LOOKS[0].value);
   const [videoTier, setVideoTier] = useState<string>("draft");
+  const [videoSeconds, setVideoSeconds] = useState(4);
   const [cameraMotion, setCameraMotion] = useState("pan");
   const [generating, setGenerating] = useState(false);
   const [gallery, setGallery] = useState<MediaItem[]>(EXAMPLE_GALLERY);
@@ -406,16 +462,50 @@ export function MediaStudio() {
   const [toastNotice, setToastNotice] = useState("");
   const [toastError, setToastError] = useState(false);
   const [videoQuote, setVideoQuote] = useState<VideoQuote | null>(null);
-  const [videoJob, setVideoJob] = useState<VideoJob | null>(null);
+  /**
+   * A render still in flight, read straight from session storage as the initial
+   * value rather than written in after mount. The studio only ever renders once
+   * the workspace has hydrated on the client, so there is no server pass to
+   * disagree with — and reading here means no extra render just to recover a
+   * job the browser already knew about.
+   */
+  const [videoJob, setVideoJob] = useState<VideoJob | null>(readStoredVideoJob);
   const [creditPanel, setCreditPanel] = useState<CreditPanelState | null>(null);
   const [credits, setCredits] = useState<CreditFacts>({
     available: null,
     image: null,
     video: null,
   });
+  const [tierPrices, setTierPrices] = useState<TierPrice[]>([]);
   // Data-saver: people on metered or slow connections do not need looping
   // video previews. This is a real constraint for this audience, not a nicety.
   const [dataSaver, setDataSaver] = useState(false);
+  /**
+   * The shape/look/length controls live behind a disclosure so the dock stays
+   * small. Collapsed is the default: the summary line on the toggle keeps every
+   * current setting readable without opening it, so nothing is hidden, only
+   * folded away.
+   */
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  /**
+   * An image render in flight. Video does not need its own copy — the durable
+   * job already carries the prompt and shape, so a refresh mid-render still
+   * redraws the placeholder card.
+   */
+  const [pendingImage, setPendingImage] = useState<{
+    prompt: string;
+    aspectRatio: string;
+  } | null>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+
+  // The prompt box grows with what is written in it, up to a ceiling, so a long
+  // description is visible without turning the dock into a wall.
+  useEffect(() => {
+    const field = promptRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${Math.min(field.scrollHeight, 168)}px`;
+  }, [prompt, mode]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-data: reduce)");
@@ -429,7 +519,9 @@ export function MediaStudio() {
   // closures and duplicate timers cannot stack after a visibility change.
   const pollTimerRef = useRef<number | null>(null);
   const pollAttemptsRef = useRef(0);
-  const videoJobRef = useRef<VideoJob | null>(null);
+  // Seeded from the same recovered job as the state above, so the visibility
+  // handler is correct from the very first render.
+  const videoJobRef = useRef<VideoJob | null>(videoJob);
   /** Only tell the person once when the video service enters a long outage. */
   const pollNoticeShownRef = useRef(false);
 
@@ -488,6 +580,8 @@ export function MediaStudio() {
           image: data.costs?.image ?? null,
           video: data.costs?.video ?? null,
         });
+        // The studio knows a render just settled before the header pill does.
+        notifyCreditsChanged();
       })
       // The studio works perfectly well without a balance on screen.
       .catch(() => undefined);
@@ -495,6 +589,41 @@ export function MediaStudio() {
   useEffect(() => {
     void loadCredits();
   }, []);
+
+  /**
+   * Live price for each quality option.
+   *
+   * Re-read whenever the requested format changes, because the price is
+   * per-second and per-resolution: the same tier costs a different amount for a
+   * tall 8-second clip than for a wide 4-second one. Fetched only in video mode
+   * so the image path makes no needless catalogue call.
+   */
+  useEffect(() => {
+    if (mode !== "video") return;
+    let cancelled = false;
+    fetch("/api/studio/video", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "tiers",
+        intent: videoIntent("", videoAspect, cameraMotion, videoTier, videoSeconds),
+      }),
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (cancelled || !data || !Array.isArray(data.tiers)) return;
+        setTierPrices(data.tiers as TierPrice[]);
+      })
+      // Prices are a courtesy here; the binding quote still comes before render.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // Deliberately not keyed on `prompt` or `videoTier`: neither changes the
+    // price of the options, and re-quoting on every keystroke would hammer a
+    // rate-limited endpoint.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, videoAspect, videoSeconds]);
 
   /**
    * A 402 means "not enough credits". Instead of a toast that points at
@@ -542,6 +671,11 @@ export function MediaStudio() {
   const handleGenerateImage = async () => {
     if (!prompt.trim() || generating) return;
     setGenerating(true);
+    // The waiting state belongs where the result will land, so a placeholder
+    // card goes into the gallery straight away rather than a spinner in the
+    // controls. Filters are reset first so the new card cannot land off-screen.
+    setPendingImage({ prompt: prompt.trim(), aspectRatio: imageAspect });
+    setGalleryFilter("all");
     setToastNotice("Making your visual… this takes a few seconds.");
     setToastError(false);
     try {
@@ -575,7 +709,7 @@ export function MediaStudio() {
       }
 
       const newItem: MediaItem = {
-        id: `media-${Date.now()}`,
+        id: newMediaId(),
         kind: "image",
         prompt: prompt.trim(),
         aspectRatio: imageAspect,
@@ -597,6 +731,7 @@ export function MediaStudio() {
       );
     } finally {
       setGenerating(false);
+      setPendingImage(null);
     }
   };
 
@@ -619,6 +754,7 @@ export function MediaStudio() {
             videoAspect,
             cameraMotion,
             videoTier,
+            videoSeconds,
           ),
         }),
       });
@@ -646,7 +782,7 @@ export function MediaStudio() {
         model: data.model,
         intent:
           data.intent ||
-          videoIntent(prompt.trim(), videoAspect, cameraMotion, videoTier),
+          videoIntent(prompt.trim(), videoAspect, cameraMotion, videoTier, videoSeconds),
       });
       setToastNotice("");
     } catch (cause) {
@@ -712,6 +848,9 @@ export function MediaStudio() {
         aspectRatio: videoAspect,
       };
       persistVideoJob(job);
+      // The render now has a placeholder card in the gallery; make sure the
+      // active filter cannot hide it.
+      setGalleryFilter("all");
       setToastNotice("");
       scheduleVideoPoll(job, 20_000);
       void loadCredits();
@@ -796,7 +935,7 @@ export function MediaStudio() {
       const status = data.status || "pending";
       if (status === "completed" && data.downloadUrl) {
         const newItem: MediaItem = {
-          id: `media-${Date.now()}`,
+          id: newMediaId(),
           kind: "video",
           prompt: job.prompt,
           aspectRatio: job.aspectRatio || "16:9",
@@ -847,21 +986,33 @@ export function MediaStudio() {
     }
   };
 
-  // Re-hydrate a render that was in flight when the page refreshed or the
-  // browser tab was closed, and poll immediately when the tab becomes visible
-  // again (mobile browsers throttle timers in background tabs). The handlers
-  // are intentionally stable — they read the latest job from refs, so the
-  // mount-time closure never goes stale.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  /**
+   * The current scheduler, reachable from the mount-only effect below.
+   *
+   * `scheduleVideoPoll` closes over most of the component, so it is a new
+   * function every render. Listing it as a dependency would tear down and
+   * re-register the visibility listener — and re-fire a poll — on every single
+   * render, so the effect reads it through a ref that is kept current here
+   * instead. Declared before that effect so it is already up to date when the
+   * mount pass runs.
+   */
+  const scheduleVideoPollRef = useRef(scheduleVideoPoll);
   useEffect(() => {
-    const stored = readStoredVideoJob();
-    if (stored) {
-      persistVideoJob(stored);
-      scheduleVideoPoll(stored, 0);
+    scheduleVideoPollRef.current = scheduleVideoPoll;
+  });
+
+  // Resume a render that was in flight when the page refreshed or the tab was
+  // closed, and poll immediately when the tab becomes visible again (mobile
+  // browsers throttle timers in background tabs). The job itself is recovered
+  // by the state initializer, so there is nothing to set here — only the
+  // polling to restart.
+  useEffect(() => {
+    if (videoJobRef.current) {
+      scheduleVideoPollRef.current(videoJobRef.current, 0);
     }
     const onVisibility = () => {
       if (document.visibilityState === "visible" && videoJobRef.current) {
-        scheduleVideoPoll(videoJobRef.current, 0);
+        scheduleVideoPollRef.current(videoJobRef.current, 0);
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -938,6 +1089,73 @@ export function MediaStudio() {
     !generating &&
     !(isVideo && (Boolean(videoJob) || Boolean(videoQuote)));
 
+  /**
+   * The work in flight, drawn as a card at the head of the gallery. Video reads
+   * from the durable job rather than a second copy of the same facts, so a
+   * refresh during a render still shows the placeholder in the right place.
+   */
+  const pending = pendingImage
+    ? {
+        kind: "image" as MediaKind,
+        prompt: pendingImage.prompt,
+        aspectRatio: pendingImage.aspectRatio,
+        label: "Making your image…",
+      }
+    : videoJob
+      ? {
+          kind: "video" as MediaKind,
+          prompt: videoJob.prompt,
+          aspectRatio: videoJob.aspectRatio || "16:9",
+          label: "Rendering your video…",
+        }
+      : null;
+  const pendingVisible =
+    pending && (galleryFilter === "all" || galleryFilter === pending.kind);
+
+  /**
+   * What the collapsed dock says about the current settings. Folding the
+   * controls away must not hide what they are set to, so every one of them is
+   * named here.
+   */
+  const formatLabel =
+    formats.find((entry) => entry.ratio === activeAspect)?.label || activeAspect;
+  const settingsSummary = isVideo
+    ? [
+        formatLabel,
+        `${videoSeconds}s`,
+        VIDEO_TIERS.find((tier) => tier.value === videoTier)?.label,
+        VIDEO_MOTIONS.find((motion) => motion.value === cameraMotion)?.label,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : [formatLabel, IMAGE_LOOKS.find((entry) => entry.value === look)?.label]
+        .filter(Boolean)
+        .join(" · ");
+
+  /**
+   * Reuse the prompt behind any card — including the shipped examples, which is
+   * what makes them templates rather than decoration. The shape and mode follow
+   * the card, so pressing this reproduces the same kind of work.
+   */
+  const reusePrompt = (item: MediaItem) => {
+    setPrompt(item.prompt);
+    setMode(item.kind);
+    const allowed = item.kind === "video" ? VIDEO_FORMATS : IMAGE_FORMATS;
+    if (allowed.some((entry) => entry.ratio === item.aspectRatio)) {
+      if (item.kind === "video") setVideoAspect(item.aspectRatio);
+      else setImageAspect(item.aspectRatio);
+    }
+    promptRef.current?.focus();
+  };
+
+  /** Ctrl/⌘+Enter starts the work without reaching for the button. */
+  const onPromptKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+    event.preventDefault();
+    if (!canGenerate) return;
+    void (isVideo ? requestVideoQuote() : handleGenerateImage());
+  };
+
   return (
     <div className="media-studio">
       {/* A workspace opens on the work, not on a poster. The header stays one
@@ -953,11 +1171,11 @@ export function MediaStudio() {
           </div>
         </div>
         <div className="ms-topbar-right">
-          {credits.available !== null ? (
-            <span className="ms-balance" title="Your available credits">
-              <b>{credits.available}</b> credits
-            </span>
-          ) : null}
+          {/* The workspace header already carries a live credit pill that
+              refreshes on focus and after each run. A second copy here showed
+              the same number twice on one screen and, being fetched once on
+              mount, went stale the moment a render settled. One indicator, and
+              it is the one that updates. */}
           <div
             className="ms-mode"
             role="tablist"
@@ -1065,199 +1283,11 @@ export function MediaStudio() {
         </section>
       ) : null}
 
-      <div className="ms-layout">
-        <section className="ms-composer" aria-label="Create">
-          <div className="ms-field">
-            <div className="ms-field-head">
-              <label htmlFor="ms-prompt">
-                {isVideo ? "Describe the shot" : "Describe the picture"}
-              </label>
-              {prompt ? (
-                <button
-                  type="button"
-                  className="ms-clear"
-                  onClick={() => setPrompt("")}
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
-            <textarea
-              id="ms-prompt"
-              className="ms-prompt"
-              rows={4}
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              placeholder={
-                isVideo
-                  ? "Slow pan across colourful wax print fabric at a market stall, warm daylight…"
-                  : "A jar of shea butter on a wooden market table, warm morning light, space at the top for a headline…"
-              }
-            />
-          </div>
-
-          <div className="ms-starters" aria-label="Starting points">
-            {starters.map((item) => (
-              <button
-                type="button"
-                key={item.label}
-                className="ms-starter"
-                onClick={() => setPrompt(item.text)}
-              >
-                <StudioIcon name={item.icon} />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="ms-control">
-            <span className="ms-control-label">Shape</span>
-            <div className="ms-chips" role="group" aria-label="Shape">
-              {formats.map((item) => (
-                <button
-                  key={item.ratio}
-                  type="button"
-                  aria-pressed={activeAspect === item.ratio}
-                  className={`ms-chip${activeAspect === item.ratio ? " is-active" : ""}`}
-                  onClick={() => setActiveAspect(item.ratio)}
-                >
-                  <b>{item.label}</b>
-                  <small>{item.use}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {isVideo ? (
-            <>
-              <div className="ms-control">
-                <span className="ms-control-label">Quality</span>
-                <div className="ms-chips" role="group" aria-label="Quality">
-                  {VIDEO_TIERS.map((tier) => (
-                    <button
-                      key={tier.value}
-                      type="button"
-                      aria-pressed={videoTier === tier.value}
-                      className={`ms-chip${videoTier === tier.value ? " is-active" : ""}`}
-                      onClick={() => setVideoTier(tier.value)}
-                    >
-                      <b>{tier.label}</b>
-                      <small>{tier.note}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="ms-control">
-                <span className="ms-control-label">Camera</span>
-                <div className="ms-chips is-compact" role="group" aria-label="Camera">
-                  {VIDEO_MOTIONS.map((motion) => (
-                    <button
-                      key={motion.value}
-                      type="button"
-                      aria-pressed={cameraMotion === motion.value}
-                      className={`ms-chip${cameraMotion === motion.value ? " is-active" : ""}`}
-                      onClick={() => setCameraMotion(motion.value)}
-                    >
-                      <b>{motion.label}</b>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="ms-control">
-              <span className="ms-control-label">Look</span>
-              <div className="ms-chips is-compact" role="group" aria-label="Look">
-                {IMAGE_LOOKS.map((entry) => (
-                  <button
-                    key={entry.value}
-                    type="button"
-                    aria-pressed={look === entry.value}
-                    className={`ms-chip${look === entry.value ? " is-active" : ""}`}
-                    onClick={() => setLook(entry.value)}
-                  >
-                    <b>{entry.label}</b>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {videoQuote ? (
-            <div className="ms-quote" role="status">
-              <div>
-                <b>{videoQuote.credits} credits for this render</b>
-                <small>
-                  You are only charged if it works. A failed render returns your
-                  credits.
-                </small>
-              </div>
-              <div className="ms-quote-actions">
-                <button
-                  type="button"
-                  className="ms-ghost-btn"
-                  onClick={() => setVideoQuote(null)}
-                  disabled={generating}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="ms-confirm-btn"
-                  onClick={confirmVideoRender}
-                  disabled={generating}
-                >
-                  Render it
-                </button>
-              </div>
-            </div>
-          ) : videoJob ? (
-            <div className="ms-rendering" role="status">
-              <span className="ms-spinner" aria-hidden="true" />
-              <div>
-                <b>Rendering your video…</b>
-                <small>
-                  About a minute. You can keep making images while it works.
-                </small>
-              </div>
-              <button
-                type="button"
-                className="ms-ghost-btn"
-                onClick={stopWaitingForVideo}
-              >
-                Stop waiting
-              </button>
-            </div>
-          ) : null}
-
-          <div className="ms-action">
-            <button
-              type="button"
-              className={`ms-generate${generating ? " is-busy" : ""}`}
-              onClick={isVideo ? requestVideoQuote : handleGenerateImage}
-              disabled={!canGenerate}
-            >
-              <StudioIcon name="spark" />
-              <span>
-                {generating
-                  ? isVideo
-                    ? "Checking price…"
-                    : "Making it…"
-                  : isVideo
-                    ? videoJob
-                      ? "Rendering…"
-                      : "See price and render"
-                    : "Make the image"}
-              </span>
-            </button>
-            <p className="ms-cost-note">
-              {cost
-                ? `${cost.from}–${cost.to} credits${isVideo ? ". You see the exact price before it runs." : " per image."}`
-                : "You are only charged when the work succeeds."}
-            </p>
-          </div>
-        </section>
-
+      {/* The work fills the page and scrolls on its own; the composer is docked
+          below it and never scrolls away. This is the inversion the old layout
+          had backwards — controls held the prime width while the gallery, the
+          reason for the page, was squeezed into the remainder. */}
+      <div className="ms-stage">
         <section className="ms-results" aria-label="Your work">
           <div className="ms-results-head">
             <h2>
@@ -1286,8 +1316,42 @@ export function MediaStudio() {
             </div>
           </div>
 
-          {visible.length ? (
+          {visible.length || pendingVisible ? (
             <div className="ms-grid">
+              {/* Work in flight takes its place in the gallery immediately, so
+                  the waiting happens where the result will appear rather than
+                  in the controls. */}
+              {pendingVisible && pending ? (
+                <article className="ms-card is-pending" aria-live="polite">
+                  <div
+                    className="ms-card-media"
+                    data-ratio={pending.aspectRatio}
+                  >
+                    <div className="ms-pending-fill">
+                      <span className="ms-spinner" aria-hidden="true" />
+                    </div>
+                    <span className="ms-card-tag">
+                      <StudioIcon name={pending.kind} />
+                      {pending.aspectRatio}
+                    </span>
+                  </div>
+                  <div className="ms-card-body">
+                    <p>{pending.prompt}</p>
+                    <div className="ms-card-foot">
+                      <span className="ms-card-meta">{pending.label}</span>
+                      {pending.kind === "video" ? (
+                        <button
+                          type="button"
+                          className="ms-card-action"
+                          onClick={stopWaitingForVideo}
+                        >
+                          Stop waiting
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              ) : null}
               {visible.map((item, index) => (
                 <article
                   className={`ms-card${item.example ? " is-example" : ""}`}
@@ -1326,16 +1390,30 @@ export function MediaStudio() {
                       <span className="ms-card-meta">
                         {item.styleName} · {item.createdAt}
                       </span>
-                      {!item.example ? (
-                        <a
-                          href={item.url}
-                          download={`ai360-${item.kind}-${item.id}.${item.kind === "video" ? "mp4" : "png"}`}
-                          className="ms-download"
+                      <div className="ms-card-actions">
+                        {/* Showing the prompt behind a result — the shipped
+                            examples included — is what turns the gallery into
+                            a set of starting points instead of decoration. */}
+                        <button
+                          type="button"
+                          className="ms-card-action"
+                          onClick={() => reusePrompt(item)}
+                          title="Put this prompt in the composer"
                         >
-                          <StudioIcon name="download" />
-                          <span>Save</span>
-                        </a>
-                      ) : null}
+                          <StudioIcon name="reuse" />
+                          <span>Use this prompt</span>
+                        </button>
+                        {!item.example ? (
+                          <a
+                            href={item.url}
+                            download={`ai360-${item.kind}-${item.id}.${item.kind === "video" ? "mp4" : "png"}`}
+                            className="ms-download"
+                          >
+                            <StudioIcon name="download" />
+                            <span>Save</span>
+                          </a>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </article>
@@ -1343,11 +1421,275 @@ export function MediaStudio() {
             </div>
           ) : (
             <p className="ms-empty">
-              Nothing here yet. Write a sentence on the left and make your
-              first one.
+              Nothing here yet. Write a sentence below and make your first one.
             </p>
           )}
         </section>
+      </div>
+
+      {/* The dock. Everything that can push the button off screen lives in a
+          scrolling area above it, so the primary action is reachable at every
+          window size — the failure the old sticky side panel had, where a tall
+          composer put its own button below the fold. */}
+      <div className="ms-dock">
+        <div className="ms-dock-extras">
+          {optionsOpen ? (
+            <div className="ms-dock-panel" id="ms-options">
+              <div className="ms-control">
+                <span className="ms-control-label">Shape</span>
+                <div className="ms-chips" role="group" aria-label="Shape">
+                  {formats.map((item) => (
+                    <button
+                      key={item.ratio}
+                      type="button"
+                      aria-pressed={activeAspect === item.ratio}
+                      className={`ms-chip${activeAspect === item.ratio ? " is-active" : ""}`}
+                      onClick={() => setActiveAspect(item.ratio)}
+                    >
+                      <b>{item.label}</b>
+                      <small>{item.use}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {isVideo ? (
+                <>
+                  <div className="ms-control">
+                    <span className="ms-control-label">Length</span>
+                    <div
+                      className="ms-chips is-compact"
+                      role="group"
+                      aria-label="Length"
+                    >
+                      {VIDEO_LENGTHS.map((seconds) => (
+                        <button
+                          key={seconds}
+                          type="button"
+                          aria-pressed={videoSeconds === seconds}
+                          className={`ms-chip${videoSeconds === seconds ? " is-active" : ""}`}
+                          onClick={() => setVideoSeconds(seconds)}
+                        >
+                          <b>{seconds}s</b>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="ms-control">
+                    <span className="ms-control-label">Quality</span>
+                    <div className="ms-chips" role="group" aria-label="Quality">
+                      {VIDEO_TIERS.map((tier) => {
+                        const price = tierPrices.find(
+                          (entry) => entry.tier === tier.value,
+                        );
+                        // An option nobody can buy is disabled and says why,
+                        // rather than failing at the moment of confirming.
+                        const unavailable = price ? !price.available : false;
+                        return (
+                          <button
+                            key={tier.value}
+                            type="button"
+                            aria-pressed={videoTier === tier.value}
+                            disabled={unavailable}
+                            className={`ms-chip ms-tier${videoTier === tier.value ? " is-active" : ""}${unavailable ? " is-unavailable" : ""}`}
+                            onClick={() => setVideoTier(tier.value)}
+                          >
+                            <b>{tier.label}</b>
+                            {price?.available && price.credits ? (
+                              <span className="ms-tier-price">
+                                {price.credits} credits
+                              </span>
+                            ) : null}
+                            <small>
+                              {unavailable
+                                ? "Not available for this shape or length."
+                                : price?.model
+                                  ? engineName(price.model)
+                                  : tier.note}
+                            </small>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="ms-control">
+                    <span className="ms-control-label">Camera</span>
+                    <div
+                      className="ms-chips is-compact"
+                      role="group"
+                      aria-label="Camera"
+                    >
+                      {VIDEO_MOTIONS.map((motion) => (
+                        <button
+                          key={motion.value}
+                          type="button"
+                          aria-pressed={cameraMotion === motion.value}
+                          className={`ms-chip${cameraMotion === motion.value ? " is-active" : ""}`}
+                          onClick={() => setCameraMotion(motion.value)}
+                        >
+                          <b>{motion.label}</b>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="ms-control">
+                  <span className="ms-control-label">Look</span>
+                  <div
+                    className="ms-chips is-compact"
+                    role="group"
+                    aria-label="Look"
+                  >
+                    {IMAGE_LOOKS.map((entry) => (
+                      <button
+                        key={entry.value}
+                        type="button"
+                        aria-pressed={look === entry.value}
+                        className={`ms-chip${look === entry.value ? " is-active" : ""}`}
+                        onClick={() => setLook(entry.value)}
+                      >
+                        <b>{entry.label}</b>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {videoQuote ? (
+            <div className="ms-quote" role="status">
+              <div>
+                <b>{videoQuote.credits} credits for this render</b>
+                <small>
+                  You are only charged if it works. A failed render returns your
+                  credits.
+                </small>
+              </div>
+              <div className="ms-quote-actions">
+                <button
+                  type="button"
+                  className="ms-ghost-btn"
+                  onClick={() => setVideoQuote(null)}
+                  disabled={generating}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="ms-confirm-btn"
+                  onClick={confirmVideoRender}
+                  disabled={generating}
+                >
+                  Render it
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="ms-bar">
+          {/* Starting points sit right at the prompt while it is empty, then
+              get out of the way — the blank-page problem is only a problem
+              before there is something written. */}
+          {!prompt.trim() ? (
+            <div className="ms-starters" aria-label="Starting points">
+              {starters.map((item) => (
+                <button
+                  type="button"
+                  key={item.label}
+                  className="ms-starter"
+                  onClick={() => setPrompt(item.text)}
+                >
+                  <StudioIcon name={item.icon} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <label className="ms-sr-only" htmlFor="ms-prompt">
+            {isVideo ? "Describe the shot" : "Describe the picture"}
+          </label>
+          <textarea
+            id="ms-prompt"
+            ref={promptRef}
+            className="ms-prompt"
+            rows={1}
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            onKeyDown={onPromptKeyDown}
+            placeholder={
+              isVideo
+                ? "Slow pan across colourful wax print fabric at a market stall, warm daylight…"
+                : "A jar of shea butter on a wooden market table, warm morning light, space at the top for a headline…"
+            }
+          />
+
+          <div className="ms-bar-row">
+            <button
+              type="button"
+              className={`ms-options-toggle${optionsOpen ? " is-open" : ""}`}
+              onClick={() => setOptionsOpen((open) => !open)}
+              aria-expanded={optionsOpen}
+              aria-controls="ms-options"
+            >
+              <StudioIcon name="sliders" />
+              <span className="ms-options-summary">{settingsSummary}</span>
+              <StudioIcon name="chevron" />
+            </button>
+
+            {prompt ? (
+              <button
+                type="button"
+                className="ms-clear"
+                onClick={() => setPrompt("")}
+              >
+                Clear
+              </button>
+            ) : null}
+
+            <p className="ms-cost-note">
+              {cost
+                ? `${cost.from}–${cost.to} credits${isVideo ? " · exact price shown first" : " per image"}`
+                : "Charged only when the work succeeds"}
+            </p>
+
+            <button
+              type="button"
+              className={`ms-generate${generating ? " is-busy" : ""}`}
+              onClick={isVideo ? requestVideoQuote : handleGenerateImage}
+              disabled={!canGenerate}
+            >
+              <StudioIcon name="spark" />
+              {/* Both labels ship; CSS picks the one the width can hold, so a
+                  phone never gets "See price and render" squeezed into a chip. */}
+              <span className="ms-generate-long">
+                {generating
+                  ? isVideo
+                    ? "Checking price…"
+                    : "Making it…"
+                  : isVideo
+                    ? videoJob
+                      ? "Rendering…"
+                      : "See price and render"
+                    : "Make the image"}
+              </span>
+              <span className="ms-generate-short">
+                {generating
+                  ? isVideo
+                    ? "Checking…"
+                    : "Making…"
+                  : isVideo
+                    ? videoJob
+                      ? "Rendering…"
+                      : "See price"
+                    : "Make image"}
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1711,13 +1711,10 @@ button {
 }
 .history-search input {
   width: 100%;
-  /* Comfortable to hit on a phone, where the field is a primary way back into
-     an earlier conversation. */
-  min-height: 26px;
   border: 0;
   outline: 0;
   background: transparent;
-  font-size: 15px;
+  font-size: 14px;
   color: #f7f6f2;
 }
 .history-search input::placeholder {
@@ -1956,25 +1953,49 @@ button {
 
 /* AI Media Studio.
 
-   A workspace, not a poster: the prompt is the first thing in reach and the
-   person's own work is always on screen, so nothing has to be navigated to.
+   The work is the page. The gallery takes the full width and scrolls; the
+   composer is docked beneath it and never scrolls away, so the button that
+   spends credits is reachable at every window size. The previous layout parked
+   a fixed 390px control panel beside a squeezed gallery, which on a normal
+   laptop left the primary action below the fold and the results in two narrow
+   columns.
+
    Everything is namespaced under .media-studio and drawn from the semantic
    tokens, so both themes and the app zoom apply without special cases. */
 .media-studio {
   flex: 1;
   min-height: 0;
   width: 100%;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
+  /* The studio does not scroll — the stage inside it does. That is what keeps
+     the dock pinned. */
+  overflow: hidden;
   background: var(--paper);
+}
+
+/* The stage: the person's own work, given the whole width. */
+.ms-stage {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  padding: 18px max(18px, env(safe-area-inset-right)) 24px
+    max(18px, env(safe-area-inset-left));
+}
+.ms-results {
+  /* A ceiling so a very wide monitor does not spread the work into a thin
+     band of eight columns. */
+  max-width: 1700px;
+  margin-inline: auto;
 }
 
 /* Header ------------------------------------------------------------------ */
 .ms-topbar {
-  position: sticky;
-  top: 0;
+  /* Fixed row of the studio column — the stage below it does the scrolling,
+     so this no longer needs to be sticky, and it must not be squashed when
+     the dock is open on a short window. */
+  flex: 0 0 auto;
   z-index: 5;
   display: flex;
   align-items: center;
@@ -2027,19 +2048,6 @@ button {
   align-items: center;
   gap: 10px;
 }
-.ms-balance {
-  padding: 6px 11px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--white);
-  color: var(--grey);
-  font-size: 14px;
-  white-space: nowrap;
-}
-.ms-balance b {
-  color: var(--black);
-  font-weight: 800;
-}
 .ms-mode {
   display: flex;
   gap: 3px;
@@ -2084,8 +2092,11 @@ button {
   color: var(--black);
 }
 
-/* Notices ----------------------------------------------------------------- */
+/* Notices ------------------------------------------------------------------
+   Both sit between the header and the stage as flex items, so they interrupt
+   in place and cannot be scrolled out of sight while they still matter. */
 .ms-toast {
+  flex: 0 0 auto;
   margin: 14px max(18px, env(safe-area-inset-left)) 0;
   padding: 12px 15px;
   border: 1px solid var(--line);
@@ -2101,6 +2112,10 @@ button {
 }
 
 .ms-credit-panel {
+  flex: 0 1 auto;
+  /* A long plan list must never eat the stage and the dock; it scrolls itself. */
+  max-height: 46%;
+  overflow-y: auto;
   margin: 14px max(18px, env(safe-area-inset-left)) 0;
   padding: 16px;
   border: 1px solid var(--line);
@@ -2185,36 +2200,58 @@ button {
   color: var(--grey);
 }
 
-/* Layout ------------------------------------------------------------------ */
-.ms-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
-  padding: 18px max(18px, env(safe-area-inset-right)) 32px
-    max(18px, env(safe-area-inset-left));
-  align-items: start;
-}
-
-/* Composer ---------------------------------------------------------------- */
-.ms-composer {
+/* The dock ----------------------------------------------------------------
+   Anything that can grow — the options panel, a video quote — lives in a
+   scrolling area above the bar. The bar itself never moves, so the primary
+   action cannot be pushed off screen the way the old sticky panel pushed it. */
+.ms-dock {
+  /* Shrinkable on purpose. On a short window the options panel would otherwise
+     hold the dock at its full height and push the button past the bottom edge;
+     giving way here lets .ms-dock-extras absorb the loss and scroll, while
+     .ms-bar stays whole. */
+  flex: 0 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--white);
+  max-height: 76%;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter: blur(12px);
 }
-.ms-field-head {
+.ms-dock-extras {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.ms-dock-panel,
+.ms-quote,
+.ms-bar {
+  width: 100%;
+  max-width: 1100px;
+  margin-inline: auto;
+}
+.ms-dock-panel {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 8px;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px max(18px, env(safe-area-inset-left)) 4px
+    max(18px, env(safe-area-inset-right));
 }
-.ms-field-head label {
-  font-size: 15px;
-  font-weight: 750;
-  color: var(--black);
+
+/* Composer bar ------------------------------------------------------------ */
+.ms-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px max(18px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+}
+.ms-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .ms-clear {
   border: 0;
@@ -2231,16 +2268,19 @@ button {
 }
 .ms-prompt {
   width: 100%;
+  /* Grown to fit its content by the component, up to this ceiling. */
+  max-height: 168px;
   padding: 13px 14px;
   border: 1px solid var(--line);
-  border-radius: 13px;
-  background: var(--warm-white);
+  border-radius: 14px;
+  background: var(--white);
   color: var(--black);
   font-family: inherit;
-  /* 16px keeps iOS from zooming the whole page on focus. */
+  /* 16px+ keeps iOS from zooming the whole page on focus. */
   font-size: 17px;
   line-height: 1.55;
-  resize: vertical;
+  resize: none;
+  overflow-y: auto;
   transition:
     border-color 0.16s var(--ease),
     background 0.16s var(--ease);
@@ -2251,7 +2291,56 @@ button {
 .ms-prompt:focus {
   outline: 0;
   border-color: var(--black);
+}
+
+/* Collapsed by default, but never silent: the toggle names every current
+   setting, so folding the controls away hides no state. */
+.ms-options-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
   background: var(--white);
+  color: var(--charcoal);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    border-color 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+.ms-options-toggle:hover,
+.ms-options-toggle.is-open {
+  border-color: var(--line-dark);
+  color: var(--black);
+}
+.ms-options-toggle svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ms-options-toggle svg:last-child {
+  transition: transform 0.16s var(--ease);
+}
+.ms-options-toggle.is-open svg:last-child {
+  transform: rotate(180deg);
+}
+.ms-options-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ms-starters {
@@ -2260,8 +2349,8 @@ button {
   overflow-x: auto;
   scrollbar-width: none;
   scroll-snap-type: x proximity;
-  margin-inline: -18px;
-  padding-inline: 18px;
+  margin-inline: -4px;
+  padding-inline: 4px;
 }
 .ms-starters::-webkit-scrollbar {
   display: none;
@@ -2352,6 +2441,24 @@ button {
   color: var(--grey);
   line-height: 1.35;
 }
+/* A quality option carries its own price, so choosing between engines is an
+   informed decision rather than one settled at the confirmation step. Sizes here
+   follow the surrounding chip styles deliberately — this adds a price line, it
+   does not introduce a second type scale. */
+.ms-tier .ms-tier-price {
+  font-weight: 800;
+  color: var(--black);
+}
+.ms-tier.is-active .ms-tier-price {
+  color: var(--paper);
+}
+.ms-tier.is-unavailable {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ms-tier.is-unavailable:hover {
+  border-color: var(--line);
+}
 .ms-chip:hover {
   border-color: var(--line-dark);
 }
@@ -2364,31 +2471,30 @@ button {
   color: color-mix(in srgb, var(--paper) 72%, transparent);
 }
 
-/* Quote, rendering state, primary action ---------------------------------- */
-.ms-quote,
-.ms-rendering {
+/* Quote and primary action -------------------------------------------------
+   There is no separate "rendering" strip any more: work in flight is shown as
+   its own card in the gallery, where the result will land. */
+.ms-quote {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  margin: 14px max(18px, env(safe-area-inset-left)) 0;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--warm-white);
 }
-.ms-quote > div:first-child,
-.ms-rendering > div {
+.ms-quote > div:first-child {
   flex: 1 1 190px;
   min-width: 0;
 }
-.ms-quote b,
-.ms-rendering b {
+.ms-quote b {
   display: block;
   font-size: 16px;
   color: var(--black);
 }
-.ms-quote small,
-.ms-rendering small {
+.ms-quote small {
   display: block;
   margin-top: 2px;
   font-size: 14px;
@@ -2449,32 +2555,20 @@ button {
   }
 }
 
-.ms-action {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  margin: 0 -18px -18px;
-  padding: 12px 18px max(12px, env(safe-area-inset-bottom));
-  background: linear-gradient(
-    to top,
-    var(--white) 72%,
-    color-mix(in srgb, var(--white) 0%, transparent)
-  );
-  border-radius: 0 0 18px 18px;
-}
 .ms-generate {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
-  width: 100%;
-  min-height: 50px;
+  flex: 0 0 auto;
+  min-height: 46px;
+  padding: 0 20px;
   border: 0;
   border-radius: 13px;
   background: var(--black);
   color: var(--paper);
   font-family: inherit;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 750;
   cursor: pointer;
   transition:
@@ -2486,6 +2580,10 @@ button {
   height: 17px;
   fill: currentColor;
   stroke: none;
+}
+/* The button carries both a full and a short label; the viewport picks one. */
+.ms-generate-short {
+  display: none;
 }
 .ms-generate:hover:not(:disabled) {
   background: var(--charcoal);
@@ -2505,9 +2603,11 @@ button {
     opacity: 0.72;
   }
 }
+/* Pushed to the right so the cost always reads immediately before the button
+   that spends it. */
 .ms-cost-note {
-  margin: 8px 0 0;
-  text-align: center;
+  margin: 0 0 0 auto;
+  text-align: right;
   font-size: 14px;
   color: var(--grey);
 }
@@ -2577,12 +2677,17 @@ button {
 
 .ms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(258px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr));
   gap: 14px;
+  /* Rows sized to each card rather than to the tallest in the row. Without
+     this a 1:1 card stretched its 16:9 neighbours to match, leaving large
+     dead gaps wherever shapes were mixed. */
+  align-items: start;
 }
 .ms-card {
   display: flex;
   flex-direction: column;
+  align-self: start;
   border: 1px solid var(--line);
   border-radius: 15px;
   background: var(--white);
@@ -2666,11 +2771,13 @@ button {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* Meta above, actions on their own row: the labels stay readable in a 230px
+   column instead of being truncated to fit beside them. */
 .ms-card-foot {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
 }
 .ms-card-meta {
   font-size: 14px;
@@ -2679,35 +2786,82 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ms-card-actions {
+  display: flex;
+  gap: 7px;
+}
+.ms-card-action,
 .ms-download {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  flex: 0 0 auto;
-  min-height: 34px;
-  padding: 0 12px;
+  flex: 1 1 auto;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
   border-radius: 9px;
   background: var(--warm-white);
   color: var(--black);
+  font-family: inherit;
   font-size: 14px;
   font-weight: 750;
   text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
   transition:
     background 0.16s var(--ease),
     color 0.16s var(--ease);
 }
+.ms-card-action svg,
 .ms-download svg {
   width: 13px;
   height: 13px;
+  flex: 0 0 auto;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.ms-card-action:hover,
 .ms-download:hover {
   background: var(--black);
   color: var(--paper);
+}
+
+/* Work in flight, holding its place in the gallery. */
+.ms-card.is-pending {
+  border-style: dashed;
+  border-color: var(--line-dark);
+}
+.ms-pending-fill {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--warm-white);
+  overflow: hidden;
+}
+.ms-pending-fill::before {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, var(--paper) 65%, transparent) 50%,
+    transparent 80%
+  );
+  animation: ms-shimmer 1.6s linear infinite;
+  content: "";
+}
+@keyframes ms-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
 }
 .ms-empty {
   margin: 0;
@@ -2719,18 +2873,13 @@ button {
   color: var(--grey);
 }
 
-/* Two columns once there is room for the work to sit beside the controls.
-   Below this the composer simply stacks above the results, which is the right
-   order on a phone: write, make, then look. */
+/* There is no longer a width at which the layout splits into two columns: the
+   gallery is full width everywhere and the dock sits under it. That also
+   removes the old 620–1040px dead zone, where a tall stacked composer pushed
+   the results a full screen down on tablets and small laptops. */
 @media (min-width: 1040px) {
-  .ms-layout {
-    grid-template-columns: minmax(340px, 390px) minmax(0, 1fr);
-    gap: 22px;
+  .ms-stage {
     padding-inline: 26px;
-  }
-  .ms-composer {
-    position: sticky;
-    top: 86px;
   }
 }
 
@@ -2739,12 +2888,18 @@ button {
     padding-block: 11px;
     gap: 10px;
   }
-  .ms-identity p {
+  /* The workspace header directly above already reads "Media Studio / Create
+     images and short video", so repeating the name here only cost a row of
+     vertical space that the work itself should have. */
+  .ms-identity {
     display: none;
   }
   .ms-topbar-right {
     width: 100%;
     justify-content: space-between;
+  }
+  .ms-filters button {
+    padding: 0 10px;
   }
   .ms-mode {
     flex: 1;
@@ -2753,37 +2908,55 @@ button {
     flex: 1;
     justify-content: center;
   }
-  .ms-layout {
-    padding: 14px 14px 26px;
-    gap: 16px;
+  .ms-stage {
+    padding: 14px 14px 20px;
   }
-  .ms-composer {
-    padding: 15px;
-    border-radius: 16px;
-  }
-  .ms-starters,
-  .ms-action {
-    margin-inline: -15px;
-    padding-inline: 15px;
-  }
-  .ms-action {
-    margin-bottom: -15px;
+  /* A phone keyboard already takes half the screen; cap the dock so the work
+     behind it never disappears completely. */
+  .ms-dock {
+    max-height: 68%;
   }
   .ms-chips {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* The dock was taller than the gallery it sits under — the composer winning
+     the screen again, which is the thing this layout exists to prevent. The
+     cost shares the options row instead of taking one of its own, so the dock
+     loses a whole line while the button stays a full-width thumb target. */
+  .ms-options-toggle {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .ms-cost-note {
+    order: 2;
+    flex: 0 0 auto;
+    margin: 0;
+    font-size: 12.5px;
+    text-align: right;
+  }
+  .ms-bar-row .ms-generate {
+    order: 3;
+    flex: 1 1 100%;
+    min-height: 48px;
+  }
+  /* "See price and render" does not fit a phone button; the short form does. */
+  .ms-generate-long {
+    display: none;
+  }
+  .ms-generate-short {
+    display: inline;
   }
   /* Everything tapped with a thumb gets a 44px target. */
   .ms-mode button,
   .ms-starter,
   .ms-filters button,
   .ms-chips.is-compact .ms-chip,
+  .ms-options-toggle,
   .ms-ghost-btn,
   .ms-confirm-btn,
+  .ms-card-action,
   .ms-download {
     min-height: 44px;
-  }
-  .ms-grid {
-    grid-template-columns: minmax(0, 1fr);
   }
   .ms-quote-actions {
     width: 100%;
@@ -4780,12 +4953,10 @@ button {
 }
 .response-actions-trigger {
   display: inline-flex;
-  /* This is how a reply gets copied, exported or reported, so it has to be
-     reliably tappable rather than merely visible. */
-  min-height: 36px;
+  min-height: 30px;
   align-items: center;
   gap: 5px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 0;
   border-radius: 7px;
   background: transparent;
@@ -4869,6 +5040,70 @@ button {
 }
 .response-feedback-slot > button span {
   display: inline !important;
+}
+/* Save-as sits as a labelled row of formats rather than three more list items,
+   so the menu still reads as a short list of actions. */
+.response-actions-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.response-actions-label {
+  width: 100%;
+  padding: 0 9px 2px;
+  color: var(--grey);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.response-actions-group > button {
+  display: inline-flex;
+  flex: 1 1 auto;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--charcoal);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.response-actions-group > button:hover:not(:disabled),
+.response-actions-group > button:focus-visible {
+  border-color: var(--black);
+  background: var(--warm-white);
+  color: var(--black);
+  outline: 0;
+}
+.response-actions-group > button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+.response-actions-group svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.response-actions-error {
+  margin: 6px 0 0;
+  padding: 0 9px;
+  color: var(--clay);
+  font-size: 12px;
+  line-height: 1.45;
 }
 @keyframes response-menu-in {
   from {
@@ -8969,9 +9204,13 @@ button {
   box-shadow: 0 10px 30px rgba(34, 31, 27, 0.06);
   backdrop-filter: blur(16px);
 }
+/* Sized from however many stages exist rather than a hardcoded count — adding
+   Chats as a fifth destination silently pushed the last stage onto a second row
+   while this said repeat(4, …). */
 .project-stage-nav ol {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -9567,7 +9806,10 @@ button {
     display: none;
   }
   .project-stage-nav ol {
-    min-width: 650px;
+    /* Sized from the stages themselves. The old fixed 650px was measured for
+       four of them, so adding Chats squeezed every tab instead of lengthening
+       the scroll. */
+    min-width: max-content;
   }
   .project-build-record,
   .deliverable-grid {
@@ -10369,7 +10611,10 @@ button {
     border-radius: 13px;
   }
   .project-stage-nav ol {
-    min-width: 590px;
+    min-width: max-content;
+  }
+  .project-stage-nav li {
+    scroll-snap-align: start;
   }
   .project-stage-nav button,
   .stage-control {
@@ -11120,8 +11365,137 @@ button {
 .active-project-meta span:not(:first-child)::before {
   margin-right: 17px;
   color: var(--line-dark);
-  content: "â€¢";
+  content: "•";
 }
+/* Project chats -----------------------------------------------------------
+   A project's conversations, listed inside the project that owns them. */
+.project-chat-start {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 16px 18px;
+  border: 1px dashed var(--line-dark);
+  border-radius: 14px;
+  background: var(--white);
+  color: var(--black);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.16s var(--ease),
+    background 0.16s var(--ease);
+}
+.project-chat-start:hover {
+  border-color: var(--black);
+  border-style: solid;
+}
+.project-chat-start > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: var(--black);
+  color: var(--paper);
+  font-size: 20px;
+  line-height: 1;
+}
+.project-chat-start b,
+.project-chat-item b {
+  display: block;
+  font-size: 15px;
+  font-weight: 750;
+}
+.project-chat-start small,
+.project-chat-item small {
+  display: block;
+  margin-top: 2px;
+  color: var(--grey);
+  font-size: 13px;
+}
+.project-chat-list {
+  display: grid;
+  gap: 8px;
+}
+.project-chat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--black);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.16s var(--ease),
+    transform 0.16s var(--ease);
+}
+.project-chat-item:hover {
+  border-color: var(--black);
+  transform: translateY(-1px);
+}
+.project-chat-item svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: var(--grey);
+}
+.project-chat-empty {
+  margin: 0;
+  padding: 28px 20px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  color: var(--grey);
+  font-size: 14px;
+  text-align: center;
+}
+.stage-number-plain {
+  display: grid;
+  place-items: center;
+  color: var(--grey);
+}
+
+/* The breadcrumb shown above a chat that belongs to a project. */
+.project-chat-context {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 9px max(18px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--line);
+  background: var(--warm-white);
+}
+.project-chat-context button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--black);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.project-chat-context button:hover {
+  border-color: var(--black);
+}
+.project-chat-context span {
+  color: var(--grey);
+  font-size: 13px;
+}
+
 .project-next-action {
   display: flex;
   flex-direction: column;
@@ -11455,7 +11829,44 @@ button {
   .asset-actions button,
   .asset-actions button.approve,
   .asset-actions button.approved {
-    min-height: 40px;
+    /* 44px is the floor for something tapped with a thumb; 40 was just under. */
+    min-height: 44px;
     width: 100%;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Touch targets, last word.
+
+   These live at the end deliberately. Every declaration here competes with a
+   base rule of equal specificity defined further up the sheet, so an earlier
+   media block loses on source order no matter how correct it is. 44px is the
+   floor for anything a thumb has to hit.
+   --------------------------------------------------------------------------- */
+@media (max-width: 620px) {
+  .project-bar-back,
+  .inline-project-actions button,
+  .project-next-action > button,
+  .asset-actions button,
+  .asset-revision button,
+  .deliverable-actions button,
+  .deliverables-empty button,
+  .project-export-bar button,
+  .studio-sources a {
+    min-height: 44px;
+  }
+  .deliverable-actions button,
+  .project-export-bar button {
+    padding-inline: 13px;
+  }
+  /* The rail scrolls rather than compressing; keep each stage a full target. */
+  .project-stage-nav button,
+  .stage-control {
+    min-height: 48px;
+  }
+  /* Media Studio: the one control in the dock still under the floor. */
+  .ms-clear {
+    min-height: 44px;
+    padding-inline: 10px;
   }
 }

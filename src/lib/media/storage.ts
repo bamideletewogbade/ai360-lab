@@ -108,9 +108,13 @@ export async function persistGeneratedMedia(input: {
           (id, workspace_key, job_id, asset_id, version, selected, metadata)
         values (${outputId}, ${input.context.workspace.key}, ${input.jobId.slice(0, 96)}, ${assetId},
                 ${Number(version?.next_version || 1)}, true, ${tx.json(input.metadata || {})})`
+      // Clearing the error is part of succeeding. A job that recovered after a
+       // delivery retry otherwise stays flagged with the fault it survived, which
+       // makes the media ledger read as broken when it is not.
       await tx`
         update public.lab_media_jobs
-           set status = 'completed', completed_at = coalesce(completed_at, now()), updated_at = now()
+           set status = 'completed', error_code = null, error_message = null,
+               completed_at = coalesce(completed_at, now()), updated_at = now()
          where workspace_key = ${input.context.workspace.key} and id = ${input.jobId.slice(0, 96)}`
     })
     return { assetId, objectPath, mimeType: input.mimeType, byteSize: input.bytes.byteLength, sha256 }

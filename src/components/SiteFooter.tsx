@@ -75,7 +75,9 @@ export function SiteFooter() {
 
           <div className={styles.linkGroup}>
             <h3>Connect</h3>
-            <a href="mailto:info@accrainnovationcentre.com">Email the centre</a>
+            {/* The domain is spelled "center". "accrainnovationcentre.com" has no
+                MX record and does not resolve, so mail to it silently bounced. */}
+            <a href="mailto:info@accrainnovationcenter.com">Email the centre</a>
             <a href="tel:+233256120157">+233 (0) 256 120 157</a>
             <a href={directionsUrl} target="_blank" rel="noreferrer">Get directions</a>
           </div>

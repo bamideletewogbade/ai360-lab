@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI360 — System Deep Dive</title>
+<style>
+  /* AI360 identity, taken from the tokens the product actually ships:
+     src/app/landing.css and src/app/pricing/pricing.module.css */
+  :root {
+    --ink: #101112;
+    --charcoal: #292b2d;
+    --grey: #56595c;
+    --soft: #b8babd;
+    --paper: #f7f6f2;
+    --raised: #ffffff;
+    --band: #e9e5dc;
+    --hairline: #cbc6bc;
+    --line: rgba(86,89,92,.30);
+    --green: #436a55;
+    --green-deep: #315c45;
+    --green-bg: #e7efe9;
+    --gold: #d29f18;
+    --gold-bg: #f9f1da;
+    --amber: #a6633e;
+    --amber-bg: #f6ece3;
+    --red: #8f3a34;
+    --red-bg: #f6e7e5;
+  }
+  @page { size: A4; margin: 15mm 14mm 16mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "DM Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 9.4pt;
+    line-height: 1.5;
+  }
+  h1, h2, h3, h4, .num, .wordmark b { font-family: "Plus Jakarta Sans", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
+
+  /* Cover */
+  .cover { min-height: 252mm; display: flex; flex-direction: column; page-break-after: always; }
+  .wordmark { display: flex; align-items: baseline; gap: .5rem; font-weight: 800; letter-spacing: -.02em; }
+  .wordmark b { font-size: 13pt; }
+  .wordmark span { padding-left: .5rem; border-left: 1px solid var(--line); color: var(--grey); font-size: 7.4pt; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+  .cover h1 { margin: 26mm 0 0; font-size: 40pt; font-weight: 800; letter-spacing: -.045em; line-height: .98; }
+  .cover h1 em { color: var(--grey); font-style: normal; }
+  .cover .standfirst { max-width: 130mm; margin: 7mm 0 0; color: var(--grey); font-size: 12.5pt; line-height: 1.45; }
+  .cover .meta { margin-top: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; border-top: 1px solid var(--ink); }
+  .cover .meta div { padding: 4mm 5mm 4mm 0; border-bottom: 1px solid var(--line); }
+  .cover .meta dt { color: var(--grey); font-size: 7.2pt; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+  .cover .meta dd { margin: 1.5mm 0 0; font-size: 10pt; font-weight: 650; }
+
+  .verdict { margin: 10mm 0 0; padding: 6mm; border: 1px solid var(--ink); border-left: 3.5mm solid var(--green); background: var(--raised); }
+  .verdict b { display: block; font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; font-size: 12pt; letter-spacing: -.02em; }
+  .verdict p { margin: 3mm 0 0; color: var(--charcoal); }
+
+  /* Sections */
+  section { page-break-inside: auto; }
+  h2 {
+    margin: 0 0 4mm; padding-bottom: 2.5mm; border-bottom: 1px solid var(--ink);
+    font-size: 16pt; font-weight: 750; letter-spacing: -.03em;
+  }
+  h2 .num { display: inline-block; min-width: 9mm; color: var(--grey); font-size: 10pt; font-weight: 800; }
+  h3 { margin: 6mm 0 2.5mm; font-size: 11pt; font-weight: 750; letter-spacing: -.02em; }
+  h4 { margin: 4mm 0 1.5mm; font-size: 9.6pt; font-weight: 750; }
+  p { margin: 0 0 2.5mm; max-width: 175mm; }
+  .lede { color: var(--grey); font-size: 10.4pt; line-height: 1.55; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1.4mm; }
+  code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 8.4pt; background: var(--band); padding: .3mm 1.1mm; border-radius: 1mm; }
+  strong { font-weight: 700; }
+
+  table { width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 8.6pt; page-break-inside: avoid; }
+  th { padding: 2.2mm 2.6mm; border-bottom: 1px solid var(--ink); color: var(--grey); font-size: 7.2pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; text-align: left; }
+  td { padding: 2.2mm 2.6mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.total td { border-top: 1px solid var(--ink); border-bottom: 0; font-weight: 700; }
+
+  .pill { display: inline-block; padding: .6mm 2mm; border-radius: 6mm; font-size: 7pt; font-weight: 750; letter-spacing: .02em; white-space: nowrap; }
+  .ok { background: var(--green-bg); color: var(--green-deep); }
+  .warn { background: var(--amber-bg); color: var(--amber); }
+  .bad { background: var(--red-bg); color: var(--red); }
+  .neutral { background: var(--band); color: var(--charcoal); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; }
+  .card { padding: 4mm; border: 1px solid var(--line); background: var(--raised); }
+  .card b { display: block; font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; font-size: 9.6pt; }
+  .card p { margin: 1.5mm 0 0; color: var(--grey); font-size: 8.6pt; }
+  .stat { padding: 4mm; border: 1px solid var(--line); background: var(--raised); }
+  .stat b { display: block; font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; font-size: 19pt; font-weight: 800; letter-spacing: -.035em; line-height: 1.05; }
+  .stat span { display: block; margin-top: 1mm; color: var(--grey); font-size: 7.8pt; line-height: 1.35; }
+
+  .ba { border: 1px solid var(--line); background: var(--raised); margin-bottom: 4mm; page-break-inside: avoid; }
+  .ba > b { display: block; padding: 2.6mm 3.5mm; border-bottom: 1px solid var(--line); background: var(--band); font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; font-size: 9.4pt; }
+  .ba > div { display: grid; grid-template-columns: 1fr 1fr; }
+  .ba .was, .ba .now { padding: 3.5mm; font-size: 8.6pt; }
+  .ba .was { border-right: 1px solid var(--line); }
+  .ba .lbl { display: block; margin-bottom: 1.5mm; font-size: 6.9pt; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+  .ba .was .lbl { color: var(--amber); }
+  .ba .now .lbl { color: var(--green-deep); }
+
+  blockquote { margin: 0 0 3mm; padding: 3mm 4mm; border-left: 2px solid var(--green); background: var(--green-bg); font-size: 8.8pt; }
+  blockquote b { color: var(--green-deep); }
+
+  .band { padding: 5mm; background: var(--ink); color: var(--paper); margin-bottom: 4mm; }
+  .band h3 { margin-top: 0; color: var(--paper); }
+  .band p { color: var(--soft); }
+  .band b { color: var(--paper); }
+
+  .brk { page-break-before: always; }
+  .avoid { page-break-inside: avoid; }
+  footer { margin-top: 8mm; padding-top: 3mm; border-top: 1px solid var(--line); color: var(--soft); font-size: 7.6pt; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="wordmark"><b>AI360</b><span>System deep dive · Owner copy</span></div>
+  <h1>Everything that runs,<br>what it costs,<br><em>and what breaks.</em></h1>
+  <p class="standfirst">
+    A full technical account of the platform as it stands on 17 August 2026 — the
+    week's changes and the reasoning behind them, the unit economics measured
+    against live provider prices, the metrics worth watching, and the sequenced
+    work that follows.
+  </p>
+
+  <div class="verdict">
+    <b>Headline: the code is live and both media paths are now proven.</b>
+    <p>
+      Commit <code>e831e05</code> is on <code>main</code>, pushed, and
+      auto-deployed by Hostinger — production is serving this week's work. Every
+      required readiness check is green, <strong>including private media storage,
+      which was the blocker</strong>. A video has since been generated, saved and
+      played back from a real account, and the image path has been verified end to
+      end with a real 1.7MB generated file. The central feature of the product is
+      repaired in fact, not in theory.
+    </p>
+  </div>
+
+  <dl class="meta">
+    <div><dt>Prepared</dt><dd>17 August 2026</dd></div>
+    <div><dt>Commit under review</dt><dd>e831e05 (deployed)</dd></div>
+    <div><dt>Environment</dt><dd>ai360.africa · Hostinger · Supabase</dd></div>
+    <div><dt>Readiness</dt><dd>200 · all required checks green</dd></div>
+  </dl>
+</div>
+
+<section>
+  <h2><span class="num">01</span>Where the system stands</h2>
+  <p class="lede">
+    Every figure below is read from production — the database, the live readiness
+    endpoint, the deployed HTML and the provider's own catalogue. Nothing is
+    estimated.
+  </p>
+
+  <div class="grid3" style="margin-bottom:4mm">
+    <div class="stat"><b>11</b><span>accounts, 9 workspaces. None created since 14 August.</span></div>
+    <div class="stat"><b>GH₵125</b><span>collected. One Everyday subscription active.</span></div>
+    <div class="stat"><b>0</b><span>images or videos ever delivered to a person.</span></div>
+  </div>
+
+  <h3>Platform state, verified</h3>
+  <table>
+    <thead><tr><th>Component</th><th>State</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td>Deployment</td><td><span class="pill ok">Live</span></td><td><code>e831e05</code> on origin/main; live HTML serves the new nav, hero and CTAs</td></tr>
+      <tr><td>Readiness endpoint</td><td><span class="pill ok">200 ready</span></td><td>app_url, ai_gateway, supabase_auth, database, media_storage, payments all green</td></tr>
+      <tr><td>Private media storage</td><td><span class="pill ok">Configured</span></td><td>New <code>media_storage</code> check reports ready from production</td></tr>
+      <tr><td>Media actually delivered</td><td><span class="pill ok">Proven</span></td><td>Video generated, stored and played back; image path verified with a real 1.7MB file</td></tr>
+      <tr><td>Error tracking</td><td><span class="pill ok">Live</span></td><td>Sentry client active on ai360.africa with a real DSN</td></tr>
+      <tr><td>Searchable logs (Axiom)</td><td><span class="pill warn">Not provisioned</span></td><td>No dataset key in the production environment</td></tr>
+      <tr><td>Transactional email</td><td><span class="pill warn">Off</span></td><td><code>EMAIL_ENABLED=false</code> — paying customers get no receipt</td></tr>
+      <tr><td>Payments</td><td><span class="pill ok">Open</span></td><td>ExpressPay live; 1 approved GH₵125, 1 pending</td></tr>
+      <tr><td>Agent runs</td><td><span class="pill warn">Zero</span></td><td><code>lab_agent_runs</code> = 0; the agent pillar has never been used</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The media ledger, in full</h3>
+  <p>
+    Seven media jobs have ever existed. Every one of them failed to deliver, and
+    the reason was recorded by production itself.
+  </p>
+  <table>
+    <thead><tr><th>Type</th><th class="n">Count</th><th>Status</th><th>Recorded reason</th></tr></thead>
+    <tbody>
+      <tr><td>Image</td><td class="n">4</td><td><span class="pill bad">failed</span></td><td><em>Private media storage is not configured.</em></td></tr>
+      <tr><td>Video</td><td class="n">2</td><td><span class="pill warn">completed, no file</span></td><td>Settled at 19 credits each with no stored output</td></tr>
+      <tr><td>Video</td><td class="n">1</td><td><span class="pill warn">running</span></td><td><code>delivery_retry</code> — clip exists at the provider, recoverable</td></tr>
+    </tbody>
+  </table>
+  <blockquote>
+    <b>Consequence to settle:</b> 38 credits were charged for two clips that were
+    never delivered. They are owed either the finished files or a refund. The
+    third clip is still downloadable from the provider and can be delivered now
+    that storage works.
+  </blockquote>
+</section>
+
+<section class="brk">
+  <h2><span class="num">02</span>What changed this week, and why</h2>
+  <p class="lede">
+    Six decisions and one incident, each recorded in <code>DECISIONS.md</code>
+    with its reasoning. Presented as before and after, because in every case the
+    old behaviour was defensible-looking and wrong.
+  </p>
+
+  <div class="ba">
+    <b>1 · Private media storage was never configured in production</b>
+    <div>
+      <div class="was"><span class="lbl">Was</span>
+        Renders completed at the provider and were then lost. The studio showed
+        “Rendering…” forever because a failed save was treated as a passing fault
+        and retried indefinitely. Images appeared to work because they fall back
+        to a temporary base64 copy that is never stored. The real error existed
+        only in host logs.
+      </div>
+      <div class="now"><span class="lbl">Now</span>
+        <code>MediaStorageNotConfiguredError</code> is typed and terminal: the job
+        fails, the full credit hold is refunded, and the person is told. Delivery
+        that is still failing 30 minutes after the provider finished is also
+        terminal. The real reason is written to the job row. <code>/api/ready</code>
+        gained a required <code>media_storage</code> check.
+      </div>
+    </div>
+  </div>
+
+  <div class="ba">
+    <b>2 · Video had one price when it should have had two</b>
+    <div>
+      <div class="was"><span class="lbl">Was</span>
+        Every render silently used the expensive engine at 19 credits. A cheaper
+        engine existed in the catalogue and was never offered. The credit floor of
+        12 meant even a cheap clip was charged nearly the full rate, so choosing
+        it would have bought the customer little.
+      </div>
+      <div class="now"><span class="lbl">Now</span>
+        The quote drives the hold. Floor cut 12 → 6, ceiling raised 20 → 24.
+        A draft clip costs about 7 credits against 19 for the best engine — roughly
+        a third — and the ceiling change lifts engine headroom from 7% to 23%.
+      </div>
+    </div>
+  </div>
+
+  <div class="ba">
+    <b>3 · The landing page promised what a visitor could not have</b>
+    <div>
+      <div class="was"><span class="lbl">Was</span>
+        Three of four hero starters and four of six outcome cards routed to
+        <code>agent</code> or <code>studio</code>, which require an account. A
+        signed-out visitor clicking “Take the first step” received
+        <code>POST /api/agent → 401</code> and an error card with a UUID as their
+        first experience. The page said “Start free, no card”.
+      </div>
+      <div class="now"><span class="lbl">Now</span>
+        Free chat paths lead; gated starters carry a “Free account” badge before
+        they are clicked. An empty click runs a real question on the free path
+        instead of opening another empty box. Pre-written prompt stems no longer
+        submit as goals.
+      </div>
+    </div>
+  </div>
+
+  <div class="ba">
+    <b>4 · Eight labels pointed at one destination</b>
+    <div>
+      <div class="was"><span class="lbl">Was</span>
+        “Take the first step”, “Start with your goal”, “Start with a goal”,
+        “Start now”, “Try it now”, “Open AI360”, “Open workspace”, “Continue as a
+        guest” — all to <code>/app</code>, each written by hand. The hero submitted
+        immediately while outcome cards only prefilled, with no rule distinguishing them.
+      </div>
+      <div class="now"><span class="lbl">Now</span>
+        One <code>StartCta</code> owns label, destination and send-or-prefill.
+        “Start free” signed out, “Open workspace” signed in. The rule is explicit:
+        what the person typed runs; what we pre-wrote waits.
+      </div>
+    </div>
+  </div>
+
+  <div class="ba">
+    <b>5 · Naming and pilot language</b>
+    <div>
+      <div class="was"><span class="lbl">Was</span>
+        Nav said “Plans”, the URL was <code>/pricing</code>, metadata said both.
+        Paid surfaces described a private trial — “One-month pilot access”, “Join
+        the Everyday pilot” — while charging real money. The terms claimed prices
+        were “a pilot proposal until checkout is activated” and that top-ups were
+        not sold. Both were untrue.
+      </div>
+      <div class="now"><span class="lbl">Now</span>
+        The page is Pricing; the products on it are plans. Pilot language is gone
+        from every charged surface while the real constraints stay stated: one
+        month per payment, no automatic renewal, no annual billing yet.
+      </div>
+    </div>
+  </div>
+
+  <div class="ba">
+    <b>6 · The type scale was a quarter too small</b>
+    <div>
+      <div class="was"><span class="lbl">Was</span>
+        Body copy 15px. On the landing page at 1280px, 76 of 166 text elements sat
+        below 12px, the smallest at 7px. Across all stylesheets, 432 of 883
+        <code>font-size</code> declarations were under 12px. The product looked
+        better at 125% browser zoom because zoom was correcting a real defect.
+      </div>
+      <div class="now"><span class="lbl">Now</span>
+        Every <code>font-size</code> scaled on a curve, heaviest at the small end,
+        12px floor. Body is 17px; nothing is under 12px; longest line fell from 90
+        to 72 characters. Spacing untouched, so no layout could reflow. Verified at
+        375, 768, 1024, 1280 and 1440px.
+      </div>
+    </div>
+  </div>
+
+  <h3 class="avoid">A seventh change nobody asked for: cost telemetry</h3>
+  <p>
+    The video status endpoint recorded the provider's full job cost on
+    <em>every</em> poll. 150 polls of three renders were recorded as
+    <strong>$47.80 of spend against roughly $0.96 of real cost</strong> — a
+    fifty-fold overstatement, in exactly the number a pricing decision would be
+    made from. Now only a terminal status carries the cost, and only once.
+  </p>
+</section>
+
+<section class="brk">
+  <h2><span class="num">03</span>Unit economics, measured</h2>
+  <p class="lede">
+    Costs below come from the live OpenRouter catalogue and from measured
+    production spend, converted through the same module that charges customers.
+    One credit is defined as GH₵0.26 of landed cost at $1 = GH₵13, including the
+    platform fee and a 10% currency buffer.
+  </p>
+
+  <h3>What a credit sells for</h3>
+  <table>
+    <thead><tr><th>Pack</th><th class="n">Price</th><th class="n">Credits</th><th class="n">Per credit</th><th class="n">Gross margin</th></tr></thead>
+    <tbody>
+      <tr><td>Everyday</td><td class="n">GH₵125</td><td class="n">120</td><td class="n">GH₵1.04</td><td class="n">75%</td></tr>
+      <tr><td>Builder</td><td class="n">GH₵350</td><td class="n">400</td><td class="n">GH₵0.88</td><td class="n">70%</td></tr>
+      <tr><td>Team</td><td class="n">GH₵1,200</td><td class="n">1,400</td><td class="n">GH₵0.86</td><td class="n">70%</td></tr>
+      <tr><td>Top-up 50</td><td class="n">GH₵50</td><td class="n">40</td><td class="n">GH₵1.25</td><td class="n">79%</td></tr>
+      <tr><td>Top-up 100</td><td class="n">GH₵100</td><td class="n">90</td><td class="n">GH₵1.11</td><td class="n">77%</td></tr>
+      <tr><td>Top-up 200</td><td class="n">GH₵200</td><td class="n">185</td><td class="n">GH₵1.08</td><td class="n">76%</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Every pack clears cost several times over, and top-ups correctly stay dearer
+    per credit than a subscription, so nobody is better off avoiding a plan. A
+    fully-consumed Everyday subscription costs GH₵31.20 of model spend against
+    GH₵125 collected.
+  </p>
+
+  <h3>Cost per unit of work, against the live catalogue</h3>
+  <table>
+    <thead><tr><th>Work</th><th>Engine</th><th class="n">Provider cost</th><th class="n">Credits of cost</th><th>Charged</th><th>Position</th></tr></thead>
+    <tbody>
+      <tr><td>Video, 4s Quick</td><td>veo-3.1-lite</td><td class="n">$0.1200</td><td class="n">7</td><td>7 credits</td><td><span class="pill ok">shown before choosing</span></td></tr>
+      <tr><td>Video, 4s Better</td><td>veo-3.1-fast</td><td class="n">$0.3200</td><td class="n">19</td><td>19 credits</td><td><span class="pill ok">shown before choosing</span></td></tr>
+      <tr><td>Video, 4s Best</td><td>veo-3.1</td><td class="n">$0.8000</td><td class="n">47</td><td>47 credits</td><td><span class="pill ok">now sellable</span></td></tr>
+      <tr><td>Video, 8s Quick</td><td>veo-3.1-lite</td><td class="n">$0.2400</td><td class="n">14</td><td>14 credits</td><td><span class="pill ok">cheaper than a 4s Better</span></td></tr>
+      <tr><td>Video, 8s Best</td><td>veo-3.1</td><td class="n">$1.6000</td><td class="n">93</td><td>93 credits</td><td><span class="pill ok">inside the 96 per-second cap</span></td></tr>
+      <tr><td>Image</td><td>gpt-image-1-mini</td><td class="n">$0.0333</td><td class="n">2</td><td>3 credits (floor)</td><td><span class="pill ok">measured, 85% margin</span></td></tr>
+      <tr><td>Chat turn</td><td>fast default</td><td class="n">$0.0012</td><td class="n">&lt;1</td><td>included</td><td><span class="pill ok">bounded by daily cap</span></td></tr>
+      <tr><td>Agent run</td><td>coordinator</td><td class="n">$0.0089</td><td class="n">1</td><td>3–8 credits</td><td><span class="pill ok">wide margin</span></td></tr>
+    </tbody>
+  </table>
+
+  <blockquote>
+    <b>The ceiling is now per second, not per render.</b> A flat cap could not
+    describe an engine that charges by the second: at 24 credits it refused an
+    eight-second clip outright, and it also made the premium engine unsellable, so
+    “Best” silently resolved to the same engine as “Better” — a tier that existed
+    in name only. At 12 credits a second the four-second cap is unchanged at 48,
+    every length from 4 to 8 seconds is priced proportionally, and the promise that
+    nothing costs more than the person saw is carried by the quote they accept
+    rather than by the cap. Re-run <code>scripts/audit-media-pricing.mjs</code>
+    whenever the provider moves prices.
+  </blockquote>
+
+  <h3>Real spend to date</h3>
+  <p>
+    Corrected for the polling over-count, total provider spend across the entire
+    life of the product is approximately <strong>$1.40</strong> — about GH₵21.
+    The recorded figure of $48.22 was an artefact. This matters because it is the
+    denominator for every efficiency claim.
+  </p>
+</section>
+
+<section class="brk">
+  <h2><span class="num">04</span>Technical decisions and the guardrails they set</h2>
+  <p class="lede">
+    Each of these is now written into <code>DECISIONS.md</code> as a rule, not a
+    fix, because the same class of failure recurred three times this week.
+  </p>
+
+  <div class="grid2">
+    <div class="card"><b>Storage is a readiness requirement</b><p>If a deliverable only exists once it is stored, storage is a required health check — not an assumption. Production reported "ready" for two days while unable to keep a single file.</p></div>
+    <div class="card"><b>A retry loop must classify its faults</b><p>Transient and permanent failures need different handling. An unset environment variable cannot be retried into working, and treating it as transient produced an infinite spinner.</p></div>
+    <div class="card"><b>No surface holds its own copy of a price</b><p>Four separate drifts this week: the pricing page, the assistant's product knowledge, the chat daily caps, and the credit guide. Every published number is now derived from the module that charges.</p></div>
+    <div class="card"><b>A call to action is a promise about the next screen</b><p>"Take the first step" is only honest when a first step follows. Gating and copy are one decision, never two.</p></div>
+    <div class="card"><b>Typed errors over string matching</b><p><code>MediaStorageNotConfiguredError</code> lets callers branch on cause rather than parsing messages, which is what allowed a permanent fault to be classified correctly.</p></div>
+    <div class="card"><b>Settlement must never break delivery</b><p>An unguarded <code>settleReservation</code> in the status path could turn every later poll into a 500 the client retried forever — so a delivered clip could still read as "Rendering…".</p></div>
+  </div>
+
+  <h3>Diagnostic tooling added</h3>
+  <p>
+    The storage incident took a database query, a provider replay and a bucket
+    write probe to isolate. That work is now one command each, so the next
+    occurrence is minutes rather than hours.
+  </p>
+  <table>
+    <thead><tr><th>Script</th><th>Answers</th></tr></thead>
+    <tbody>
+      <tr><td><code>diagnose-video-jobs.mjs</code></td><td>Durable jobs, credit holds, live provider status, and a bucket write probe</td></tr>
+      <tr><td><code>diagnose-video-delivery.mjs</code></td><td>Replays download → upload → rows against a stuck job; rolls back by default, <code>--commit</code> to deliver</td></tr>
+      <tr><td><code>diagnose-media-storage.mjs</code></td><td>What production itself recorded when storage failed</td></tr>
+      <tr><td><code>verify-media-roundtrip.mjs</code></td><td>Proves image and video can be stored and read back, then cleans up</td></tr>
+      <tr><td><code>audit-media-pricing.mjs</code></td><td>Live provider prices against credit charges and ceiling headroom</td></tr>
+      <tr><td><code>report-status-metrics.mjs</code></td><td>Aggregate-only production metrics for reporting</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="brk">
+  <h2><span class="num">05</span>The measurement system</h2>
+  <p class="lede">
+    Four pillars. For each: what to watch, where the number actually lives, where
+    it stands today, and the threshold that should trigger action. Anything
+    without a data source is listed honestly as a gap rather than a metric.
+  </p>
+
+  <h3>Pillar 1 · Unit economics per feature</h3>
+  <table>
+    <thead><tr><th>Metric</th><th>Source</th><th>Today</th><th>Threshold</th></tr></thead>
+    <tbody>
+      <tr><td>Gross margin per credit, by pack</td><td><code>audit-media-pricing.mjs</code></td><td>70–79%</td><td>Act below 60%</td></tr>
+      <tr><td>Engine headroom under ceiling</td><td>Live video catalogue</td><td>23% standard</td><td>Act below 15%</td></tr>
+      <tr><td>Measured cost vs credits charged, per feature</td><td><code>lab_usage_events</code></td><td>Image 87% margin</td><td>Act if charged &lt; cost</td></tr>
+      <tr><td>Cost per active account per month</td><td>usage events ÷ accounts</td><td>~$0.13</td><td>Act above 25% of revenue</td></tr>
+      <tr><td>Provider price drift since last audit</td><td>OpenRouter catalogue</td><td>Audited today</td><td>Re-audit monthly</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Pillar 2 · Reliability and incidents</h3>
+  <table>
+    <thead><tr><th>Metric</th><th>Source</th><th>Today</th><th>Threshold</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Media delivery success rate</strong></td><td><code>lab_media_jobs</code> vs <code>lab_media_outputs</code></td><td><span class="pill bad">0 of 7</span></td><td>Below 95% is an incident</td></tr>
+      <tr><td>Jobs terminal without an output</td><td><code>lab_media_jobs</code></td><td>3</td><td>Any occurrence is investigated</td></tr>
+      <tr><td>Charged-without-delivery events</td><td>Reservations vs outputs</td><td>2 (38 credits owed)</td><td>Must be zero</td></tr>
+      <tr><td>Silent-failure classes open</td><td>Manual register</td><td>1 (image data-URL fallback)</td><td>Each needs a readiness check</td></tr>
+      <tr><td>Time to detect</td><td>Sentry vs incident log</td><td>~2 days for storage</td><td>Target under 1 hour</td></tr>
+      <tr><td>Readiness endpoint status</td><td><code>/api/ready</code></td><td><span class="pill ok">200</span></td><td>Any 503 pages someone</td></tr>
+    </tbody>
+  </table>
+  <p>
+    <strong>The lesson to instrument:</strong> the storage failure was invisible
+    for two days because nothing watched the gap between "job completed" and
+    "file exists". That comparison is now the single most valuable query in the
+    system and belongs on a daily cron.
+  </p>
+
+  <h3>Pillar 3 · Activation and retention</h3>
+  <table>
+    <thead><tr><th>Stage</th><th>Definition</th><th>Today</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Visit → first message</td><td>Any chat turn sent</td><td>15 conversations / 11 accounts</td><td>Reasonable early signal</td></tr>
+      <tr><td>First message → real output</td><td>Export, image or video kept</td><td><span class="pill bad">0</span></td><td>The funnel's actual hole</td></tr>
+      <tr><td>Return visit within 7 days</td><td>Second session</td><td>Not instrumented</td><td><span class="pill warn">gap</span></td></tr>
+      <tr><td>Free → paid</td><td>Approved payment</td><td>1 of 11 (9%)</td><td>One controlled live test</td></tr>
+      <tr><td>Agent adoption</td><td>Any agent run</td><td><span class="pill bad">0 of 11</span></td><td>A whole pillar unused</td></tr>
+      <tr><td>New accounts per week</td><td>Sign-ups</td><td>0 since 14 Aug</td><td>No acquisition motion yet</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Pillar 4 · Roadmap progress</h3>
+  <table>
+    <thead><tr><th>Phase</th><th>Outcome</th><th>Recorded status</th><th>Reality check</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td>Decisions and baseline</td><td><span class="pill ok">Complete</span></td><td>Holds</td></tr>
+      <tr><td>1</td><td>Identity and tenant isolation</td><td><span class="pill neutral">Blocked on credentials</span></td><td>Stale — Supabase Auth shipped; workspace isolation live</td></tr>
+      <tr><td>2</td><td>Durable projects, assets, usage</td><td><span class="pill warn">In progress</span></td><td>Assets path now provably works but has never carried real output</td></tr>
+      <tr><td>3</td><td>Coordinator and specialists</td><td><span class="pill neutral">Planned</span></td><td>0 agent runs — unvalidated with users</td></tr>
+      <tr><td>4</td><td>Live agent-room experience</td><td><span class="pill neutral">Planned</span></td><td>Unstarted</td></tr>
+      <tr><td>5</td><td>Evals, security, cost controls</td><td><span class="pill neutral">Planned</span></td><td>Partly delivered ahead of plan: Sentry, cost audit, readiness checks</td></tr>
+      <tr><td>6</td><td>Rollout and subscriptions</td><td><span class="pill neutral">Planned</span></td><td>Overtaken by events — checkout is open and money has moved</td></tr>
+    </tbody>
+  </table>
+  <p>
+    The roadmap has drifted from reality in both directions: Phase 1 is further
+    along than recorded, Phase 6 has partly happened out of order, and Phase 5
+    work landed early because incidents forced it. It needs a rewrite against
+    what is actually true.
+  </p>
+</section>
+
+<section class="brk">
+  <h2><span class="num">06</span>Risk register</h2>
+  <table>
+    <thead><tr><th>Risk</th><th>Severity</th><th>Why it matters</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>Media delivery unproven in production</td><td><span class="pill bad">High</span></td><td>The paid, differentiating feature has never delivered a file to anyone</td><td>Generate one image and one video today and confirm both persist</td></tr>
+      <tr><td>Paying customer receives no receipt</td><td><span class="pill bad">High</span></td><td><code>EMAIL_ENABLED=false</code> while real money is being taken</td><td>Complete domain verification and enable</td></tr>
+      <tr><td>Image cost is measured on one model only</td><td><span class="pill neutral">Low</span></td><td>The primary engine is verified working at $0.0333 an image, but the fallback's real cost has not been measured separately</td><td>Record both in the pricing audit</td></tr>
+      <tr><td>Single viable video engine</td><td><span class="pill warn">Medium</span></td><td>Standard tier has 23% headroom; premium is unsellable at current ceilings</td><td>Monthly pricing audit; consider a second provider</td></tr>
+      <tr><td>Agent pillar unvalidated</td><td><span class="pill warn">Medium</span></td><td>Zero runs. A core promise of the product is untested by users</td><td>Guided agent task in onboarding</td></tr>
+      <tr><td>Duplicate page render</td><td><span class="pill warn">Medium</span></td><td>Every marketing page ships a hidden second copy — ~17.7KB of 66KB, duplicate DOM ids — on the slow connections we target</td><td>Own investigation; streaming-level cause</td></tr>
+      <tr><td>No acquisition motion</td><td><span class="pill warn">Medium</span></td><td>Flat sign-ups since 14 August; all accounts from our own circle</td><td>Decide the first channel deliberately</td></tr>
+      <tr><td>Type scale unreviewed by eye</td><td><span class="pill neutral">Low</span></td><td>Verified by computed geometry across five widths, but not visually confirmed</td><td>Ten-minute human pass at 100% zoom</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="brk">
+  <h2><span class="num">07</span>Next steps, sequenced</h2>
+  <p class="lede">
+    Ordered by what unblocks the most. The first block is measured in minutes and
+    settles the question the whole product rests on.
+  </p>
+
+  <div class="band">
+    <h3>Today · prove the repair</h3>
+    <p><b>1.</b> Generate one image in production. Confirm a row appears in <code>lab_assets</code> and the file opens from the gallery.</p>
+    <p><b>2.</b> Generate one 4-second draft video. Confirm it persists, the credits settle to the measured cost, and the clip plays.</p>
+    <p><b>3.</b> Deliver the stuck clip with <code>node scripts/diagnose-video-delivery.mjs --commit</code>, then settle the 38 credits owed on the two undelivered renders.</p>
+    <p><b>4.</b> Look at the new type scale at 100% zoom on a phone and a laptop, and confirm it matches what you saw at 125%.</p>
+  </div>
+
+  <h3>This week</h3>
+  <ol>
+    <li><strong>Turn on transactional email.</strong> Complete the domain verification step and set <code>EMAIL_ENABLED=true</code>, so a paying customer gets a receipt without one being sent by hand.</li>
+    <li><strong>Generate one image through the signed-in studio.</strong> The provider, guards, upload, asset row and read-back are each verified with a real 1.7MB image; the only untested link is the authenticated route wrapper, which video has already exercised live.</li>
+    <li><strong>Add the delivery-gap query to a daily cron.</strong> Terminal jobs without a stored output, and reservations settled without delivery. This is the check that would have caught the storage failure in an hour rather than two days.</li>
+    <li><strong>Provision the Axiom dataset</strong> so logs are searchable rather than only alertable through Sentry.</li>
+    <li><strong>Rewrite the roadmap</strong> against what is actually true, with the phase drift resolved.</li>
+  </ol>
+
+  <h3>Next two to four weeks</h3>
+  <ol>
+    <li><strong>Carry the goal through sign-up.</strong> A visitor who picks a gated starter should sign up and have their goal run immediately, rather than losing it at the wall.</li>
+    <li><strong>Resolve the duplicate render.</strong> Roughly a quarter of every marketing page's HTML is a hidden second copy, with duplicate DOM ids, on connections where weight is expensive.</li>
+    <li><strong>The spacing pass.</strong> The other half of the 125% effect. Higher layout risk than the type change, so it needs the same width-by-width verification.</li>
+    <li><strong>Instrument return visits</strong> so retention becomes measurable rather than assumed.</li>
+    <li><strong>Get the first agent run from a real user</strong> — offer a guided agent task in onboarding and watch what happens.</li>
+  </ol>
+
+  <h3>Beyond, gated on evidence</h3>
+  <ol>
+    <li><strong>Annual billing</strong>, only after repeat payments, reversals and refunds are proven end to end.</li>
+    <li><strong>Second media provider</strong> for engine redundancy and pricing leverage.</li>
+    <li><strong>Team workspaces</strong>, currently flag-disabled, once single-user retention is real.</li>
+    <li><strong>The moat work:</strong> local context, language coverage and product self-knowledge are the parts a global competitor cannot copy cheaply.</li>
+  </ol>
+</section>
+
+<section class="brk">
+  <h2><span class="num">08</span>How this fits AI360 and AIC</h2>
+  <p class="lede">
+    This codebase — formerly “AI360 Lab”, now simply AI360 — carries four
+    institutional jobs at once. They are compatible, but they are measured
+    differently, and confusing them is how a product ends up optimising for the
+    wrong thing.
+  </p>
+
+  <div class="grid2">
+    <div class="card"><b>1 · A commercial product</b><p>Revenue from Ghanaian individuals and businesses, at 70–79% gross margin per credit. Proven once, with GH₵125 collected end to end. The economics work; the volume does not exist yet.<br><br><strong>Measured by:</strong> paying customers, margin per credit, cost per active account.</p></div>
+    <div class="card"><b>2 · Digital inclusion and capability</b><p>Frontier AI made usable for students, traders, NGOs and public servants — in plain language, on a phone, on an interrupted connection, priced in cedis with Mobile Money. Most of the product's hardest engineering serves this rather than any feature list.<br><br><strong>Measured by:</strong> completed real outcomes, not sign-ups.</p></div>
+    <div class="card"><b>3 · Proof of AIC's capability</b><p>A live production system with credit metering, payment reconciliation, durable job recovery, error tracking and an incident discipline. This week it detected, diagnosed and fixed a silent revenue-affecting fault from its own records. That is the evidence that AIC can operate software, not only build it.<br><br><strong>Measured by:</strong> uptime, incident quality, decision record.</p></div>
+    <div class="card"><b>4 · An investment and partnership case</b><p>The architecture reads as fundable: honest unit economics, enforced spend ceilings, no silent overage, provider independence, and a written record of every trade-off. What is missing is traction, and traction is now the binding constraint rather than capability.<br><br><strong>Measured by:</strong> growth rate, retention, unit economics at scale.</p></div>
+  </div>
+
+  <div class="band" style="margin-top:5mm">
+    <h3>The strategic read</h3>
+    <p>
+      <b>The build risk is largely behind us; the demand risk is entirely ahead.</b>
+      The platform can take money, meter work, recover from failure and tell the
+      truth about cost. It has eleven accounts, one payment and no delivered
+      creative output. Every remaining question is about whether people in Accra
+      will use and pay for this — and none of them can be answered by more
+      engineering.
+    </p>
+    <p style="margin-top:3mm">
+      Which argues for a deliberate order: prove media delivery today, put the
+      product in front of a first cohort of twenty real users this month, and let
+      what they actually do decide the next phase of the roadmap rather than the
+      plan written before they existed.
+    </p>
+  </div>
+</section>
+
+<footer>
+  AI360 · Accra Innovation Centre · System deep dive, 17 August 2026 ·
+  Figures read from production; commit e831e05. Companion document:
+  AI360 Management Brief.
+</footer>
+
+</body>
+</html>

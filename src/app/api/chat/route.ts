@@ -13,6 +13,7 @@ import { openCreditGate } from '@/lib/billing/credit-gate'
 import { chatFeature } from '@/lib/billing/credits'
 import { readBalance } from '@/lib/billing/credit-repository'
 import { productKnowledgeBlock } from '@/lib/product-knowledge'
+import { projectContextBlock } from '@/lib/studio/project-context'
 import { DEFAULT_LANGUAGE, isLanguageCode, languageDirective, type LanguageCode } from '@/lib/languages'
 import { policyForConversation, prepareConversationContext, type ContextMessage } from '@/lib/context-engineering'
 import {
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest) {
     return responseWithRequestId(limited, log.requestId)
   }
 
-  let body: { messages?: Msg[]; mode?: ChatMode; sessionId?: string; language?: unknown }
+  let body: { messages?: Msg[]; mode?: ChatMode; sessionId?: string; language?: unknown; projectId?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -132,6 +133,16 @@ export async function POST(req: NextRequest) {
   const mode: ChatMode = isChatMode(body.mode) ? body.mode : 'auto'
   const language: LanguageCode = isLanguageCode(body.language) ? body.language : DEFAULT_LANGUAGE
   const sessionId = typeof body.sessionId === 'string' ? body.sessionId.slice(0, 256) : undefined
+  // A chat inside a project inherits that project's brief and files. The id is
+  // the only thing taken from the request; the content behind it is read from
+  // the caller's own workspace, so this cannot be used to inject context the
+  // person does not already own.
+  const projectId = typeof body.projectId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.projectId)
+    ? body.projectId
+    : ''
+  const projectContext = projectId && requester.workspaceKey
+    ? await projectContextBlock({ workspaceKey: requester.workspaceKey, projectId })
+    : ''
   const key = process.env.OPENROUTER_API_KEY
   const policy = policyForConversation(messages)
   const attachments = messages.flatMap((message) => message.attachments ?? [])
@@ -233,7 +244,7 @@ export async function POST(req: NextRequest) {
                 role: 'system',
                 content: `${SYSTEM_PROMPT}\n\n${productKnowledgeBlock()}\n\n${languageDirective(language)}\n\n${policy.liveInformation
                   ? 'Live information tools are available for this request. Use them only where freshness or verification matters.'
-                  : 'Live information tools are not enabled for this request. Do not claim that you searched or verified current information.'}`,
+                  : 'Live information tools are not enabled for this request. Do not claim that you searched or verified current information.'}${projectContext ? `\n\n${projectContext}` : ''}`,
               },
               ...messages.map(toProviderMessage),
             ],

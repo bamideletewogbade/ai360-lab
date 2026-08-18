@@ -27,6 +27,10 @@ test('deliverables become current only when every asset is approved', () => {
 })
 
 test('an empty project never claims review is complete', () => {
-  assert.equal(currentProjectStage({ approved: 0, total: 0 }), 'review')
   assert.equal(projectStageStatuses({ phase: 'project', approved: 0, total: 0 }).review, 'current')
+  assert.notEqual(projectStageStatuses({ phase: 'project', approved: 0, total: 0 }).review, 'complete')
+})
+
+test('a project with nothing built opens on the brief, not an empty review board', () => {
+  assert.equal(currentProjectStage({ approved: 0, total: 0 }), 'brief')
 })
