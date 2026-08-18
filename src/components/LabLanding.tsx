@@ -1,5 +1,7 @@
 import { LandingHero } from '@/components/LandingHero'
-import { LandingMission, LandingOutcomes, LandingProcess, LandingProof } from '@/components/LandingSections'
+import {
+  LandingCapabilities, LandingMission, LandingOutcomes, LandingProcess, LandingProof,
+} from '@/components/LandingSections'
 import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
 
@@ -11,6 +13,7 @@ export function LabLanding() {
       <LandingProof />
       <LandingMission />
       <LandingOutcomes />
+      <LandingCapabilities />
       <LandingProcess />
       <SiteFooter />
     </main>

@@ -185,6 +185,8 @@ test('premium-model chat is metered above measured cost, unlike included everyda
 
 test('every published credit-guide figure is backed by a real feature weight', () => {
   const publishedCeilings: Record<string, number> = {
+    'Everyday chat on AI-Auto': FEATURE_WEIGHTS.chat.ceiling,
+    'PDF, Word and Excel files': FEATURE_WEIGHTS.export.ceiling,
     'Extra chat beyond your daily limit': FEATURE_WEIGHTS['chat.overflow'].ceiling,
     'Premium model chat (Claude, Kimi)': FEATURE_WEIGHTS['chat.premium'].ceiling,
     'Current web research or file review': FEATURE_WEIGHTS['chat.research'].ceiling,
@@ -194,12 +196,15 @@ test('every published credit-guide figure is backed by a real feature weight', (
   }
 
   for (const item of CREDIT_GUIDE) {
-    if (item.credits === 'Included with your plan') {
-      assert.equal(item.task, 'Everyday chat on AI-Auto', 'only the everyday-chat row may advertise no credit cost')
-      continue
-    }
     const backing = publishedCeilings[item.task]
     assert.ok(backing !== undefined, `the pricing page advertises "${item.task}" with no feature weight behind it`)
+    // A row may only claim to be free when the engine really charges nothing
+    // for it. Naming the feature rather than the row is what keeps the promise
+    // enforceable: if `export` ever gains a price, this fails.
+    if (/^included/i.test(item.credits)) {
+      assert.equal(backing, 0, `"${item.task}" is advertised as included but the engine charges up to ${backing} credits`)
+      continue
+    }
     const highest = Number(item.credits.split(' to ').pop()?.replace(/[^0-9]/g, '') ?? '')
     assert.equal(highest, backing, `"${item.task}" advertises ${highest} credits but the engine charges up to ${backing}`)
   }

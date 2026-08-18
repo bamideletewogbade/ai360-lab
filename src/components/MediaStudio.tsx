@@ -1156,6 +1156,18 @@ export function MediaStudio() {
     void (isVideo ? requestVideoQuote() : handleGenerateImage());
   };
 
+  /** Complete the tab pattern for people navigating without a pointer. */
+  const onModeKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const nextMode: MediaKind = event.key === "ArrowRight" || event.key === "End"
+      ? "video"
+      : "image";
+    setMode(nextMode);
+    const tabs = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    tabs?.[nextMode === "image" ? 0 : 1]?.focus();
+  };
+
   return (
     <div className="media-studio">
       {/* A workspace opens on the work, not on a poster. The header stays one
@@ -1185,8 +1197,11 @@ export function MediaStudio() {
               type="button"
               role="tab"
               aria-selected={!isVideo}
+              aria-controls="media-studio-workspace"
+              tabIndex={!isVideo ? 0 : -1}
               className={!isVideo ? "is-active" : ""}
               onClick={() => setMode("image")}
+              onKeyDown={onModeKeyDown}
             >
               <StudioIcon name="image" />
               <span>Image</span>
@@ -1195,8 +1210,11 @@ export function MediaStudio() {
               type="button"
               role="tab"
               aria-selected={isVideo}
+              aria-controls="media-studio-workspace"
+              tabIndex={isVideo ? 0 : -1}
               className={isVideo ? "is-active" : ""}
               onClick={() => setMode("video")}
+              onKeyDown={onModeKeyDown}
             >
               <StudioIcon name="video" />
               <span>Video</span>
@@ -1287,7 +1305,7 @@ export function MediaStudio() {
           below it and never scrolls away. This is the inversion the old layout
           had backwards — controls held the prime width while the gallery, the
           reason for the page, was squeezed into the remainder. */}
-      <div className="ms-stage">
+      <div className="ms-stage" id="media-studio-workspace">
         <section className="ms-results" aria-label="Your work">
           <div className="ms-results-head">
             <h2>

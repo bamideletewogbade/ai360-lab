@@ -11869,4 +11869,95 @@ button {
     min-height: 44px;
     padding-inline: 10px;
   }
+  /* The answer-options trigger is the way to a saved PDF, Word or Excel file,
+     so it is a primary path on a phone rather than a minor affordance. At 30px
+     it was the smallest thing standing between someone and their document. */
+  .response-actions-trigger {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+  /* And the format buttons behind it — these are the download itself, so they
+     are the last thing that should be fiddly. Inline legal links inside the
+     composer note are deliberately left alone: they sit mid-sentence, where a
+     44px box would break the line rather than help anyone. */
+  .response-actions-group > button,
+  .response-actions-menu > button,
+  .response-feedback-slot > button {
+    min-height: 44px;
+  }
+}
+
+/* A file the assistant produced, attached to the answer that made it. */
+.message-files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 680px;
+  margin-top: 12px;
+}
+.message-file {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--black);
+  text-decoration: none;
+  transition: border-color 0.16s var(--ease), transform 0.16s var(--ease);
+}
+.message-file:hover,
+.message-file:focus-visible {
+  border-color: var(--black);
+  transform: translateY(-1px);
+  outline: 0;
+}
+.message-file-kind {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--black);
+  color: var(--paper);
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.message-file-copy {
+  min-width: 0;
+}
+.message-file-copy b,
+.message-file-copy small {
+  display: block;
+}
+.message-file-copy b {
+  font-size: 14.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-file-copy small {
+  margin-top: 1px;
+  color: var(--grey);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-file svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@media (max-width: 620px) {
+  .message-file {
+    min-height: 56px;
+  }
 }

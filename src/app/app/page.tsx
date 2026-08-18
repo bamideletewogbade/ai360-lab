@@ -26,6 +26,7 @@ import { WorkspaceOnboarding } from '@/components/WorkspaceOnboarding'
 import { MobileWorkspaceNav } from '@/components/MobileWorkspaceNav'
 import { useWorkspaceIdentity } from '@/components/WorkspaceIdentityProvider'
 import { scopedStorageKey } from '@/lib/workspace'
+import { syncableOnly } from '@/lib/conversation-sync'
 import { routeIntentDeterministically, type IntentRoute } from '@/lib/intent-router'
 import {
   personalizedIntro, personalizedTasks, readStoredProfile, resolveFirstRun, SKIPPED, type OnboardingProfile,
@@ -55,10 +56,19 @@ type Msg = {
   agentRunId?: string
   sources?: SourceLink[]
   usage?: { totalTokens?: number; cost?: number; credits?: number }
+  /** Files the assistant produced for this answer, stored and downloadable later. */
+  files?: GeneratedFile[]
   actions?: AgentAction[]
   /** Correlates customer feedback with the server trace that produced this answer. */
   requestId?: string
   failure?: MessageFailure
+}
+type GeneratedFile = {
+  assetId: string
+  filename: string
+  title: string
+  format: string
+  byteSize: number
 }
 type MessageFailure = {
   code: string
@@ -256,6 +266,7 @@ function fileToDataUrl(file: Blob) {
 type ChatStreamEvent =
   | { type: 'delta'; text: string }
   | { type: 'done' }
+  | { type: 'attachment'; assetId: string; filename: string; title: string; format: string; byteSize: number }
   | { type: 'error'; code: string; message: string; retryable: boolean; creditNotice: string; requestId: string }
 
 async function readChatStream(response: Response, onEvent: (event: ChatStreamEvent) => void) {
@@ -654,7 +665,10 @@ function LabWorkspace({
   useEffect(() => {
     if (!hydrated || loadedWorkspaceRef.current !== workspaceScope) return
     try {
-      const storageSafe = conversations.map((conversation) => ({
+      // Media, Apps and untouched drafts are local workspace state, not chat
+      // records. Sending them made the durable chat endpoint reject the whole
+      // batch, so one visit to Media Studio could pause cloud chat saving.
+      const storageSafe = syncableOnly(conversations).map((conversation) => ({
         ...conversation,
         messages: conversation.messages.map((message) => ({
           ...message,
@@ -1487,9 +1501,20 @@ function LabWorkspace({
                         ? message
                         : event.type === 'delta'
                           ? { ...message, content: currentText, failure: undefined }
-                          : event.type === 'error'
-                            ? { ...message, content: '', failure: event }
-                            : message,
+                          : event.type === 'attachment'
+                            ? {
+                                ...message,
+                                files: [
+                                  ...(message.files ?? []).filter((file) => file.assetId !== event.assetId),
+                                  {
+                                    assetId: event.assetId, filename: event.filename,
+                                    title: event.title, format: event.format, byteSize: event.byteSize,
+                                  },
+                                ],
+                              }
+                            : event.type === 'error'
+                              ? { ...message, content: '', failure: event }
+                              : message,
                     ),
                     updatedAt: Date.now(),
                   }
@@ -2019,6 +2044,30 @@ function LabWorkspace({
                       <p className="message-credit-receipt">
                         This {message.agent ? 'research' : 'answer'} used {message.usage.credits} credit{message.usage.credits === 1 ? '' : 's'}.
                       </p>
+                    ) : null}
+                    {/* Files the assistant made for this answer. They are stored
+                        against the workspace, so they are still here tomorrow. */}
+                    {message.files?.length ? (
+                      <div className="message-files">
+                        {message.files.map((file) => (
+                          <a
+                            key={file.assetId}
+                            className="message-file"
+                            href={`/api/documents?assetId=${encodeURIComponent(file.assetId)}`}
+                            download={file.filename}
+                          >
+                            <span className="message-file-kind">{file.format.toUpperCase()}</span>
+                            <span className="message-file-copy">
+                              <b>{file.title}</b>
+                              <small>{file.filename} · {Math.max(1, Math.round(file.byteSize / 1024))} KB</small>
+                            </span>
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <path d="m7 10 5 5 5-5" /><path d="M12 15V3" />
+                            </svg>
+                          </a>
+                        ))}
+                      </div>
                     ) : null}
                     {message.sources?.length ? (
                       <details className="source-drawer">

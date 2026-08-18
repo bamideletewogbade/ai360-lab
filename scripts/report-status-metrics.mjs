@@ -75,10 +75,10 @@ try {
 
   console.log('\n--- provider spend to date (measured) ---')
   const [spend] = await sql`
-    select round(coalesce(sum(actual_cost_usd), 0)::numeric, 4) as usd,
+    select round(coalesce(sum(cost_usd), 0)::numeric, 4) as usd,
            count(*)::int as events,
-           min(created_at) as first_event, max(created_at) as last_event
-      from public.lab_usage_events where actual_cost_usd is not null`
+           min(occurred_at) as first_event, max(occurred_at) as last_event
+      from public.lab_cost_ledger`
   console.log(`  $${spend.usd} across ${spend.events} charged events`)
   console.log(`  from ${spend.first_event?.toISOString?.() ?? '-'} to ${spend.last_event?.toISOString?.() ?? '-'}`)
 } finally {

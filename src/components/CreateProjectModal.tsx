@@ -16,12 +16,39 @@ export function CreateProjectModal({
 }) {
   const [name, setName] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
     inputRef.current?.focus()
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return
+      const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      )]
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      previousFocus?.focus()
+    }
   }, [onClose])
 
   const ready = name.trim().length > 0
@@ -30,38 +57,44 @@ export function CreateProjectModal({
   return (
     <div
       className="onboarding-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-project-title"
+      role="presentation"
       onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}
     >
-      <section className="onboarding-card create-project-card">
-        <button className="onboarding-skip" onClick={onClose} aria-label="Close">Close</button>
+      <section
+        ref={dialogRef}
+        className="onboarding-card create-project-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-project-title"
+        aria-describedby="create-project-hint"
+      >
+        <button type="button" className="onboarding-skip" onClick={onClose} aria-label="Close new project dialog">Close</button>
         <p className="onboarding-kicker">New project</p>
-        <h1 id="create-project-title">Name your project</h1>
+        <h2 id="create-project-title">Name your project</h2>
 
-        <input
-          ref={inputRef}
-          className="create-project-input"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          onKeyDown={(event) => { if (event.key === 'Enter') submit() }}
-          placeholder="e.g. Hibiscus drink launch"
-          maxLength={255}
-          aria-label="Project name"
-        />
+        <form onSubmit={(event) => { event.preventDefault(); submit() }}>
+          <input
+            ref={inputRef}
+            className="create-project-input"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="e.g. Hibiscus drink launch"
+            maxLength={255}
+            aria-label="Project name"
+          />
 
-        <p className="create-project-hint">
-          <span aria-hidden="true">◇</span>
-          A project keeps your files, brief and chats in one place. Use it for ongoing work, or just to keep things tidy.
-        </p>
+          <p className="create-project-hint" id="create-project-hint">
+            <span aria-hidden="true">◇</span>
+            A project keeps your files, brief and chats in one place. Use it for ongoing work, or just to keep things tidy.
+          </p>
 
-        <div className="create-project-actions">
-          <button type="button" className="create-project-cancel" onClick={onClose}>Cancel</button>
-          <button type="button" className="create-project-confirm" onClick={submit} disabled={!ready}>
-            Create project
-          </button>
-        </div>
+          <div className="create-project-actions">
+            <button type="button" className="create-project-cancel" onClick={onClose}>Cancel</button>
+            <button type="submit" className="create-project-confirm" disabled={!ready}>
+              Create project
+            </button>
+          </div>
+        </form>
       </section>
     </div>
   )

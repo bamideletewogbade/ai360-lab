@@ -90,10 +90,6 @@ export function PricingExperience() {
       <section className={styles.pricingSection} aria-labelledby="plans-title">
         <div className={styles.sectionHead}>
           <div><p>AI360 plans</p><h2 id="plans-title">Choose the pace that fits.</h2></div>
-          <div className={styles.pricingDecision}>
-            <span>Pay one month at a time</span>
-            <p>Nothing renews automatically. Annual billing stays off until renewals and refunds are proven, so a longer commitment is never asked for before it is earned.</p>
-          </div>
         </div>
 
         <div className={styles.planGrid}>

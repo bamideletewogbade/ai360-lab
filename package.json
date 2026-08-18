@@ -23,13 +23,16 @@
     "domains:verify": "node --experimental-strip-types scripts/verify-domains.mjs",
     "prod:check": "node scripts/check-production.mjs",
     "smoke:deploy": "node scripts/smoke-deployment.mjs",
+    "smoke:documents": "node scripts/smoke-chat-documents.mjs",
     "release:check": "npm audit --omit=dev && npm run lint && npm test && npm run build && npm run prod:check"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
     "@sentry/nextjs": "^10.70.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.2",
     "cross-env": "^7.0.3",
+    "dejavu-fonts-ttf": "^2.37.3",
     "docx": "^9.7.1",
     "dotenv": "^16.6.1",
     "jszip": "^3.10.1",

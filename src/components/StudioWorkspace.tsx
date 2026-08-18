@@ -1293,7 +1293,7 @@ export function StudioWorkspace({
               <h1>Projects</h1>
               {activeProjects.length ? <span>{activeProjects.length} active</span> : null}
               {signedIn ? (
-                <span className={`library-save ${saveState}`}>
+                <span className={`library-save ${saveState}`} role="status" aria-live="polite">
                   <i />
                   {saveState === 'saving' ? 'Saving' : saveState === 'unavailable' ? 'Saving paused' : 'Saved'}
                 </span>
@@ -1319,6 +1319,7 @@ export function StudioWorkspace({
                 key={tab}
                 type="button"
                 className={projectFilter === tab ? 'on' : ''}
+                aria-pressed={projectFilter === tab}
                 onClick={() => setProjectFilter(tab)}
               >
                 {tab === 'all' ? 'All' : tab === 'active' ? 'Active' : 'Archived'}
@@ -1326,6 +1327,9 @@ export function StudioWorkspace({
               </button>
             ))}
           </nav>
+          <span className="sr-only" role="status" aria-live="polite">
+            {visible.length} project{visible.length === 1 ? '' : 's'} shown
+          </span>
 
           {error ? <div className="studio-error dashboard-error">{error}</div> : null}
 

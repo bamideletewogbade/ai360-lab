@@ -26,3 +26,7 @@ next-env.d.ts
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Per-machine assistant permissions and command history can contain local paths
+# or credential-shaped values and are never part of the product release.
+.claude/settings.local.json

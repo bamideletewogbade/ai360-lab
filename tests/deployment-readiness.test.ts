@@ -4,6 +4,7 @@ import { evaluateProductionEnvironment } from '../scripts/check-production.mjs'
 import { runDeploymentSmoke } from '../scripts/smoke-deployment.mjs'
 import { resolveDeploymentId } from '../scripts/build.mjs'
 import { ASSET_RECOVERY_SCRIPT } from '../src/lib/asset-recovery.ts'
+import { readFile } from 'node:fs/promises'
 
 function releaseEnvironment() {
   return {
@@ -111,4 +112,10 @@ test('deployed smoke checks cover readiness, headers, private workspace indexing
   }
   const result = await runDeploymentSmoke('https://staging.example.com', request as typeof fetch)
   assert.equal(result.passed, true)
+})
+
+test('the operator spend report uses the unified ledger that includes video jobs', async () => {
+  const report = await readFile(new URL('../scripts/report-status-metrics.mjs', import.meta.url), 'utf8')
+  assert.match(report, /from public\.lab_cost_ledger/)
+  assert.doesNotMatch(report, /sum\(actual_cost_usd\)[\s\S]*from public\.lab_usage_events/)
 })

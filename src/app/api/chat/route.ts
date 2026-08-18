@@ -7,6 +7,13 @@ import {
 import { consumeChatDailyCounter } from '@/lib/chat-daily-cap'
 import { errorDetails, providerErrorDetails, requestLogger } from '@/lib/observability'
 import { citationSources, LIVE_INFORMATION_TOOLS } from '@/lib/live-tools'
+import {
+  accumulateToolCalls, CREATE_DOCUMENT_TOOL, guestDocumentSignInMessage, parseToolCall, shouldOfferDocumentTool,
+  type StreamedToolCall,
+} from '@/lib/chat-tools'
+import { isAuthConfigured } from '@/lib/auth'
+import { isDocumentStoreConfigured, persistGeneratedDocument } from '@/lib/export/document-store'
+import { NoTabularContentError, renderDocument } from '@/lib/export/render'
 import { recordUsageEventSafe } from '@/lib/usage'
 import { CHAT_FAIR_USE_DAILY, CHAT_FAIR_USE_FALLBACK } from '@/lib/billing/catalog'
 import { openCreditGate } from '@/lib/billing/credit-gate'
@@ -27,6 +34,15 @@ type Msg = ContextMessage
 type ChatStreamEvent =
   | { type: 'delta'; text: string }
   | { type: 'done' }
+  /** A file the assistant produced and stored; the browser renders it as a download. */
+  | {
+      type: 'attachment'
+      assetId: string
+      filename: string
+      title: string
+      format: string
+      byteSize: number
+    }
   | { type: 'error'; code: string; message: string; retryable: boolean; creditNotice: string; requestId: string }
 type ContentPart =
   | { type: 'text'; text: string }
@@ -156,6 +172,26 @@ export async function POST(req: NextRequest) {
     aiConfigured: Boolean(key),
   })
 
+  const guestDocumentMessage = guestDocumentSignInMessage({
+    authConfigured: isAuthConfigured(),
+    authenticated: Boolean(requester.context),
+    messages,
+  })
+  if (guestDocumentMessage) {
+    log.finish(200, { outcome: 'document_sign_in_required' })
+    const body = [
+      JSON.stringify({ type: 'delta', text: guestDocumentMessage } satisfies ChatStreamEvent),
+      JSON.stringify({ type: 'done' } satisfies ChatStreamEvent),
+      '',
+    ].join('\n')
+    return responseWithRequestId(new Response(body, {
+      headers: {
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'private, no-store',
+      },
+    }), log.requestId)
+  }
+
   let feature = chatFeature({
     liveResearch: policy.liveInformation,
     hasAttachment: policy.hasAttachments,
@@ -219,84 +255,43 @@ export async function POST(req: NextRequest) {
           hasVideo: policy.hasVideo,
           hasAttachments: policy.hasAttachments,
         })
+
+        /**
+         * Producing a file is only offered when the file could actually be kept:
+         * a signed-in workspace to own it, storage configured to hold it, and a
+         * request that reads like someone wanting something to keep or send. A
+         * model that can see a tool will eventually reach for it, so the narrow
+         * gate is the feature.
+         */
+        const documentToolOffered = Boolean(
+          requester.context
+          && isDocumentStoreConfigured()
+          && shouldOfferDocumentTool(messages),
+        )
+        const providerTools = [
+          ...(policy.liveInformation ? LIVE_INFORMATION_TOOLS : []),
+          ...(documentToolOffered ? [CREATE_DOCUMENT_TOOL] : []),
+        ]
         const providerStartedAt = performance.now()
         log.info('provider.request.started', {
           provider: 'openrouter',
           model,
           fallbackModels: models,
           hasPdf: policy.hasPdf,
-        })
-        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          signal: AbortSignal.timeout(90_000),
-          headers: {
-            Authorization: `Bearer ${key}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://ai360.africa',
-            'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
-          },
-          body: JSON.stringify({
-            model,
-            models,
-            ...(sessionId ? { session_id: sessionId } : {}),
-            messages: [
-              {
-                role: 'system',
-                content: `${SYSTEM_PROMPT}\n\n${productKnowledgeBlock()}\n\n${languageDirective(language)}\n\n${policy.liveInformation
-                  ? 'Live information tools are available for this request. Use them only where freshness or verification matters.'
-                  : 'Live information tools are not enabled for this request. Do not claim that you searched or verified current information.'}${projectContext ? `\n\n${projectContext}` : ''}`,
-              },
-              ...messages.map(toProviderMessage),
-            ],
-            ...(policy.liveInformation ? { tools: LIVE_INFORMATION_TOOLS } : {}),
-            provider: providerPreferences('chat', { withTools: policy.liveInformation }),
-            // A thinking model otherwise spends the whole budget reasoning and
-            // streams back an empty answer.
-            reasoning: REASONING_BUDGET,
-            stream: true,
-            max_tokens: 2_000,
-            ...(policy.hasPdf
-              ? { plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] }
-              : {}),
-          }),
+          documentToolOffered,
         })
 
-        if (!res.ok || !res.body) {
-          const failure = await providerErrorDetails(res)
-          log.error('provider.request.failed', {
-            provider: 'openrouter',
-            model,
-            durationMs: Math.round(performance.now() - providerStartedAt),
-            ...failure,
-          })
-          log.finish(502, { outcome: 'provider_error', providerStatus: res.status })
-          await recordUsageEventSafe({
-            requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter', model,
-            latencyMs: Math.round(performance.now() - providerStartedAt), outcome: 'provider_error',
-            metadata: { providerStatus: res.status, mode, attachmentCount: attachments.length },
-          })
-          await gate?.settle('failure')
-          send({
-            type: 'error',
-            code: 'provider_unavailable',
-            message: 'AI360 could not reach the AI service.',
-            retryable: true,
-            creditNotice: 'No credits were used for this attempt.',
-            requestId: log.requestId,
-          })
-          controller.close()
-          return
-        }
+        const systemContent = `${SYSTEM_PROMPT}\n\n${productKnowledgeBlock()}\n\n${languageDirective(language)}\n\n${policy.liveInformation
+          ? 'Live information tools are available for this request. Use them only where freshness or verification matters.'
+          : 'Live information tools are not enabled for this request. Do not claim that you searched or verified current information.'}${documentToolOffered
+          ? '\n\nYou can attach a downloadable file to this answer with the create_document tool when the person asked for something to keep, send or print. Write the document body yourself in markdown. After the tool returns, still reply briefly saying what you made — do not repeat the whole document in the message.'
+          : ''}${projectContext ? `\n\n${projectContext}` : ''}`
 
-        log.info('provider.stream.connected', {
-          provider: 'openrouter',
-          model,
-          providerStatus: res.status,
-          durationMs: Math.round(performance.now() - providerStartedAt),
-        })
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
+        const conversation: unknown[] = [
+          { role: 'system', content: systemContent },
+          ...messages.map(toProviderMessage),
+        ]
+
         let chunkCount = 0
         let outputCharacters = 0
         let outputText = ''
@@ -306,13 +301,20 @@ export async function POST(req: NextRequest) {
         let answeredBy = model
         let finishReason: string | undefined
         const sources = new Map<string, string>()
-        let usage: {
+        type ProviderUsage = {
           prompt_tokens?: number
           completion_tokens?: number
           total_tokens?: number
           cost?: number
           server_tool_use?: { web_search_requests?: number }
-        } | undefined
+        }
+        let usage: ProviderUsage | undefined
+        // A tool round trip means a second billable call, so cost accumulates
+        // across passes rather than being read from the last one.
+        let totalCostUsd = 0
+        let passes = 0
+        const producedFiles: Array<{ filename: string; format: string; byteSize: number }> = []
+
         const appendLiveSources = () => {
           const missing = [...sources.entries()].filter(([url]) => !outputText.includes(url))
           if (!missing.length) return
@@ -321,114 +323,261 @@ export async function POST(req: NextRequest) {
           outputCharacters += block.length
           send({ type: 'delta', text: block })
         }
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          chunkCount += 1
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() ?? ''
-          for (const line of lines) {
-            const trimmed = line.trim()
-            if (!trimmed.startsWith('data:')) continue
-            const data = trimmed.slice(5).trim()
-            if (data === '[DONE]') {
-              appendLiveSources()
-              const truncated = wasTruncated(finishReason)
-              const leaked = looksLikeLeakedReasoning(outputText)
-              if (truncated || leaked) {
-                // The person still receives whatever arrived. Recording it is
-                // what makes an intermittent provider fault countable instead
-                // of a thing one user mentions once.
-                log.warn('chat.answer.degraded', {
-                  model: answeredBy, finishReason, truncated, leakedReasoning: leaked, outputCharacters,
-                })
+
+        /**
+         * One provider pass: streams any text straight to the browser and
+         * returns whatever tool calls the model assembled along the way.
+         */
+        const runPass = async (
+          passMessages: unknown[],
+        ): Promise<{ failed: boolean; toolCalls: StreamedToolCall[] }> => {
+          passes += 1
+          const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            signal: AbortSignal.timeout(90_000),
+            headers: {
+              Authorization: `Bearer ${key}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://ai360.africa',
+              'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
+            },
+            body: JSON.stringify({
+              model,
+              models,
+              ...(sessionId ? { session_id: sessionId } : {}),
+              messages: passMessages,
+              ...(providerTools.length ? { tools: providerTools } : {}),
+              provider: providerPreferences('chat', { withTools: providerTools.length > 0 }),
+              // A thinking model otherwise spends the whole budget reasoning and
+              // streams back an empty answer.
+              reasoning: REASONING_BUDGET,
+              stream: true,
+              max_tokens: 2_000,
+              ...(policy.hasPdf
+                ? { plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] }
+                : {}),
+            }),
+          })
+
+          if (!res.ok || !res.body) {
+            const failure = await providerErrorDetails(res)
+            log.error('provider.request.failed', {
+              provider: 'openrouter',
+              model,
+              pass: passes,
+              durationMs: Math.round(performance.now() - providerStartedAt),
+              ...failure,
+            })
+            log.finish(502, { outcome: 'provider_error', providerStatus: res.status })
+            await recordUsageEventSafe({
+              requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter', model,
+              latencyMs: Math.round(performance.now() - providerStartedAt), outcome: 'provider_error',
+              metadata: { providerStatus: res.status, mode, attachmentCount: attachments.length },
+            })
+            await gate?.settle('failure')
+            send({
+              type: 'error',
+              code: 'provider_unavailable',
+              message: 'AI360 could not reach the AI service.',
+              retryable: true,
+              creditNotice: 'No credits were used for this attempt.',
+              requestId: log.requestId,
+            })
+            controller.close()
+            return { failed: true, toolCalls: [] }
+          }
+
+          log.info('provider.stream.connected', {
+            provider: 'openrouter',
+            model,
+            pass: passes,
+            providerStatus: res.status,
+            durationMs: Math.round(performance.now() - providerStartedAt),
+          })
+          const reader = res.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
+          let toolCalls = new Map<number, StreamedToolCall>()
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            chunkCount += 1
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop() ?? ''
+            let finished = false
+            for (const line of lines) {
+              const trimmed = line.trim()
+              if (!trimmed.startsWith('data:')) continue
+              const data = trimmed.slice(5).trim()
+              if (data === '[DONE]') { finished = true; break }
+              try {
+                const json = JSON.parse(data)
+                // Providers return this field as a string, as an array of content
+                // parts, or as a single bare part. Only the first was handled, so
+                // the other two reached the browser as raw JSON.
+                answeredBy = servedModel(json, answeredBy)
+                if (json.choices?.[0]?.finish_reason) finishReason = json.choices[0].finish_reason
+                const delta = stripThinkingBlocks(providerContentText(json.choices?.[0]?.delta?.content))
+                if (delta) {
+                  outputCharacters += delta.length
+                  outputText += delta
+                  send({ type: 'delta', text: delta })
+                }
+                toolCalls = accumulateToolCalls(toolCalls, json.choices?.[0]?.delta?.tool_calls)
+                const annotations =
+                  json.choices?.[0]?.delta?.annotations ||
+                  json.choices?.[0]?.message?.annotations ||
+                  json.choices?.[0]?.annotations
+                for (const source of citationSources(annotations)) sources.set(source.url, source.title)
+                if (json.usage && typeof json.usage === 'object') {
+                  usage = json.usage as ProviderUsage
+                  if (typeof usage.cost === 'number') totalCostUsd += usage.cost
+                }
+              } catch {
+                log.warn('provider.stream.event_ignored', { provider: 'openrouter', model })
               }
-              await recordUsageEventSafe({
-                requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter',
-                model: answeredBy,
-                inputTokens: usage?.prompt_tokens, outputTokens: usage?.completion_tokens,
-                actualCostUsd: usage?.cost, latencyMs: Math.round(performance.now() - providerStartedAt),
-                outcome: truncated || leaked ? 'success_degraded' : 'success', metadata: {
-                  mode, liveWebUsed: sources.size > 0, sourceCount: sources.size,
-                  webSearchRequests: usage?.server_tool_use?.web_search_requests || 0,
-                  attachmentCount: attachments.length,
-                  requestedModel: model, finishReason: finishReason ?? null,
-                  truncated, leakedReasoning: leaked,
-                },
+            }
+            if (finished) break
+          }
+          return { failed: false, toolCalls: [...toolCalls.values()] }
+        }
+
+        const first = await runPass(conversation)
+        if (first.failed) return
+
+        /**
+         * Exactly one tool round trip, never a loop. A bounded exchange cannot
+         * run away with someone's credits, and one pass is all this tool needs:
+         * the model writes the document, we make and keep the file, and it gets
+         * one turn to say what it produced.
+         */
+        const documentCalls = documentToolOffered ? first.toolCalls.filter((call) => call.id) : []
+        if (documentCalls.length) {
+          const toolResults: unknown[] = []
+          for (const call of documentCalls) {
+            const parsed = parseToolCall(call)
+            if (!parsed.ok) {
+              log.warn('chat.tool.rejected', { tool: call.name, reason: parsed.reason })
+              toolResults.push({
+                role: 'tool', tool_call_id: call.id, name: call.name,
+                content: JSON.stringify({ ok: false, error: parsed.reason }),
               })
-              await gate?.settle('success', usage?.cost)
-              log.finish(200, {
-                outcome: truncated || leaked ? 'success_degraded' : 'success',
-                provider: 'openrouter',
-                model: answeredBy,
-                requestedModel: model,
-                finishReason,
-                creditsReserved: gate?.reserved,
-                chunkCount,
-                outputCharacters,
-                promptTokens: usage?.prompt_tokens,
-                completionTokens: usage?.completion_tokens,
-                totalTokens: usage?.total_tokens,
-                cost: usage?.cost,
-                webSearchRequests: usage?.server_tool_use?.web_search_requests,
-                liveWebUsed: sources.size > 0,
-                sourceCount: sources.size,
-              })
-              send({ type: 'done' })
-              controller.close()
-              return
+              continue
             }
             try {
-              const json = JSON.parse(data)
-              // Providers return this field as a string, as an array of content
-              // parts, or as a single bare part. Only the first was handled, so
-              // the other two reached the browser as raw JSON.
-              answeredBy = servedModel(json, answeredBy)
-              if (json.choices?.[0]?.finish_reason) finishReason = json.choices[0].finish_reason
-              const delta = stripThinkingBlocks(providerContentText(json.choices?.[0]?.delta?.content))
-              if (delta) {
-                outputCharacters += delta.length
-                outputText += delta
-                send({ type: 'delta', text: delta })
-              }
-              const annotations =
-                json.choices?.[0]?.delta?.annotations ||
-                json.choices?.[0]?.message?.annotations ||
-                json.choices?.[0]?.annotations
-              for (const source of citationSources(annotations)) sources.set(source.url, source.title)
-              if (json.usage && typeof json.usage === 'object') usage = json.usage
-            } catch {
-              log.warn('provider.stream.event_ignored', { provider: 'openrouter', model })
+              const document = await renderDocument({
+                title: parsed.arguments.title,
+                content: parsed.arguments.content,
+                format: parsed.arguments.format,
+              })
+              const stored = await persistGeneratedDocument({
+                context: requester.context!,
+                bytes: document.bytes,
+                mimeType: document.mimeType,
+                filename: document.filename,
+                format: parsed.arguments.format,
+                conversationId: sessionId || null,
+                projectId: projectId || null,
+                metadata: { title: parsed.arguments.title, source: 'chat.create_document' },
+              })
+              producedFiles.push({
+                filename: stored.filename, format: stored.format, byteSize: stored.byteSize,
+              })
+              log.info('chat.tool.document_created', {
+                format: stored.format, bytes: stored.byteSize, assetId: stored.assetId,
+              })
+              send({
+                type: 'attachment',
+                assetId: stored.assetId,
+                filename: stored.filename,
+                title: parsed.arguments.title,
+                format: stored.format,
+                byteSize: stored.byteSize,
+              })
+              toolResults.push({
+                role: 'tool', tool_call_id: call.id, name: call.name,
+                content: JSON.stringify({
+                  ok: true, filename: stored.filename, format: stored.format,
+                  note: 'The file is attached to this answer and the person can download it.',
+                }),
+              })
+            } catch (error) {
+              const reason = error instanceof NoTabularContentError
+                ? 'That content has no table in it, so it cannot become a spreadsheet. Offer it as a document instead.'
+                : 'The file could not be created.'
+              log.error('chat.tool.document_failed', { format: parsed.arguments.format, ...errorDetails(error) })
+              toolResults.push({
+                role: 'tool', tool_call_id: call.id, name: call.name,
+                content: JSON.stringify({ ok: false, error: reason }),
+              })
             }
           }
+
+          // Hand the results back so the model can say what it produced.
+          const second = await runPass([
+            ...conversation,
+            {
+              role: 'assistant',
+              content: outputText || null,
+              tool_calls: documentCalls.map((call) => ({
+                id: call.id, type: 'function',
+                function: { name: call.name, arguments: call.argumentsText },
+              })),
+            },
+            ...toolResults,
+          ])
+          if (second.failed) return
         }
+
         appendLiveSources()
+        const truncated = wasTruncated(finishReason)
+        const leaked = looksLikeLeakedReasoning(outputText)
+        if (truncated || leaked) {
+          // The person still receives whatever arrived. Recording it is what
+          // makes an intermittent provider fault countable instead of a thing
+          // one user mentions once.
+          log.warn('chat.answer.degraded', {
+            model: answeredBy, finishReason, truncated, leakedReasoning: leaked, outputCharacters,
+          })
+        }
         await recordUsageEventSafe({
           requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter',
           model: answeredBy,
           inputTokens: usage?.prompt_tokens, outputTokens: usage?.completion_tokens,
-          actualCostUsd: usage?.cost, latencyMs: Math.round(performance.now() - providerStartedAt),
-          outcome: 'success_without_done_event', metadata: {
-            mode, sourceCount: sources.size, attachmentCount: attachments.length,
+          actualCostUsd: totalCostUsd || usage?.cost,
+          latencyMs: Math.round(performance.now() - providerStartedAt),
+          outcome: truncated || leaked ? 'success_degraded' : 'success', metadata: {
+            mode, liveWebUsed: sources.size > 0, sourceCount: sources.size,
+            webSearchRequests: usage?.server_tool_use?.web_search_requests || 0,
+            attachmentCount: attachments.length,
             requestedModel: model, finishReason: finishReason ?? null,
-            truncated: wasTruncated(finishReason), leakedReasoning: looksLikeLeakedReasoning(outputText),
+            truncated, leakedReasoning: leaked,
+            providerPasses: passes,
+            documentsCreated: producedFiles.length,
+            documentFormats: producedFiles.map((file) => file.format),
           },
         })
-        await gate?.settle('success', usage?.cost)
+        await gate?.settle('success', totalCostUsd || usage?.cost)
         log.finish(200, {
-          outcome: 'success_without_done_event',
+          outcome: truncated || leaked ? 'success_degraded' : 'success',
           provider: 'openrouter',
           model: answeredBy,
           requestedModel: model,
           finishReason,
+          creditsReserved: gate?.reserved,
           chunkCount,
           outputCharacters,
+          promptTokens: usage?.prompt_tokens,
+          completionTokens: usage?.completion_tokens,
           totalTokens: usage?.total_tokens,
-          cost: usage?.cost,
+          cost: totalCostUsd || usage?.cost,
           webSearchRequests: usage?.server_tool_use?.web_search_requests,
           liveWebUsed: sources.size > 0,
           sourceCount: sources.size,
+          providerPasses: passes,
+          documentsCreated: producedFiles.length,
         })
         send({ type: 'done' })
         controller.close()

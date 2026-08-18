@@ -563,8 +563,14 @@ export async function POST(request: Request) {
       // The provider reports the job's whole cost on every poll, so recording
       // it each time counted one clip dozens of times over: 150 polls of three
       // renders read as $47.80 of spend against about $0.96 of real cost — and
-      // that is the number a pricing decision gets made from. Only a terminal
-      // status carries the cost, and only the first one to see it.
+      // that is the number a pricing decision gets made from.
+      //
+      // Guarding it to the first terminal poll fixed the multiplication but
+      // left the same figure written to two tables at once, because
+      // `updateMediaJobResult` below records it on the job as well. A video's
+      // cost now lives in `lab_media_jobs` and nowhere else, so the two sources
+      // cannot overlap and `lab_cost_ledger` can union them without choosing.
+      // The poll is still recorded — its latency and outcome are real telemetry.
       if (terminal && durableJob?.actualCostUsd == null) {
         await recordUsageEventSafe({
           requestId: log.requestId,
@@ -572,7 +578,6 @@ export async function POST(request: Request) {
           feature: "video.status",
           provider: "openrouter",
           model: durableJob?.model || undefined,
-          actualCostUsd: result.usage?.cost,
           latencyMs: Math.round(performance.now() - requestStartedAt),
           outcome: result.status || "status",
         });

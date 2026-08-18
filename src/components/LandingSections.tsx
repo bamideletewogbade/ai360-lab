@@ -20,7 +20,10 @@ export function LandingProof() {
       <span><b>Live when it matters</b><small>Current sources when today’s facts can change the answer</small></span>
       <span><b>Built around your context</b><small>Works with your documents, voice, language and goals</small></span>
       <span><b>You stay in control</b><small>Review the plan, the cost and every important action</small></span>
-      <span><b>Ends in an outcome</b><small>Plans, documents, images and work you can put to use</small></span>
+      {/* The old copy said "documents" and left the reader to guess what that
+          meant. Naming the formats is the difference between a claim and a
+          promise, and files are the most tangible thing the product hands over. */}
+      <span><b>Ends in a real file</b><small>Finished PDF, Word and Excel files, images and video you can send today</small></span>
     </section>
   )
 }
@@ -99,6 +102,68 @@ export function LandingOutcomes() {
             overlaySubline="Hibiscus · Ginger · Accra"
           />
         </div>
+      </div>
+    </section>
+  )
+}
+
+/**
+ * What AI360 can actually do.
+ *
+ * The page had outcomes and a process but never the capabilities themselves,
+ * so the most differentiating thing the product does — producing the finished
+ * file without being asked for one — was sold nowhere. Every claim here is a
+ * shipped behaviour: the languages are the ones in `languages.ts`, files really
+ * are free (`FEATURE_WEIGHTS.export` is all zeros), and failed work really does
+ * refund in full.
+ */
+export function LandingCapabilities() {
+  return (
+    <section className="landing-section capabilities" id="capabilities">
+      <div className="landing-section-head">
+        <p>What it can do</p>
+        <h2>Ask for the work.<br />Get the work.</h2>
+        <span>Not a chat box with extra buttons. AI360 does the thinking, then hands you the thing you actually needed.</span>
+      </div>
+
+      <div className="capability-lead">
+        <div className="capability-lead-copy">
+          <p>New</p>
+          <h3>It makes the file for you.</h3>
+          <p>
+            You should not have to know you wanted a spreadsheet. Ask for a price
+            list, a proposal or a report, and AI360 writes it, builds the file and
+            attaches it to the answer — PDF, Word or Excel, ready to send. It is
+            kept in your workspace, so it is still there tomorrow, on another phone.
+          </p>
+          <Link href={workspaceHref('Make me a wholesale price list I can send to buyers: ', 'chat')}>
+            Ask for a file
+          </Link>
+        </div>
+        <ul className="capability-lead-formats" aria-label="File formats AI360 produces">
+          <li><b>PDF</b><small>Fixed layout, ready to print or send</small></li>
+          <li><b>Word</b><small>Editable document you can keep working on</small></li>
+          <li><b>Excel</b><small>Real numbers in real cells, one sheet per table</small></li>
+        </ul>
+      </div>
+
+      <div className="capability-grid">
+        <article>
+          <h3>Speaks the way Ghana speaks</h3>
+          <p>English, Twi, Gã, Eʋegbe and Pidgin. Type it, or say it out loud and let AI360 write it down.</p>
+        </article>
+        <article>
+          <h3>Survives a dropped line</h3>
+          <p>Close the tab, lose the network, switch phone. Work that was running is still running when you come back.</p>
+        </article>
+        <article>
+          <h3>Projects that remember</h3>
+          <p>A project holds its brief, its files and its own conversations, so you never explain your business twice.</p>
+        </article>
+        <article>
+          <h3>The price before it runs</h3>
+          <p>Anything that costs is quoted first and refunded in full if it fails. Documents cost nothing at all.</p>
+        </article>
       </div>
     </section>
   )

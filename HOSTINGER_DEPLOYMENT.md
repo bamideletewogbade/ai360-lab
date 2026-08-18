@@ -101,6 +101,15 @@ After the temporary deployment passes readiness, run:
 npm run smoke:deploy -- https://the-temporary-hostinger-url.example
 ```
 
+Run the authenticated document smoke separately with a dedicated test account.
+Set `AI360_SMOKE_EMAIL` and `AI360_SMOKE_PASSWORD` in the environment file; the
+script creates and downloads PDF, DOCX, and XLSX files through chat, then removes
+only the exact test assets it created.
+
+```bash
+npm run smoke:documents -- https://ai360.africa ai360-production.env
+```
+
 The smoke suite checks health, dependency readiness, security headers, public
 routes, private-workspace indexing rules and discovery files. Follow
 `STAGING_RELEASE_CHECKLIST.md` before connecting the live domain and

@@ -16,6 +16,13 @@ const messageSchema = z.object({
   agentSteps: z.array(z.unknown()).max(30).optional(),
   sources: z.array(z.unknown()).max(50).optional(),
   usage: z.record(z.string(), z.unknown()).optional(),
+  files: z.array(z.object({
+    assetId: z.string().min(1).max(96),
+    filename: z.string().min(1).max(255),
+    title: z.string().min(1).max(140),
+    format: z.enum(['pdf', 'docx', 'xlsx']),
+    byteSize: z.number().int().positive().max(25 * 1024 * 1024),
+  })).max(10).optional(),
   actions: z.array(z.unknown()).max(30).optional(),
 })
 

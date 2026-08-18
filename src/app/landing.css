@@ -436,3 +436,139 @@
 @media (prefers-reduced-motion: reduce) {
   .landing-shell *, .landing-shell *::before, .landing-shell *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Capabilities — what AI360 can actually do.
+   Sits between outcomes (what you achieve) and process (how it works), because
+   the page previously jumped from one to the other without ever showing the
+   product's own abilities. */
+.landing-section.capabilities {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+}
+.capability-lead {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 34px;
+  align-items: center;
+  padding: 34px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--white);
+}
+.capability-lead-copy > p:first-child {
+  margin: 0 0 10px;
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--black);
+  color: var(--paper);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.capability-lead-copy h3 {
+  margin: 0 0 12px;
+  font-family: var(--font-heading);
+  font-size: clamp(26px, 3.4vw, 38px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--black);
+  text-wrap: balance;
+}
+.capability-lead-copy p {
+  margin: 0 0 18px;
+  max-width: 52ch;
+  color: var(--charcoal);
+  font-size: 16.5px;
+  line-height: 1.6;
+}
+.capability-lead-copy a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 20px;
+  border-radius: 12px;
+  background: var(--black);
+  color: var(--paper);
+  font-size: 15.5px;
+  font-weight: 750;
+  text-decoration: none;
+  transition: background 0.16s var(--ease);
+}
+.capability-lead-copy a:hover,
+.capability-lead-copy a:focus-visible {
+  background: var(--charcoal);
+  outline: 0;
+}
+.capability-lead-formats {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.capability-lead-formats li {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--warm-white);
+}
+.capability-lead-formats b {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  color: var(--black);
+}
+.capability-lead-formats small {
+  display: block;
+  margin-top: 2px;
+  color: var(--grey);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+}
+.capability-grid article {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+}
+.capability-grid h3 {
+  margin: 0 0 7px;
+  font-family: var(--font-heading);
+  font-size: 17.5px;
+  line-height: 1.25;
+  color: var(--black);
+  text-wrap: balance;
+}
+.capability-grid p {
+  margin: 0;
+  color: var(--grey);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+@media (max-width: 900px) {
+  .capability-lead {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 26px;
+    padding: 26px;
+  }
+}
+@media (max-width: 620px) {
+  .landing-section.capabilities {
+    gap: 24px;
+  }
+  .capability-lead {
+    padding: 22px;
+    border-radius: 18px;
+  }
+  .capability-grid article {
+    padding: 18px;
+  }
+}
