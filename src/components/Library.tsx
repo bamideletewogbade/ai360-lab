@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { scopedStorageKey } from '@/lib/workspace'
 import { mergeProjects, sortProjects } from '@/lib/studio-projects'
 import type { StudioAsset, StudioProject } from '@/lib/studio-project-model'
@@ -55,6 +55,26 @@ const ASSET_TYPE_LABEL: Record<StudioAsset['type'], string> = {
   video: 'Video direction',
 }
 
+const KIND_LABEL: Record<LibraryKind, string> = {
+  document: 'Document',
+  image: 'Image',
+  video: 'Video',
+  project: 'Project work',
+}
+
+function LibraryKindIcon({ kind }: { kind: LibraryKind }) {
+  if (kind === 'document') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h7l4 4v13h-11Z" /><path d="M13.5 3.5v4h4M9 12h6M9 15.5h6" /></svg>
+  }
+  if (kind === 'image') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="8.5" cy="9" r="1.5" /><path d="m4.5 17 4.5-4.5 3.2 3.2 2.3-2.3 5 5" /></svg>
+  }
+  if (kind === 'video') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="13" height="14" rx="2.5" /><path d="m16.5 10 4-2v8l-4-2Z" /></svg>
+  }
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5h6l2-2h9v13h-17Z" /><path d="M3.5 9.5h17M9 13h6" /></svg>
+}
+
 function bytesLabel(byteSize: number) {
   if (byteSize < 1024) return `${byteSize} B`
   if (byteSize < 1024 * 1024) return `${Math.round(byteSize / 1024)} KB`
@@ -81,6 +101,18 @@ function assetPreview(content: string) {
   return stripped.length > 160 ? `${stripped.slice(0, 160)}…` : stripped
 }
 
+function createdLabel(createdAt: number) {
+  if (!createdAt) return 'Recently created'
+  const date = new Date(createdAt)
+  const now = new Date()
+  const sameYear = date.getFullYear() === now.getFullYear()
+  return new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' as const }),
+  }).format(date)
+}
+
 export function Library({
   signedIn,
   workspaceScope,
@@ -96,6 +128,20 @@ export function Library({
   const [loaded, setLoaded] = useState(false)
   const [typeFilter, setTypeFilter] = useState<'all' | LibraryKind>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'ready'>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      const target = event.target
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return
+      event.preventDefault()
+      searchInputRef.current?.focus()
+    }
+    window.addEventListener('keydown', focusSearch)
+    return () => window.removeEventListener('keydown', focusSearch)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -190,31 +236,73 @@ export function Library({
     return [...documentItems, ...mediaItems, ...projectItems].sort((a, b) => b.createdAt - a.createdAt)
   }, [documents, media, projects, projectNameById])
 
-  const visible = items.filter((item) => {
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase()
+  const visible = useMemo(() => items.filter((item) => {
     if (typeFilter !== 'all' && item.kind !== typeFilter) return false
     if (statusFilter === 'ready' && item.status !== 'ready') return false
+    if (normalizedSearch) {
+      const searchable = [item.title, item.preview, item.formatLabel, item.sourceLabel, KIND_LABEL[item.kind]]
+        .filter(Boolean)
+        .join(' ')
+        .toLocaleLowerCase()
+      if (!searchable.includes(normalizedSearch)) return false
+    }
     return true
-  })
+  }), [items, normalizedSearch, statusFilter, typeFilter])
 
-  const counts = {
+  const counts = useMemo(() => ({
     all: items.length,
     document: items.filter((item) => item.kind === 'document').length,
     image: items.filter((item) => item.kind === 'image').length,
     video: items.filter((item) => item.kind === 'video').length,
     project: items.filter((item) => item.kind === 'project').length,
+    ready: items.filter((item) => item.status === 'ready').length,
+    draft: items.filter((item) => item.status === 'draft').length,
+  }), [items])
+
+  const hasActiveFilters = Boolean(normalizedSearch || typeFilter !== 'all' || statusFilter !== 'all')
+  const clearFilters = () => {
+    setSearchQuery('')
+    setTypeFilter('all')
+    setStatusFilter('all')
+    requestAnimationFrame(() => searchInputRef.current?.focus())
   }
 
   return (
     <div className="outcomes-container full-width-layout">
       <header className="outcomes-header">
-        <div>
-          <span className="outcomes-eyebrow">Workspace library</span>
-          <h1>Everything you&rsquo;ve made</h1>
+        <div className="outcomes-heading">
+          <span className="outcomes-eyebrow"><i aria-hidden="true" /> Workspace library</span>
+          <h1>Your work, ready when you need it.</h1>
           <p className="outcomes-intro">
-            Documents, images, video and project work from across AI360, kept in one place.
+            Find every document, visual and project outcome you have made across AI360.
           </p>
         </div>
+        <dl className="outcomes-summary" aria-label="Library summary">
+          <div><dt>All work</dt><dd>{counts.all}</dd></div>
+          <div><dt>Finished</dt><dd>{counts.ready}</dd></div>
+          <div><dt>In progress</dt><dd>{counts.draft}</dd></div>
+        </dl>
       </header>
+
+      <form className="outcomes-search" role="search" onSubmit={(event) => event.preventDefault()}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4 4" /></svg>
+        <label htmlFor="library-search">Search your library</label>
+        <input
+          ref={searchInputRef}
+          id="library-search"
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search by title, project, type or content…"
+          autoComplete="off"
+        />
+        {searchQuery ? (
+          <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear library search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+          </button>
+        ) : <kbd aria-hidden="true">/</kbd>}
+      </form>
 
       <div className="outcomes-filter-row">
         <div className="outcomes-filter-bar" role="group" aria-label="Filter by type">
@@ -230,6 +318,7 @@ export function Library({
               type="button"
               className={typeFilter === value ? 'active' : ''}
               onClick={() => setTypeFilter(value)}
+              aria-pressed={typeFilter === value}
             >
               {label}
             </button>
@@ -245,6 +334,14 @@ export function Library({
         </div>
       </div>
 
+      <div className="outcomes-results-line" aria-live="polite" aria-atomic="true">
+        <span>
+          {loaded ? <><strong>{visible.length}</strong> {visible.length === 1 ? 'item' : 'items'}</> : 'Gathering your work…'}
+          {normalizedSearch ? <> matching &ldquo;{searchQuery.trim()}&rdquo;</> : null}
+        </span>
+        <span>Newest first</span>
+      </div>
+
       {!signedIn ? (
         <p className="outcomes-guest-note">
           Signed out: showing project work saved on this device. Sign in to also see documents and media you&rsquo;ve created.
@@ -252,24 +349,33 @@ export function Library({
       ) : null}
 
       {!loaded ? (
-        <p className="outcomes-empty">Loading your work…</p>
+        <div className="outcomes-loading" aria-label="Loading your library">
+          {[0, 1, 2].map((item) => <span key={item} />)}
+        </div>
       ) : visible.length ? (
-        <div className="outcomes-grid">
+        <div className="outcomes-grid" id="library-results">
           {visible.map((item) => (
-            <div className="outcomes-card" key={item.id}>
+            <article className={`outcomes-card outcomes-card-${item.kind}`} key={item.id}>
               <div className="outcomes-card-top">
-                <span className={`format-badge format-${item.kind}`}>{item.formatLabel}</span>
-                <span className="outcomes-card-status">
+                <div className="outcomes-card-kind">
+                  <span className="outcomes-kind-icon"><LibraryKindIcon kind={item.kind} /></span>
+                  <span><b>{KIND_LABEL[item.kind]}</b><small>{item.formatLabel}</small></span>
+                </div>
+                <span className={`outcomes-card-status status-${item.status}`}>
+                  <i aria-hidden="true" />
                   {item.status === 'ready' ? 'Finished' : 'In progress'}
                 </span>
               </div>
-              <h3>{item.title}</h3>
-              {item.preview ? <p>{item.preview}</p> : null}
+              <div className="outcomes-card-body">
+                <h2>{item.title}</h2>
+                {item.preview ? <p>{item.preview}</p> : (
+                  <p className="outcomes-card-hint">
+                    {item.kind === 'document' ? 'Ready to download and use.' : `Created in ${item.sourceLabel}.`}
+                  </p>
+                )}
+              </div>
               <div className="outcomes-card-footer">
-                <span className="outcomes-card-source">
-                  {item.sourceLabel}
-                  {item.sizeLabel ? ` · ${item.sizeLabel}` : ''}
-                </span>
+                <span className="outcomes-card-source"><b>{item.sourceLabel}</b><small>{createdLabel(item.createdAt)}{item.sizeLabel ? ` · ${item.sizeLabel}` : ''}</small></span>
                 {item.downloadUrl ? (
                   <a href={item.downloadUrl} download className="outcomes-download-btn">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -282,15 +388,18 @@ export function Library({
                   </button>
                 ) : null}
               </div>
-            </div>
+            </article>
           ))}
         </div>
       ) : (
-        <p className="outcomes-empty">
-          {items.length
-            ? 'Nothing finished yet. Switch to "All" to see work still in progress.'
-            : 'Nothing here yet. Start a chat, a project or a Media Studio render, and your work will show up here.'}
-        </p>
+        <div className="outcomes-empty">
+          <span aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4 4" /></svg></span>
+          <h2>{items.length ? 'No work matches that' : 'Your library is ready for your first creation'}</h2>
+          <p>{items.length
+            ? 'Try another search or clear a filter to see more of your work.'
+            : 'Start a chat, project or Media Studio render and it will be easy to find here.'}</p>
+          {hasActiveFilters ? <button type="button" onClick={clearFilters}>Clear search and filters</button> : null}
+        </div>
       )}
     </div>
   )
