@@ -4989,41 +4989,6 @@ button {
   margin: 0 7px 0 -21px;
   accent-color: var(--black);
 }
-.message-file {
-  display: inline-flex;
-  max-width: 100%;
-  align-items: center;
-  gap: 9px;
-  margin: 2px 0 9px;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--white);
-}
-.message-file img,
-.message-file video {
-  width: 42px;
-  height: 42px;
-  border-radius: 6px;
-  object-fit: cover;
-}
-.message-file > span {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 6px;
-  background: var(--warm-white);
-  font-size: 12px;
-  font-weight: 800;
-}
-.message-file b {
-  overflow: hidden;
-  max-width: 320px;
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .thinking {
   display: inline-flex;
   align-items: center;
