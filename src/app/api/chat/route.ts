@@ -14,6 +14,7 @@ import {
 import { isAuthConfigured } from '@/lib/auth'
 import { isDocumentStoreConfigured, persistGeneratedDocument } from '@/lib/export/document-store'
 import { NoTabularContentError, renderDocument } from '@/lib/export/render'
+import { resolveDocumentBrand } from '@/lib/export/brand'
 import { recordUsageEventSafe } from '@/lib/usage'
 import { CHAT_FAIR_USE_DAILY, CHAT_FAIR_USE_FALLBACK } from '@/lib/billing/catalog'
 import { openCreditGate } from '@/lib/billing/credit-gate'
@@ -456,6 +457,13 @@ export async function POST(req: NextRequest) {
         const documentCalls = documentToolOffered ? first.toolCalls.filter((call) => call.id) : []
         if (documentCalls.length) {
           const toolResults: unknown[] = []
+          // Resolved once and reused for every call in this pass: the project's
+          // own colours when it has them, else the workspace's saved kit, else
+          // undefined — every builder already has a sensible neutral default.
+          const brand = await resolveDocumentBrand({
+            workspaceKey: requester.context!.workspace.key,
+            projectId: projectId || null,
+          }).catch(() => undefined)
           for (const call of documentCalls) {
             const parsed = parseToolCall(call)
             if (!parsed.ok) {
@@ -471,6 +479,7 @@ export async function POST(req: NextRequest) {
                 title: parsed.arguments.title,
                 content: parsed.arguments.content,
                 format: parsed.arguments.format,
+                brand,
               })
               const stored = await persistGeneratedDocument({
                 context: requester.context!,

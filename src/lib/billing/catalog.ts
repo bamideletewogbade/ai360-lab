@@ -111,7 +111,7 @@ export const CREDIT_GUIDE = [
   // for. That was true before this line existed, and saying nothing about it
   // gave away the most tangible thing the product does without ever crediting
   // it. `FEATURE_WEIGHTS.export` is all zeros, which is what this publishes.
-  { task: 'PDF, Word and Excel files', credits: 'Included, no credits' },
+  { task: 'PDF, Word, Excel and PowerPoint files', credits: 'Included, no credits' },
   { task: 'Extra chat beyond your daily limit', credits: '1 credit each' },
   { task: 'Premium model chat (Claude, Kimi)', credits: '1 to 8 credits' },
   { task: 'Current web research or file review', credits: '2 to 4 credits' },

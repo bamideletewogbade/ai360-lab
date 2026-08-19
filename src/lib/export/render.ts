@@ -8,6 +8,10 @@ import {
 } from 'docx'
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import { buildXlsx, sheetsFromBlocks } from '@/lib/export/xlsx'
+import { buildPptx } from '@/lib/export/pptx'
+import { hexToOoxml, hexToRgb01, tint, type DocumentBrand } from '@/lib/export/color'
+
+export type { DocumentBrand }
 
 /**
  * One generation path for every document AI360 produces.
@@ -18,16 +22,17 @@ import { buildXlsx, sheetsFromBlocks } from '@/lib/export/xlsx'
  * the same as one the person asks for, and a fix to either applies to both.
  */
 
-export type ExportFormat = 'pdf' | 'docx' | 'xlsx'
+export type ExportFormat = 'pdf' | 'docx' | 'xlsx' | 'pptx'
 
 export const EXPORT_MIME: Record<ExportFormat, string> = {
   pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 }
 
 export function isExportFormat(value: unknown): value is ExportFormat {
-  return value === 'pdf' || value === 'docx' || value === 'xlsx'
+  return value === 'pdf' || value === 'docx' || value === 'xlsx' || value === 'pptx'
 }
 
 /** Raised when a spreadsheet is asked for but the content holds no table. */
@@ -144,8 +149,10 @@ export function safeFilename(title: string, extension: string) {
   return `${base || 'ai-360-response'}.${extension}`
 }
 
-async function buildDocx(title: string, blocks: ExportBlock[]) {
+async function buildDocx(title: string, blocks: ExportBlock[], brand?: DocumentBrand) {
   const logo = await readFile(path.join(process.cwd(), 'public', 'icon-mark-black.png'))
+  const primary = brand ? hexToOoxml(brand.primary) : '101112'
+  const headerFill = brand ? hexToOoxml(tint(brand.primary, 0.88)) : 'F1F0EC'
   const children: Array<Paragraph | Table> = [
     new Paragraph({
       spacing: { before: 0, after: 100 },
@@ -153,7 +160,7 @@ async function buildDocx(title: string, blocks: ExportBlock[]) {
     }),
     new Paragraph({
       spacing: { before: 0, after: 120 },
-      children: [new TextRun({ text: cleanText(title), bold: true, size: 42, font: 'Arial', color: '101112' })],
+      children: [new TextRun({ text: cleanText(title), bold: true, size: 42, font: 'Arial', color: primary })],
     }),
     new Paragraph({
       spacing: { before: 0, after: 300 },
@@ -174,7 +181,7 @@ async function buildDocx(title: string, blocks: ExportBlock[]) {
         new Paragraph({
           heading: block.level === 1 ? HeadingLevel.HEADING_1 : block.level === 2 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_3,
           spacing: { before: block.level === 1 ? 280 : 220, after: 100 },
-          children: [new TextRun({ text: block.text, bold: true, font: 'Arial', color: '101112' })],
+          children: [new TextRun({ text: block.text, bold: true, font: 'Arial', color: primary })],
         }),
       )
     } else if (block.type === 'paragraph') {
@@ -187,8 +194,8 @@ async function buildDocx(title: string, blocks: ExportBlock[]) {
     } else if (block.type === 'quote') {
       children.push(
         new Paragraph({
-          border: { left: { style: BorderStyle.SINGLE, size: 12, color: '101112', space: 12 } },
-          shading: { type: ShadingType.CLEAR, fill: 'F1F0EC' },
+          border: { left: { style: BorderStyle.SINGLE, size: 12, color: primary, space: 12 } },
+          shading: { type: ShadingType.CLEAR, fill: headerFill },
           indent: { left: 240, right: 160 },
           spacing: { before: 100, after: 160, line: 280 },
           children: [new TextRun({ text: block.text, italics: true, size: 21, font: 'Arial', color: '292B2D' })],
@@ -228,7 +235,7 @@ async function buildDocx(title: string, blocks: ExportBlock[]) {
                 children: Array.from({ length: columns }, (_, columnIndex) =>
                   new TableCell({
                     width: { size: width, type: WidthType.DXA },
-                    shading: rowIndex === 0 ? { type: ShadingType.CLEAR, fill: 'F1F0EC' } : undefined,
+                    shading: rowIndex === 0 ? { type: ShadingType.CLEAR, fill: headerFill } : undefined,
                     margins: { top: 100, bottom: 100, left: 120, right: 120 },
                     children: [
                       new Paragraph({
@@ -276,12 +283,12 @@ async function buildDocx(title: string, blocks: ExportBlock[]) {
       paragraphStyles: [
         {
           id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-          run: { font: 'Arial', size: 32, bold: true, color: '101112' },
+          run: { font: 'Arial', size: 32, bold: true, color: primary },
           paragraph: { spacing: { before: 320, after: 140 } },
         },
         {
           id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-          run: { font: 'Arial', size: 26, bold: true, color: '101112' },
+          run: { font: 'Arial', size: 26, bold: true, color: primary },
           paragraph: { spacing: { before: 240, after: 120 } },
         },
         {
@@ -370,12 +377,16 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
   return lines
 }
 
-async function buildPdf(title: string, blocks: ExportBlock[]) {
+async function buildPdf(title: string, blocks: ExportBlock[], brand?: DocumentBrand) {
   const pdf = await PDFDocument.create()
   // Standard PDF fonts use WinAnsi and throw on characters used in Twi, Gã and
   // Eʋegbe. DejaVu Sans is embedded and subsetted so supported-language text is
   // preserved without turning every document into a multi-megabyte download.
   const { regular, bold, italic, mono } = await pdfFonts(pdf)
+  const primaryRgb: [number, number, number] = brand ? hexToRgb01(brand.primary) : [0.06, 0.07, 0.07]
+  const headerFillRgb: [number, number, number] = brand ? hexToRgb01(tint(brand.primary, 0.88)) : [0.94, 0.93, 0.91]
+  const primary = rgb(...primaryRgb)
+  const headerFill = rgb(...headerFillRgb)
   const logoBytes = await readFile(path.join(process.cwd(), 'public', 'icon-mark-black.png'))
   const logo = await pdf.embedPng(logoBytes)
   const margin = 58
@@ -411,19 +422,19 @@ async function buildPdf(title: string, blocks: ExportBlock[]) {
     state.y -= options.gap ?? 8
   }
 
-  drawWrapped(cleanText(title), { font: bold, size: 22, color: rgb(.06, .07, .07), gap: 5 })
+  drawWrapped(cleanText(title), { font: bold, size: 22, color: primary, gap: 5 })
   drawWrapped(`Prepared ${new Intl.DateTimeFormat('en', { dateStyle: 'long' }).format(new Date())}`, {
     size: 8.5, color: rgb(.34, .35, .36), gap: 22,
   })
 
   for (const block of blocks) {
     if (block.type === 'heading') {
-      drawWrapped(block.text, { font: bold, size: block.level === 1 ? 15 : block.level === 2 ? 12.5 : 11, gap: 8 })
+      drawWrapped(block.text, { font: bold, size: block.level === 1 ? 15 : block.level === 2 ? 12.5 : 11, gap: 8, color: block.level <= 2 ? primary : undefined })
     } else if (block.type === 'paragraph') {
       drawWrapped(block.text)
     } else if (block.type === 'quote') {
       ensure(52)
-      state.page.drawRectangle({ x: margin, y: state.y - 30, width: 2, height: 38, color: rgb(.06, .07, .07) })
+      state.page.drawRectangle({ x: margin, y: state.y - 30, width: 2, height: 38, color: primary })
       drawWrapped(block.text, { font: italic, indent: 16, color: rgb(.25, .26, .27), gap: 14 })
     } else if (block.type === 'code') {
       const lines = block.text.split('\n')
@@ -450,7 +461,7 @@ async function buildPdf(title: string, blocks: ExportBlock[]) {
         const height = Math.max(23, lines.length * 11 + 10)
         state.page.drawRectangle({
           x: margin, y: state.y - height + 6, width, height,
-          color: rowIndex === 0 ? rgb(.94, .93, .91) : rgb(1, 1, 1),
+          color: rowIndex === 0 ? headerFill : rgb(1, 1, 1),
           borderColor: rgb(.86, .85, .82), borderWidth: .6,
         })
         let rowY = state.y - 6
@@ -483,6 +494,8 @@ export async function renderDocument(input: {
   title: string
   content: string
   format: ExportFormat
+  /** A workspace or project's colours. Omitted, every builder keeps its current neutral AI360 look. */
+  brand?: DocumentBrand
 }): Promise<{ bytes: Buffer; mimeType: string; filename: string; blockCount: number; sheetCount?: number }> {
   const title = cleanText(input.title || 'AI360 document').slice(0, 140)
   const blocks = parseMarkdown(input.content)
@@ -490,16 +503,20 @@ export async function renderDocument(input: {
   if (input.format === 'xlsx') {
     const sheets = sheetsFromBlocks(blocks)
     if (!sheets.length) throw new NoTabularContentError()
-    const bytes = await buildXlsx(sheets)
+    const bytes = await buildXlsx(sheets, input.brand)
     return {
       bytes, mimeType: EXPORT_MIME.xlsx, filename: safeFilename(title, 'xlsx'),
       blockCount: blocks.length, sheetCount: sheets.length,
     }
   }
   if (input.format === 'docx') {
-    const bytes = await buildDocx(title, blocks)
+    const bytes = await buildDocx(title, blocks, input.brand)
     return { bytes, mimeType: EXPORT_MIME.docx, filename: safeFilename(title, 'docx'), blockCount: blocks.length }
   }
-  const bytes = await buildPdf(title, blocks)
+  if (input.format === 'pptx') {
+    const bytes = await buildPptx(title, blocks, input.brand)
+    return { bytes, mimeType: EXPORT_MIME.pptx, filename: safeFilename(title, 'pptx'), blockCount: blocks.length }
+  }
+  const bytes = await buildPdf(title, blocks, input.brand)
   return { bytes, mimeType: EXPORT_MIME.pdf, filename: safeFilename(title, 'pdf'), blockCount: blocks.length }
 }

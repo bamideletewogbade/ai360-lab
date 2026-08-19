@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 
-type CreditGuide = Array<{ task: string; credits: string }>
-
 /**
  * Announced by any surface that has just spent or released credits — a finished
  * render, a settled hold, a completed top-up. Kept as a plain window event so a
@@ -30,7 +28,6 @@ export function CreditBalance({ signedIn, busy }: { signedIn: boolean; busy: boo
   const [available, setAvailable] = useState<number | null>(null)
   const [reserved, setReserved] = useState(0)
   const [plan, setPlan] = useState('')
-  const [guide, setGuide] = useState<CreditGuide>([])
   // Balance at or below which the pill turns amber and offers a top-up. Same
   // threshold as the low-credit email, so both surfaces agree.
   const [lowThreshold, setLowThreshold] = useState(5)
@@ -54,7 +51,6 @@ export function CreditBalance({ signedIn, busy }: { signedIn: boolean; busy: boo
         setReserved(typeof data.reserved === 'number' ? data.reserved : 0)
         setPlan(typeof data.plan === 'string' ? data.plan : '')
         if (typeof data.lowThreshold === 'number') setLowThreshold(data.lowThreshold)
-        if (Array.isArray(data.guide)) setGuide(data.guide)
       })
       .catch(() => { /* the balance is a nicety, never a blocker */ })
   }, [signedIn])
@@ -125,7 +121,7 @@ export function CreditBalance({ signedIn, busy }: { signedIn: boolean; busy: boo
       >
         <i className="credit-dot" aria-hidden="true" />
         <b>{available}</b>
-        <small>{holding ? `using ${reserved}…` : busy ? 'using…' : low ? 'left, add soon' : 'credits'}</small>
+        <small>{holding ? `using ${reserved}…` : busy ? 'using…' : 'credits'}</small>
       </button>
 
       {open ? (
@@ -136,15 +132,8 @@ export function CreditBalance({ signedIn, busy }: { signedIn: boolean; busy: boo
           </div>
           {low ? <p className="credit-low-note">Almost out. A one-time top-up keeps paid work from pausing.</p> : null}
           {reserved > 0 ? <p className="credit-holding">{reserved} reserved for work in progress.</p> : null}
-          {guide.length ? (
-            <ul className="credit-guide">
-              {guide.map((item) => (
-                <li key={item.task}><span>{item.task}</span><b>{item.credits}</b></li>
-              ))}
-            </ul>
-          ) : null}
-          {/* The full picture — balance, costs, plan and payments — lives on one
-              page now, so the popover stays a glance and hands off to it. */}
+          {/* The full picture — balance, what work costs, plan and payments —
+              lives on one page, so the popover stays a glance and hands off to it. */}
           <Link href="/settings/billing" className="credit-plans-link" onClick={() => setOpen(false)}>
             Credits and billing <span aria-hidden="true">→</span>
           </Link>

@@ -131,6 +131,9 @@
 @media (max-width: 560px) {
   .settingRow { flex-direction: column; align-items: stretch; gap: 10px; }
   .settingRow .select { max-width: none; }
+  /* The swatch and label stay on one line; the hex field drops to its own
+     full-width line rather than wrapping mid-row into an awkward gap. */
+  .hexInput { flex-basis: 100%; width: 100%; order: 3; }
 }
 
 .select {
@@ -336,6 +339,102 @@
   cursor: pointer;
 }
 .passwordForm button:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Brand kit */
+.colorRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.colorRow:first-child { border-top: 0; padding-top: 2px; }
+
+.colorSwatch {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line-dark);
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.colorSwatch::-webkit-color-swatch-wrapper { padding: 0; border-radius: 9px; }
+.colorSwatch::-webkit-color-swatch { border: 0; border-radius: 9px; }
+.colorSwatch::-moz-color-swatch { border: 0; border-radius: 9px; }
+
+.colorField { flex: 1 1 160px; display: grid; gap: 2px; min-width: 0; }
+.colorField strong { font-size: 16px; font-weight: 750; }
+.colorField span { color: var(--grey); font-size: 14px; }
+
+.hexInput {
+  flex: none;
+  width: 122px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line-dark);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--black);
+  font: inherit;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  outline: 0;
+}
+.hexInput:focus-visible { border-color: var(--black); }
+.hexInputInvalid { border-color: #c5221f; }
+
+.brandActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 4px; }
+.brandActions button:first-child {
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--black);
+  padding: 0 18px;
+  color: var(--paper);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.brandActions button:first-child:disabled { opacity: .55; cursor: not-allowed; }
+.textButton {
+  min-height: 44px;
+  border: 0;
+  background: none;
+  padding: 0 6px;
+  color: var(--grey);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.textButton:hover { color: var(--black); }
+.textButton:disabled { opacity: .5; cursor: not-allowed; }
+
+.brandPreview {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--white);
+}
+.brandPreviewHead { padding: 16px 18px 14px; }
+.brandPreviewEyebrow { display: block; color: var(--grey); font-size: 12px; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; }
+.brandPreviewTitle { display: block; margin-top: 4px; font-family: var(--font-heading, inherit); font-size: 19px; font-weight: 850; }
+.brandPreviewTable { display: grid; font-size: 13px; }
+.brandPreviewTableHead, .brandPreviewTableRow {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  padding: 9px 18px;
+}
+.brandPreviewTableHead { font-weight: 750; }
+.brandPreviewTableRow { color: var(--charcoal); border-top: 1px solid var(--line); }
 
 @media (min-width: 860px) {
   .layout { grid-template-columns: 232px minmax(0, 1fr); align-items: start; }

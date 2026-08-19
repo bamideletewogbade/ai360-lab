@@ -68,7 +68,7 @@ test('malformed arguments are reported, never thrown', () => {
 test('an unsupported format is refused with a usable reason', () => {
   const bad = parseToolCall({
     index: 0, id: 'c', name: 'create_document',
-    argumentsText: JSON.stringify({ title: 'T', format: 'pptx', content: 'x' }),
+    argumentsText: JSON.stringify({ title: 'T', format: 'txt', content: 'x' }),
   })
   assert.equal(bad.ok, false)
   if (!bad.ok) assert.match(bad.reason, /format/)
@@ -94,6 +94,8 @@ test('the tool is offered only when the person asked for something to keep', () 
   assert.equal(asked('Can you make me a price list I can send to spa buyers?'), true)
   assert.equal(asked('Draft a proposal for the Tema account'), true)
   assert.equal(asked('I need a spreadsheet of these figures'), true)
+  assert.equal(asked('Can you make a PowerPoint presentation for the board meeting?'), true)
+  assert.equal(asked('Put together some slides pitching this to investors'), true)
   // Ordinary conversation must not trigger it
   assert.equal(asked('What is shea butter used for?'), false)
   assert.equal(asked('Explain how wholesale pricing works'), false)
@@ -129,10 +131,10 @@ test('the guest sign-in prompt never replaces normal chat or signed-in document 
   }), null)
 })
 
-test('the contract the model sees names all three formats and forbids extra fields', () => {
+test('the contract the model sees names all four formats and forbids extra fields', () => {
   const fn = CREATE_DOCUMENT_TOOL.function
   assert.equal(fn.name, 'create_document')
-  assert.deepEqual(fn.parameters.properties.format.enum, ['pdf', 'docx', 'xlsx'])
+  assert.deepEqual(fn.parameters.properties.format.enum, ['pdf', 'docx', 'xlsx', 'pptx'])
   assert.deepEqual(fn.parameters.required, ['title', 'format', 'content'])
   assert.equal(fn.parameters.additionalProperties, false)
 })

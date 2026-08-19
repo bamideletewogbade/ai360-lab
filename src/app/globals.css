@@ -11953,9 +11953,10 @@ button {
     min-height: 44px;
     padding-inline: 10px;
   }
-  /* The answer-options trigger is the way to a saved PDF, Word or Excel file,
-     so it is a primary path on a phone rather than a minor affordance. At 30px
-     it was the smallest thing standing between someone and their document. */
+  /* The answer-options trigger is the way to a saved PDF, Word, Excel or
+     PowerPoint file, so it is a primary path on a phone rather than a minor
+     affordance. At 30px it was the smallest thing standing between someone
+     and their document. */
   .response-actions-trigger {
     min-height: 44px;
     padding-inline: 12px;

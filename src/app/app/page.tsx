@@ -2109,6 +2109,7 @@ function LabWorkspace({
                       <ResponseActions
                         content={message.content}
                         title={displayConversationTitle(active.title)}
+                        projectId={active.projectId}
                         canListen={Boolean(browserSpeechLocale(responseLanguage))}
                         canRetry={index === messages.length - 1}
                         busy={busy}

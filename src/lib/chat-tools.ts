@@ -22,6 +22,7 @@ export const CREATE_DOCUMENT_TOOL = {
       'and never use it just because the answer is long.',
       'Choose xlsx only when the content is genuinely tabular; it renders each markdown table as a sheet.',
       'Choose docx for written documents and pdf when the layout should be fixed for printing or sending.',
+      'Choose pptx when the person wants slides, a deck or a presentation; headings become slide titles and each markdown table becomes its own slide.',
     ].join(' '),
     parameters: {
       type: 'object',
@@ -32,8 +33,8 @@ export const CREATE_DOCUMENT_TOOL = {
         },
         format: {
           type: 'string',
-          enum: ['pdf', 'docx', 'xlsx'],
-          description: 'pdf for fixed layout, docx for an editable document, xlsx for tabular data.',
+          enum: ['pdf', 'docx', 'xlsx', 'pptx'],
+          description: 'pdf for fixed layout, docx for an editable document, xlsx for tabular data, pptx for a slide deck.',
         },
         content: {
           type: 'string',
@@ -51,7 +52,7 @@ export const CREATE_DOCUMENT_TOOL = {
 /** What the model is allowed to send us, validated before anything is generated. */
 export const createDocumentArgumentsSchema = z.object({
   title: z.string().trim().min(1).max(140),
-  format: z.enum(['pdf', 'docx', 'xlsx']),
+  format: z.enum(['pdf', 'docx', 'xlsx', 'pptx']),
   content: z.string().trim().min(1).max(100_000),
 })
 
@@ -138,7 +139,7 @@ export function parseToolCall(call: StreamedToolCall): ParsedToolCall {
  * something they intend to keep, send or print.
  */
 const DELIVERABLE_INTENT =
-  /\b(document|doc|pdf|word|excel|spreadsheet|sheet|report|proposal|price\s?list|pricelist|invoice|quote|quotation|letter|contract|brief|plan|deck|summary|export|download|template|form|checklist|agenda|minutes|catalogue|catalog)\b/i
+  /\b(document|doc|pdf|word|excel|powerpoint|ppt|pptx|slides?|spreadsheet|sheet|report|proposal|price\s?list|pricelist|invoice|quote|quotation|letter|contract|brief|plan|deck|presentation|summary|export|download|template|form|checklist|agenda|minutes|catalogue|catalog)\b/i
 const PRODUCE_VERB =
   /\b(create|make|draft|write|prepare|produce|generate|build|put together|send me|give me|i need|can you)\b/i
 
@@ -155,7 +156,7 @@ export function shouldOfferDocumentTool(messages: Array<{ role: string; content:
  * to improvise an inaccurate "I can't create files" answer.
  */
 export const GUEST_DOCUMENT_SIGN_IN_MESSAGE =
-  'To create and securely save a downloadable PDF, Word document, or Excel workbook, '
+  'To create and securely save a downloadable PDF, Word document, Excel workbook, or PowerPoint presentation, '
   + '[sign in to AI360](/sign-in?next=%2Fapp), then send this request again. '
   + 'Signing in keeps the file private and available across your devices.'
 

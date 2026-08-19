@@ -186,7 +186,7 @@ test('premium-model chat is metered above measured cost, unlike included everyda
 test('every published credit-guide figure is backed by a real feature weight', () => {
   const publishedCeilings: Record<string, number> = {
     'Everyday chat on AI-Auto': FEATURE_WEIGHTS.chat.ceiling,
-    'PDF, Word and Excel files': FEATURE_WEIGHTS.export.ceiling,
+    'PDF, Word, Excel and PowerPoint files': FEATURE_WEIGHTS.export.ceiling,
     'Extra chat beyond your daily limit': FEATURE_WEIGHTS['chat.overflow'].ceiling,
     'Premium model chat (Claude, Kimi)': FEATURE_WEIGHTS['chat.premium'].ceiling,
     'Current web research or file review': FEATURE_WEIGHTS['chat.research'].ceiling,

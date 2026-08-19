@@ -15,9 +15,11 @@ type ResponseActionsProps = {
   feedback: ReactNode
   /** Names the downloaded file; falls back to a generic document name. */
   title?: string
+  /** When this answer belongs to a project, its own brand colours take precedence over the workspace default. */
+  projectId?: string
 }
 
-export function ResponseActions({ content, canListen, canRetry, busy, onListen, onRetry, feedback, title }: ResponseActionsProps) {
+export function ResponseActions({ content, canListen, canRetry, busy, onListen, onRetry, feedback, title, projectId }: ResponseActionsProps) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState<ExportFormat | ''>('')
@@ -27,14 +29,14 @@ export function ResponseActions({ content, canListen, canRetry, busy, onListen, 
 
   // A spreadsheet only makes sense when the answer actually contains a table.
   const formats: ExportFormat[] = hasTabularContent(content)
-    ? ['pdf', 'docx', 'xlsx']
-    : ['pdf', 'docx']
+    ? ['pdf', 'docx', 'xlsx', 'pptx']
+    : ['pdf', 'docx', 'pptx']
 
   async function saveAs(format: ExportFormat) {
     setSaving(format)
     setSaveError('')
     try {
-      await downloadDocument({ title: title || 'AI360 answer', content, format })
+      await downloadDocument({ title: title || 'AI360 answer', content, format, projectId })
       setOpen(false)
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'The document could not be created.')

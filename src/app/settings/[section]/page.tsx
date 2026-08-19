@@ -1,6 +1,7 @@
 ﻿import { notFound } from 'next/navigation'
 import { AccountSettings } from '@/components/settings/AccountSettings'
 import { BillingSettings } from '@/components/settings/BillingSettings'
+import { BrandSettings } from '@/components/settings/BrandSettings'
 import { GeneralSettings } from '@/components/settings/GeneralSettings'
 import { isSettingsSection, SETTINGS_SECTIONS, settingsSectionTitle } from '@/lib/settings-sections'
 
@@ -19,6 +20,7 @@ export default async function SettingsSectionPage({ params }: { params: Promise<
   if (!isSettingsSection(section)) notFound()
 
   if (section === 'billing') return <BillingSettings />
+  if (section === 'brand') return <BrandSettings />
   if (section === 'account') return <AccountSettings />
   return <GeneralSettings />
 }

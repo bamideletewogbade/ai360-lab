@@ -1,4 +1,5 @@
 import JSZip from 'jszip'
+import { hexToOoxml, readableTextHex, tint, type DocumentBrand } from '@/lib/export/color'
 
 /**
  * A minimal, dependency-light XLSX writer.
@@ -141,7 +142,7 @@ export function sheetsFromBlocks(blocks: SheetSourceBlock[]): Sheet[] {
   return sheets
 }
 
-export async function buildXlsx(sheets: Sheet[]): Promise<Buffer> {
+export async function buildXlsx(sheets: Sheet[], brand?: DocumentBrand): Promise<Buffer> {
   if (!sheets.length) throw new Error('A spreadsheet needs at least one sheet')
   const names = uniqueSheetNames(sheets.map((sheet) => sheet.name))
   const zip = new JSZip()
@@ -183,11 +184,15 @@ export async function buildXlsx(sheets: Sheet[]): Promise<Buffer> {
   )
 
   // One style beyond the default: a bold header row, so an exported table reads
-  // as a table rather than an undifferentiated block of cells.
+  // as a table rather than an undifferentiated block of cells. With a brand, the
+  // header also gets a tinted fill — the one visual flourish a spreadsheet has
+  // room for — with its text colour chosen for contrast against that fill.
+  const headerFillHex = brand ? hexToOoxml(tint(brand.primary, 0.82)) : null
+  const headerTextHex = brand ? hexToOoxml(readableTextHex(tint(brand.primary, 0.82))) : null
   zip.file(
     'xl/styles.xml',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs></styleSheet>`,
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/>${headerTextHex ? `<color rgb="FF${headerTextHex}"/>` : ''}</font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="${headerFillHex ? 'solid' : 'none'}">${headerFillHex ? `<fgColor rgb="FF${headerFillHex}"/><bgColor indexed="64"/>` : ''}</patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs></styleSheet>`,
   )
 
   sheets.forEach((sheet, index) => {

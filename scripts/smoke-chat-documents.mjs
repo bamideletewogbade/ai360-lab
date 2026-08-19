@@ -24,6 +24,12 @@ const CASES = [
     magic: '504b0304',
     prompt: 'Create an Excel XLSX spreadsheet titled AI360 Production Excel Smoke Check from this table: | Item | Quantity | Status |\n| PDF | 1 | Ready |\n| DOCX | 1 | Ready |\n| XLSX | 1 | Ready |',
   },
+  {
+    format: 'pptx',
+    mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    magic: '504b0304',
+    prompt: 'Create a PowerPoint PPTX presentation titled AI360 Production PowerPoint Smoke Check with a heading and three short bullet points.',
+  },
 ]
 
 function cleanBaseUrl(value) {
@@ -186,5 +192,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   } finally {
     await cleanupSmokeAssets(process.env, auth.userId, assets.map((asset) => asset.assetId))
   }
-  console.log('\n3/3 production document chat flows passed')
+  console.log(`\n${CASES.length}/${CASES.length} production document chat flows passed`)
 }

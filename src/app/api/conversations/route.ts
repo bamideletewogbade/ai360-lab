@@ -20,7 +20,7 @@ const messageSchema = z.object({
     assetId: z.string().min(1).max(96),
     filename: z.string().min(1).max(255),
     title: z.string().min(1).max(140),
-    format: z.enum(['pdf', 'docx', 'xlsx']),
+    format: z.enum(['pdf', 'docx', 'xlsx', 'pptx']),
     byteSize: z.number().int().positive().max(25 * 1024 * 1024),
   })).max(10).optional(),
   actions: z.array(z.unknown()).max(30).optional(),

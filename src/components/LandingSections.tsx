@@ -23,7 +23,7 @@ export function LandingProof() {
       {/* The old copy said "documents" and left the reader to guess what that
           meant. Naming the formats is the difference between a claim and a
           promise, and files are the most tangible thing the product hands over. */}
-      <span><b>Ends in a real file</b><small>Finished PDF, Word and Excel files, images and video you can send today</small></span>
+      <span><b>Ends in a real file</b><small>Finished PDF, Word, Excel and PowerPoint files, images and video you can send today</small></span>
     </section>
   )
 }
@@ -133,7 +133,7 @@ export function LandingCapabilities() {
           <p>
             You should not have to know you wanted a spreadsheet. Ask for a price
             list, a proposal or a report, and AI360 writes it, builds the file and
-            attaches it to the answer — PDF, Word or Excel, ready to send. It is
+            attaches it to the answer — PDF, Word, Excel or PowerPoint, ready to send. It is
             kept in your workspace, so it is still there tomorrow, on another phone.
           </p>
           <Link href={workspaceHref('Make me a wholesale price list I can send to buyers: ', 'chat')}>

@@ -797,6 +797,7 @@ export function StudioWorkspace({
         content: projectMarkdown(project),
         format,
         requestId: requestId(),
+        projectId: project.id,
       })
     } catch (cause) {
       console.error('[AI360] Studio export failed', cause)
@@ -821,6 +822,7 @@ export function StudioWorkspace({
         content: asset.content,
         format,
         requestId: requestId(),
+        projectId: project?.id,
       })
     } catch (cause) {
       console.error('[AI360] Deliverable export failed', cause)
@@ -1827,8 +1829,8 @@ export function StudioWorkspace({
                           {/* Excel is offered only when this deliverable
                               actually contains a table to fill it with. */}
                           {(hasTabularContent(asset.content)
-                            ? (['pdf', 'docx', 'xlsx'] as ExportFormat[])
-                            : (['pdf', 'docx'] as ExportFormat[])
+                            ? (['pdf', 'docx', 'xlsx', 'pptx'] as ExportFormat[])
+                            : (['pdf', 'docx', 'pptx'] as ExportFormat[])
                           ).map((format) => (
                             <button
                               key={format}
@@ -1951,6 +1953,7 @@ export function StudioWorkspace({
               {hasTabularContent(projectMarkdown(project)) ? (
                 <button onClick={() => exportPack('xlsx')} disabled={Boolean(exporting)}>{exporting === 'xlsx' ? 'Creating…' : 'Export Excel'}</button>
               ) : null}
+              <button onClick={() => exportPack('pptx')} disabled={Boolean(exporting)}>{exporting === 'pptx' ? 'Creating…' : 'Export PowerPoint'}</button>
             </div>
           </div>
         </section>

@@ -21,6 +21,7 @@ test('the default section is a real section, so /settings always lands somewhere
 test('only known sections are routable, so an unknown URL cannot render a blank page', () => {
   assert.equal(isSettingsSection('general'), true)
   assert.equal(isSettingsSection('billing'), true)
+  assert.equal(isSettingsSection('brand'), true)
   assert.equal(isSettingsSection('account'), true)
   assert.equal(isSettingsSection('passwords'), false)
   assert.equal(isSettingsSection(''), false)

@@ -24,6 +24,11 @@ function SectionIcon({ section }: { section: SettingsSection }) {
       <svg {...common}><rect x="2.5" y="5" width="19" height="14" rx="2.5" /><path d="M2.5 9.5h19" /></svg>
     )
   }
+  if (section === 'brand') {
+    return (
+      <svg {...common}><circle cx="8" cy="8" r="4.5" /><circle cx="16" cy="8" r="4.5" /><circle cx="12" cy="15" r="4.5" /></svg>
+    )
+  }
   return (
     <svg {...common}><path d="M12 2 4 5v6c0 5 3.4 7.7 8 9 4.6-1.3 8-4 8-9V5Z" /><path d="M9.2 12.2l2 2 3.6-4" /></svg>
   )

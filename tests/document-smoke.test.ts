@@ -11,7 +11,8 @@ test('production document smoke exercises chat attachments and authenticated dow
       const payload = JSON.parse(String(init?.body))
       const format = /XLSX/i.test(payload.messages[0].content)
         ? 'xlsx'
-        : /DOCX/i.test(payload.messages[0].content) ? 'docx' : 'pdf'
+        : /DOCX/i.test(payload.messages[0].content) ? 'docx'
+          : /PPTX/i.test(payload.messages[0].content) ? 'pptx' : 'pdf'
       seen.set(format, (seen.get(format) || 0) + 1)
       return new Response([
         JSON.stringify({ type: 'attachment', assetId: `asset-${format}`, filename: `smoke.${format}`, title: 'Smoke', format, byteSize: 800 }),
@@ -25,6 +26,7 @@ test('production document smoke exercises chat attachments and authenticated dow
       pdf: 'application/pdf',
       docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     }[format]
     const prefix = format === 'pdf' ? Buffer.from('%PDF') : Buffer.from('PK\x03\x04')
     return new Response(Buffer.concat([prefix, Buffer.alloc(600)]), {
@@ -33,8 +35,8 @@ test('production document smoke exercises chat attachments and authenticated dow
   }
 
   const assets = await runDocumentChatSmoke('https://production.example.com', 'smoke-auth=1', request as typeof fetch)
-  assert.deepEqual(assets.map((asset) => asset.format), ['pdf', 'docx', 'xlsx'])
-  assert.deepEqual(Object.fromEntries(seen), { pdf: 1, docx: 1, xlsx: 1 })
+  assert.deepEqual(assets.map((asset) => asset.format), ['pdf', 'docx', 'xlsx', 'pptx'])
+  assert.deepEqual(Object.fromEntries(seen), { pdf: 1, docx: 1, xlsx: 1, pptx: 1 })
 })
 
 test('a partial document smoke reports every created asset so production cleanup can still remove it', async () => {

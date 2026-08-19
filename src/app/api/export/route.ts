@@ -4,6 +4,7 @@ import { recordUsageEventSafe } from '@/lib/usage'
 import {
   isExportFormat, NoTabularContentError, renderDocument,
 } from '@/lib/export/render'
+import { resolveDocumentBrand } from '@/lib/export/brand'
 
 export const runtime = 'nodejs'
 
@@ -22,13 +23,14 @@ export async function POST(request: Request) {
     log.finish(tooLarge.status, { outcome: 'request_too_large' })
     return new Response(tooLarge.body, { status: tooLarge.status, headers: log.headers(tooLarge.headers) })
   }
-  const limited = rateLimit(request, 'export', { minute: 15, daily: 80 }, await resolveRequester(request))
+  const requester = await resolveRequester(request)
+  const limited = rateLimit(request, 'export', { minute: 15, daily: 80 }, requester)
   if (limited) {
     log.finish(limited.status, { outcome: 'rate_limited' })
     return new Response(limited.body, { status: limited.status, headers: log.headers(limited.headers) })
   }
 
-  let body: { title?: string; content?: string; format?: string }
+  let body: { title?: string; content?: string; format?: string; projectId?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -52,10 +54,16 @@ export async function POST(request: Request) {
     })
   }
   const format = body.format
+  const projectId = typeof body.projectId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.projectId)
+    ? body.projectId
+    : null
 
   try {
     log.info('export.started', { format, inputCharacters: content.length })
-    const document = await renderDocument({ title: body.title || 'AI360 response', content, format })
+    const brand = requester.context
+      ? await resolveDocumentBrand({ workspaceKey: requester.context.workspace.key, projectId }).catch(() => undefined)
+      : undefined
+    const document = await renderDocument({ title: body.title || 'AI360 response', content, format, brand })
     await recordUsageEventSafe({
       requestId: log.requestId, route: '/api/export', feature: `export.${format}`,
       latencyMs: Math.round(performance.now() - startedAt), outcome: 'success',

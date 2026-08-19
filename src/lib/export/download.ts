@@ -1,9 +1,10 @@
-export type ExportFormat = 'pdf' | 'docx' | 'xlsx'
+export type ExportFormat = 'pdf' | 'docx' | 'xlsx' | 'pptx'
 
 export const EXPORT_LABELS: Record<ExportFormat, string> = {
   pdf: 'PDF',
   docx: 'Word',
   xlsx: 'Excel',
+  pptx: 'PowerPoint',
 }
 
 /**
@@ -35,13 +36,15 @@ export async function downloadDocument(input: {
   content: string
   format: ExportFormat
   requestId?: string
+  /** The project this content belongs to, if any — its brand colours take precedence over the workspace default. */
+  projectId?: string
 }) {
   const reference = input.requestId
     || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()))
   const response = await fetch('/api/export', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Request-Id': reference },
-    body: JSON.stringify({ title: input.title, content: input.content, format: input.format }),
+    body: JSON.stringify({ title: input.title, content: input.content, format: input.format, projectId: input.projectId || undefined }),
   })
 
   if (!response.ok) {

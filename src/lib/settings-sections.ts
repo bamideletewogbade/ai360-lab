@@ -11,7 +11,7 @@
  * definition and it can be unit tested directly.
  */
 
-export type SettingsSection = 'general' | 'billing' | 'account'
+export type SettingsSection = 'general' | 'billing' | 'brand' | 'account'
 
 export const DEFAULT_SETTINGS_SECTION: SettingsSection = 'general'
 
@@ -23,6 +23,7 @@ export const SETTINGS_SECTIONS: Array<{
 }> = [
   { id: 'general', label: 'General', detail: 'Appearance and language', title: 'General' },
   { id: 'billing', label: 'Credits & Billing', detail: 'Balance, plan and payments', title: 'Credits & Billing' },
+  { id: 'brand', label: 'Brand', detail: 'Colours for your documents', title: 'Brand' },
   { id: 'account', label: 'Account', detail: 'Identity, privacy and data', title: 'Account' },
 ]
 

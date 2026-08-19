@@ -32,16 +32,16 @@ test('the page still makes the claims this file is guarding', () => {
   }
 })
 
-test('"PDF, Word or Excel" — all three formats really are produced', () => {
-  assert.ok(landing.includes('PDF, Word or Excel'), 'the lead claim names three formats')
-  for (const format of ['pdf', 'docx', 'xlsx'] as const) {
+test('"PDF, Word, Excel or PowerPoint" — all four formats really are produced', () => {
+  assert.ok(landing.includes('PDF, Word, Excel or PowerPoint'), 'the lead claim names four formats')
+  for (const format of ['pdf', 'docx', 'xlsx', 'pptx'] as const) {
     assert.ok(isExportFormat(format), `${format} is not an accepted export format`)
     assert.ok(EXPORT_MIME[format]?.length > 0, `${format} has no mime type, so it cannot be served`)
   }
   // And the assistant can ask for each of them by name.
   assert.deepEqual(
     [...CREATE_DOCUMENT_TOOL.function.parameters.properties.format.enum],
-    ['pdf', 'docx', 'xlsx'],
+    ['pdf', 'docx', 'xlsx', 'pptx'],
     'the tool offers a different set of formats than the page advertises',
   )
 })
@@ -62,7 +62,7 @@ test('"Documents cost nothing at all" — the engine really charges zero', () =>
   assert.equal(weight.reserve, 0, 'documents reserve credits, so they are not free')
   assert.equal(weight.ceiling, 0, 'documents can be charged, so they are not free')
   // And the pricing page says so, rather than leaving it unstated.
-  const row = CREDIT_GUIDE.find((item) => /PDF, Word and Excel/i.test(item.task))
+  const row = CREDIT_GUIDE.find((item) => /PDF, Word, Excel and PowerPoint/i.test(item.task))
   assert.ok(row, 'the pricing page does not mention documents at all')
   assert.match(row.credits, /^included/i, `the pricing page prices documents at "${row?.credits}"`)
 })
@@ -134,7 +134,7 @@ test('"Survives a dropped line" — unfinished work can genuinely be resumed', (
 test('"Ends in a real file" — the proof strip names what it delivers', () => {
   assert.ok(landing.includes('Ends in a real file'))
   assert.ok(
-    /PDF, Word and Excel files, images and video/.test(landing),
+    /PDF, Word, Excel and PowerPoint files, images and video/.test(landing),
     'the proof strip promises files without naming them',
   )
 })
