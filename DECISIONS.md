@@ -1,5 +1,66 @@
 # Decision and incident log
 
+## 2026-08-19 · Decision · Every video tier now survives a Veo outage
+
+**Why.** Draft, Standard and Premium were all secretly the same vendor —
+`google/veo-3.1-lite`, `-fast` and the full model. A tier "falling back within
+its own list" only ever meant falling back to another Veo variant
+(`VIDEO_TIER_PREFERENCES`'s own doc comment said so). One Google outage, price
+change or catalogue removal would have taken every tier down at once, not just
+degraded one of them.
+
+**What was checked before touching anything.** The two vendors first proposed
+(Flux 3, Seedance 2.5) do not actually work today, verified against the live
+`https://openrouter.ai/api/v1/videos/models` catalogue rather than public
+pricing pages, which turned out to disagree with it:
+
+- `black-forest-labs/flux-3-video` cannot appear at all — its shortest clip is
+  5 seconds and `STUDIO_CLIP` is fixed at 4. `supportsFormat` correctly
+  excludes it; no format flexibility exists to work around this without
+  changing the Studio clip length itself, which is published in the credit
+  guide and marketing copy.
+- `bytedance/seedance-2.5` looked like a $0.1028/s per-second price on public
+  pricing blogs. The live catalogue exposes only a token-priced sku
+  (`video_tokens`), the same unquotable shape as Seedance 2.0 before it. It
+  would need its own real measured-clip generation and a `MEASURED_CLIP_USD`
+  entry before it could be quoted — not done here, because that costs real
+  money and deserves its own deliberate step, not a side effect of a
+  reliability fix.
+
+**What did check out.** `kwaivgi/kling-v3.0-std` and `-pro` both fit the exact
+Studio clip (4s, 720p, 9:16) with real per-second pricing, verified the same
+way: $0.336 and $0.448 per clip against a $0.8272 budget at the current
+48-credit video ceiling — Std undercuts `veo-3.1-fast` ($0.32) by a hair and
+comfortably beats the old assumption that the ceiling was 24 credits (it
+is not, `FEATURE_WEIGHTS.video.ceiling` is 48; the "24" in the 2026-08-17
+entry was a since-superseded value). Pro is cheaper than the current Premium
+default (`veo-3.1` at $0.80). `alibaba/wan-2.7` ($0.40) and `runway/gen-4.5`
+($0.48) also priced and fit that day — documented as the next candidates
+rather than added, so each new vendor enters production one at a time and can
+be watched.
+
+**What changed.** Every tier gained a Kling fallback, ordered after the
+existing Google default so today's default behaviour and quality bar are
+unchanged:
+
+```
+draft:    veo-3.1-lite   → kling-v3.0-std
+standard: veo-3.1-fast   → kling-v3.0-std → veo-3.1-lite
+premium:  veo-3.1        → kling-v3.0-pro → veo-3.1-fast
+```
+
+**Guardrail, and it is now a test, not just this paragraph.**
+`tests/video-catalogue.test.ts` asserts every tier's preference list names
+more than one provider, and separately simulates a Google-only outage (a
+catalogue containing only Kling) and confirms all three tiers still resolve.
+A future edit that quietly strips the fallback back to Google-only fails the
+suite instead of waiting for a real outage to notice.
+
+**Revisit if.** `npm run media:verify`'s next run shows Kling's price moved
+enough to threaten the ceiling, or a production render surfaces a quality gap
+between Kling and Veo worth knowing about before Kling becomes a primary
+choice rather than a fallback.
+
 ## 2026-08-17 · Decision · The type scale was built a quarter too small
 
 **Why.** The product looked better at 125% browser zoom, and the reason was

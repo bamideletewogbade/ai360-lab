@@ -47,6 +47,34 @@ const HAILUO = {
   supported_aspect_ratios: ['9:16'],
 }
 
+/**
+ * Verbatim from the live catalogue on 2026-08-19 — the fallback vendor added
+ * alongside Google so a Veo outage does not take every tier down with it.
+ */
+const KLING_STD = {
+  id: 'kwaivgi/kling-v3.0-std',
+  pricing_skus: {
+    duration_seconds: '0.084',
+    duration_seconds_with_audio: '0.126',
+    text_to_video_duration_seconds_480p: '0.084',
+    text_to_video_duration_seconds_720p: '0.084',
+    text_to_video_duration_seconds_1080p: '0.084',
+  },
+  supported_durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  supported_resolutions: ['720p'],
+  supported_aspect_ratios: ['16:9', '9:16', '1:1'],
+}
+
+const KLING_PRO = {
+  ...KLING_STD,
+  id: 'kwaivgi/kling-v3.0-pro',
+  pricing_skus: {
+    duration_seconds: '0.112',
+    duration_seconds_with_audio: '0.168',
+    text_to_video_duration_seconds_720p: '0.112',
+  },
+}
+
 test('a per-second price uses the most specific sku available', () => {
   // 720p without audio is $0.03/s, not the $0.05 generic without-audio rate.
   assert.equal(clipPriceUsd(VEO_LITE, STUDIO_CLIP), 0.12)
@@ -135,6 +163,37 @@ test('a tier falls back within its own list before giving up', () => {
   const tighter = selectVideoModel({ catalogue: [VEO_LITE, veoFast], tier: 'standard', budgetUsd: 0.2 })
   assert.ok(isVideoSelection(tighter))
   assert.equal(tighter.model, 'google/veo-3.1-lite')
+})
+
+test('Kling fits the exact Studio clip at a real, quotable price', () => {
+  assert.equal(supportsFormat(KLING_STD, STUDIO_CLIP), true)
+  assert.equal(supportsFormat(KLING_PRO, STUDIO_CLIP), true)
+  // $0.084/s and $0.112/s at 4 seconds — computed from the live per-second
+  // sku, not a measured guess the way Seedance needs.
+  assert.equal(clipPriceUsd(KLING_STD, STUDIO_CLIP), 0.336)
+  assert.equal(clipPriceUsd(KLING_PRO, STUDIO_CLIP), 0.448)
+})
+
+test('every tier survives a Google-only outage by falling back to another vendor', () => {
+  // Simulates Veo vanishing from the catalogue entirely — an outage, a
+  // deprecation, a provider dropping OpenRouter — and confirms every tier
+  // still resolves rather than reporting itself unavailable.
+  const catalogueWithoutGoogle = [KLING_STD, KLING_PRO]
+  for (const tier of Object.keys(MEDIA_TIERS) as Array<keyof typeof MEDIA_TIERS>) {
+    const chosen = selectVideoModel({ catalogue: catalogueWithoutGoogle, tier, budgetUsd: 0.8272 })
+    assert.ok(isVideoSelection(chosen), `${tier} has no non-Google fallback and would go dark in a Veo outage`)
+    assert.match(chosen.model, /^kwaivgi\//, `${tier} fell back to an unexpected model: ${isVideoSelection(chosen) ? chosen.model : ''}`)
+  }
+})
+
+test('no tier is secretly single-vendor', () => {
+  // The guardrail this whole change exists for: every preference list must
+  // name a model from more than one provider, so a future edit cannot quietly
+  // strip the fallback and put every tier back on one vendor's uptime.
+  for (const [tier, preferences] of Object.entries(VIDEO_TIER_PREFERENCES)) {
+    const vendors = new Set(preferences.map((id) => id.split('/')[0]))
+    assert.ok(vendors.size > 1, `${tier} only lists ${[...vendors].join(', ')} — one outage would take it down entirely`)
+  }
 })
 
 test('every tier has a preference list and a description', () => {

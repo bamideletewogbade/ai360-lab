@@ -158,9 +158,11 @@ const IMAGE_LOOKS = [
 ] as const;
 
 /**
- * Two honest video tiers. The catalogue also has a premium engine, but at
- * today's prices it costs more than a single render is allowed to charge, so
- * offering it would only produce a refusal at the moment of confirming.
+ * Three honest video tiers, all currently affordable within the video
+ * ceiling. Whether a given tier can actually be bought is decided live by the
+ * catalogue price, not by this list — see `tierPrices`/`unavailable` below,
+ * which disables and explains a tier rather than removing it the moment a
+ * price change puts it out of reach.
  */
 const VIDEO_TIERS = [
   { value: "draft", label: "Quick", note: "Great for trying an idea." },
@@ -326,6 +328,18 @@ type VideoJob = {
   prompt: string;
   duration: string;
   aspectRatio: string;
+  /**
+   * Set when this render is a cheap Draft preview taken instead of the tier
+   * the person actually picked — offered, never forced, from the quote panel.
+   * Carries what is needed to re-quote at that tier once the draft lands, so
+   * "sharpen" reproduces the same shot rather than a fresh, possibly
+   * different one.
+   */
+  previewForTier?: {
+    tier: string;
+    motion: string;
+    seconds: number;
+  };
 };
 
 /** A completed durable media job as returned by `/api/studio/media?recent=1`. */
@@ -469,6 +483,17 @@ export function MediaStudio() {
   const [toastNotice, setToastNotice] = useState("");
   const [toastError, setToastError] = useState(false);
   const [videoQuote, setVideoQuote] = useState<VideoQuote | null>(null);
+  /** A cheap Draft quote fetched alongside the picked tier's quote, so the
+   *  quote panel can offer it — never fetched when Draft is already picked. */
+  const [draftAlternative, setDraftAlternative] = useState<VideoQuote | null>(null);
+  /** Shown once a Draft preview finishes: "like this? get it in real quality". */
+  const [sharpenOffer, setSharpenOffer] = useState<{
+    tier: string;
+    prompt: string;
+    aspectRatio: string;
+    motion: string;
+    seconds: number;
+  } | null>(null);
   /**
    * A render still in flight, read straight from session storage as the initial
    * value rather than written in after mount. The studio only ever renders once
@@ -746,35 +771,63 @@ export function MediaStudio() {
     }
   };
 
-  const requestVideoQuote = async () => {
-    if (!prompt.trim() || generating || videoJob) return;
+  /** One quote request, raw — shared by the tier the person picked and the
+   *  Draft alternative offered alongside it, so both are priced identically. */
+  const fetchVideoQuote = async (
+    intent: ReturnType<typeof videoIntent>,
+  ): Promise<
+    | { ok: true; quote: VideoQuote }
+    | { ok: false; status: number; data: Record<string, unknown> }
+  > => {
+    const response = await fetch("/api/studio/video", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": newRequestId("vid"),
+      },
+      body: JSON.stringify({ action: "quote", intent }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || typeof data.costUsd !== "number") {
+      return { ok: false, status: response.status, data };
+    }
+    return {
+      ok: true,
+      quote: {
+        costUsd: data.costUsd,
+        credits: data.credits || 16,
+        model: data.model,
+        intent: data.intent || intent,
+      },
+    };
+  };
+
+  const requestVideoQuote = async (override?: {
+    prompt?: string;
+    tier?: string;
+    aspect?: string;
+    motion?: string;
+    seconds?: number;
+  }) => {
+    const effectivePrompt = (override?.prompt ?? prompt).trim();
+    const effectiveTier = override?.tier ?? videoTier;
+    const effectiveAspect = override?.aspect ?? videoAspect;
+    const effectiveMotion = override?.motion ?? cameraMotion;
+    const effectiveSeconds = override?.seconds ?? videoSeconds;
+    if (!effectivePrompt || generating || videoJob) return;
     setGenerating(true);
     setToastNotice("Checking today's price…");
     setToastError(false);
+    setDraftAlternative(null);
     try {
-      const response = await fetch("/api/studio/video", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": newRequestId("vid"),
-        },
-        body: JSON.stringify({
-          action: "quote",
-          intent: videoIntent(
-            prompt.trim(),
-            videoAspect,
-            cameraMotion,
-            videoTier,
-            videoSeconds,
-          ),
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || typeof data.costUsd !== "number") {
-        if (response.status === 402) {
+      const main = await fetchVideoQuote(
+        videoIntent(effectivePrompt, effectiveAspect, effectiveMotion, effectiveTier, effectiveSeconds),
+      );
+      if (!main.ok) {
+        if (main.status === 402) {
           await openCreditPanel(
-            typeof data.required === "number" ? data.required : 12,
-            typeof data.available === "number" ? data.available : 0,
+            typeof main.data.required === "number" ? main.data.required : 12,
+            typeof main.data.available === "number" ? main.data.available : 0,
           );
           showToast(
             "You need more credits to render this video. Pick a top-up or a plan below.",
@@ -783,19 +836,28 @@ export function MediaStudio() {
           return;
         }
         throw new Error(
-          mediaError(response.status, data) ||
+          mediaError(main.status, main.data) ||
             "Video pricing is unavailable right now.",
         );
       }
-      setVideoQuote({
-        costUsd: data.costUsd,
-        credits: data.credits || 16,
-        model: data.model,
-        intent:
-          data.intent ||
-          videoIntent(prompt.trim(), videoAspect, cameraMotion, videoTier, videoSeconds),
-      });
+      setVideoQuote(main.quote);
       setToastNotice("");
+
+      // Offered, never forced: a cheap Draft sits alongside whatever tier was
+      // actually picked, so the direction can be checked before paying for
+      // the polished version. Its own failure stays silent — the quote that
+      // matters already succeeded, and there is nothing useful to tell the
+      // person about a courtesy price that could not be fetched.
+      if (effectiveTier !== "draft") {
+        try {
+          const draft = await fetchVideoQuote(
+            videoIntent(effectivePrompt, effectiveAspect, effectiveMotion, "draft", effectiveSeconds),
+          );
+          if (draft.ok) setDraftAlternative(draft.quote);
+        } catch {
+          // A courtesy price. See above.
+        }
+      }
     } catch (cause) {
       showToast(
         cause instanceof Error
@@ -808,12 +870,21 @@ export function MediaStudio() {
     }
   };
 
-  const confirmVideoRender = async () => {
-    if (!videoQuote || generating) return;
-    const quote = videoQuote;
+  const confirmVideoRender = async (
+    quote: VideoQuote,
+    previewForTier?: { tier: string; motion: string; seconds: number },
+  ) => {
+    if (generating) return;
+    // Confirming one option clears both — the choice has been made.
     setVideoQuote(null);
+    setDraftAlternative(null);
+    setSharpenOffer(null);
     setGenerating(true);
-    setToastNotice("Starting your render…");
+    setToastNotice(
+      previewForTier
+        ? "Starting your draft…"
+        : "Starting your render…",
+    );
     setToastError(false);
     try {
       const response = await fetch("/api/studio/video", {
@@ -833,8 +904,10 @@ export function MediaStudio() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.token) {
         if (response.status === 402) {
-          // Keep the quote so the person can confirm again once topped up.
-          setVideoQuote(quote);
+          // Keep the quote so the person can confirm again once topped up,
+          // in whichever slot it came from.
+          if (previewForTier) setDraftAlternative(quote);
+          else setVideoQuote(quote);
           await openCreditPanel(
             typeof data.required === "number" ? data.required : quote.credits,
             typeof data.available === "number" ? data.available : 0,
@@ -857,6 +930,7 @@ export function MediaStudio() {
         prompt: prompt.trim(),
         duration: "4s",
         aspectRatio: videoAspect,
+        previewForTier,
       };
       persistVideoJob(job);
       // The render now has a placeholder card in the gallery; make sure the
@@ -876,6 +950,21 @@ export function MediaStudio() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  /** Re-quote the exact shot a Draft preview just proved out, at the tier it
+   *  was standing in for. Syncs the composer to match what is being priced,
+   *  rather than trusting the person has not touched anything since. */
+  const confirmSharpen = () => {
+    if (!sharpenOffer || generating) return;
+    const { tier, prompt: offerPrompt, aspectRatio, motion, seconds } = sharpenOffer;
+    setPrompt(offerPrompt);
+    setVideoTier(tier);
+    setVideoAspect(aspectRatio);
+    setCameraMotion(motion);
+    setVideoSeconds(seconds);
+    setSharpenOffer(null);
+    void requestVideoQuote({ prompt: offerPrompt, tier, aspect: aspectRatio, motion, seconds });
   };
 
   const pollVideo = async (job: VideoJob) => {
@@ -959,7 +1048,23 @@ export function MediaStudio() {
         clearVideoJob();
         setGalleryFilter("all");
         setGalleryPage(1);
-        showToast("Your video is ready — it is in your work below.", false);
+        // A Draft taken instead of the tier actually picked: offer to redo
+        // it at that tier now that the direction has been seen, not guessed at.
+        if (job.previewForTier) {
+          setSharpenOffer({
+            tier: job.previewForTier.tier,
+            prompt: job.prompt,
+            aspectRatio: job.aspectRatio || "16:9",
+            motion: job.previewForTier.motion,
+            seconds: job.previewForTier.seconds,
+          });
+          showToast(
+            "Your draft is ready — it is in your work below.",
+            false,
+          );
+        } else {
+          showToast("Your video is ready — it is in your work below.", false);
+        }
         void loadCredits();
         return;
       }
@@ -1639,7 +1744,11 @@ export function MediaStudio() {
           {videoQuote ? (
             <div className="ms-quote" role="status">
               <div>
-                <b>{videoQuote.credits} credits for this render</b>
+                <b>
+                  {videoQuote.credits} credits for{" "}
+                  {VIDEO_TIERS.find((tier) => tier.value === videoTier)?.label || "this"}{" "}
+                  quality
+                </b>
                 <small>
                   You are only charged if it works. A failed render returns your
                   credits.
@@ -1649,7 +1758,10 @@ export function MediaStudio() {
                 <button
                   type="button"
                   className="ms-ghost-btn"
-                  onClick={() => setVideoQuote(null)}
+                  onClick={() => {
+                    setVideoQuote(null);
+                    setDraftAlternative(null);
+                  }}
                   disabled={generating}
                 >
                   Cancel
@@ -1657,10 +1769,58 @@ export function MediaStudio() {
                 <button
                   type="button"
                   className="ms-confirm-btn"
-                  onClick={confirmVideoRender}
+                  onClick={() => confirmVideoRender(videoQuote)}
                   disabled={generating}
                 >
                   Render it
+                </button>
+              </div>
+              {/* Offered, never forced: a cheap way to check the direction
+                  before paying for the tier actually picked. */}
+              {draftAlternative ? (
+                <button
+                  type="button"
+                  className="ms-draft-offer"
+                  onClick={() => confirmVideoRender(draftAlternative, {
+                    tier: videoTier,
+                    motion: cameraMotion,
+                    seconds: videoSeconds,
+                  })}
+                  disabled={generating}
+                >
+                  Not sure yet? Try a quick draft first — {draftAlternative.credits}{" "}
+                  credits
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {sharpenOffer && !videoQuote ? (
+            <div className="ms-quote ms-sharpen" role="status">
+              <div>
+                <b>Like this direction?</b>
+                <small>
+                  That was a quick draft. Get the same shot in{" "}
+                  {VIDEO_TIERS.find((tier) => tier.value === sharpenOffer.tier)?.label || "better"}{" "}
+                  quality.
+                </small>
+              </div>
+              <div className="ms-quote-actions">
+                <button
+                  type="button"
+                  className="ms-ghost-btn"
+                  onClick={() => setSharpenOffer(null)}
+                  disabled={generating}
+                >
+                  Dismiss
+                </button>
+                <button
+                  type="button"
+                  className="ms-confirm-btn"
+                  onClick={confirmSharpen}
+                  disabled={generating}
+                >
+                  Sharpen it
                 </button>
               </div>
             </div>
@@ -1781,7 +1941,7 @@ export function MediaStudio() {
             <button
               type="button"
               className={`ms-generate${generating ? " is-busy" : ""}`}
-              onClick={isVideo ? requestVideoQuote : handleGenerateImage}
+              onClick={() => void (isVideo ? requestVideoQuote() : handleGenerateImage())}
               disabled={!canGenerate}
             >
               <StudioIcon name="spark" />

@@ -2857,6 +2857,35 @@ button {
   opacity: 0.55;
   cursor: not-allowed;
 }
+/* Offered, not forced: a plain-text link, not a second button competing with
+   Render — it always drops to its own line under the real quote row. */
+.ms-draft-offer {
+  flex: 1 1 100%;
+  padding: 2px 0 0;
+  border: 0;
+  background: none;
+  color: var(--grey);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.ms-draft-offer:hover:not(:disabled) {
+  color: var(--black);
+}
+.ms-draft-offer:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* The sharpen offer is good news, not a warning — same shape as a quote,
+   with a quieter accent so it reads as a suggestion. */
+.ms-sharpen {
+  border-color: var(--line-dark);
+  background: var(--paper);
+}
 .ms-spinner {
   width: 17px;
   height: 17px;
@@ -3387,6 +3416,7 @@ button {
   .ms-options-toggle,
   .ms-ghost-btn,
   .ms-confirm-btn,
+  .ms-draft-offer,
   .ms-card-action,
   .ms-download {
     min-height: 44px;
