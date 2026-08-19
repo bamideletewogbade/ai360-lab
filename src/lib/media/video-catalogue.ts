@@ -133,11 +133,27 @@ export function isMediaTier(value: unknown): value is MediaTier {
  * affordable. A tier never silently falls back to a model from another tier: if
  * nothing in the list fits, the answer is that the tier is unavailable, so the
  * person is told rather than quietly given something else.
+ *
+ * Every tier carries at least one fallback from a vendor other than Google:
+ * three tiers that are all secretly "Veo" is one outage away from a total
+ * video-generation blackout. Kling (Kuaishou) is the fallback vendor because
+ * it is the only alternative, verified against the live catalogue on
+ * 2026-08-19, that both fits the exact Studio clip (4s, 720p, 9:16) and has a
+ * real per-second price rather than a token rate that would have to be
+ * guessed at. `alibaba/wan-2.7` ($0.40/clip) and `runway/gen-4.5` ($0.48/clip)
+ * also priced and fit that day and are documented here as the next candidates
+ * — not wired in yet, so each new vendor enters production one at a time.
+ * `bytedance/seedance-2.5` looked promising from public pricing pages but the
+ * live catalogue exposes only a token rate for it, the same unquotable shape
+ * as 2.0 before it — it would need its own measured-clip entry (see
+ * `MEASURED_CLIP_USD`) before it could join a tier. `black-forest-labs/
+ * flux-3-video` cannot appear at all: its shortest clip is 5 seconds and the
+ * Studio format is fixed at 4.
  */
 export const VIDEO_TIER_PREFERENCES: Record<MediaTier, string[]> = {
-  draft: ['google/veo-3.1-lite'],
-  standard: ['google/veo-3.1-fast', 'google/veo-3.1-lite'],
-  premium: ['google/veo-3.1', 'google/veo-3.1-fast'],
+  draft: ['google/veo-3.1-lite', 'kwaivgi/kling-v3.0-std'],
+  standard: ['google/veo-3.1-fast', 'kwaivgi/kling-v3.0-std', 'google/veo-3.1-lite'],
+  premium: ['google/veo-3.1', 'kwaivgi/kling-v3.0-pro', 'google/veo-3.1-fast'],
 }
 
 export type VideoSelection = {

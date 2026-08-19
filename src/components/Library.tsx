@@ -325,10 +325,10 @@ export function Library({
           ))}
         </div>
         <div className="outcomes-status-toggle" role="group" aria-label="Filter by status">
-          <button type="button" className={statusFilter === 'all' ? 'active' : ''} onClick={() => setStatusFilter('all')}>
+          <button type="button" className={statusFilter === 'all' ? 'active' : ''} onClick={() => setStatusFilter('all')} aria-pressed={statusFilter === 'all'}>
             All
           </button>
-          <button type="button" className={statusFilter === 'ready' ? 'active' : ''} onClick={() => setStatusFilter('ready')}>
+          <button type="button" className={statusFilter === 'ready' ? 'active' : ''} onClick={() => setStatusFilter('ready')} aria-pressed={statusFilter === 'ready'}>
             Finished only
           </button>
         </div>
