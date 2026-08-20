@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { QualityFeedback } from '@/components/QualityFeedback'
 import { useAuth } from '@/components/AuthProvider'
 
-export type MobileWorkspaceExperience = 'chat' | 'agent' | 'studio' | 'apps' | 'media'
+export type MobileWorkspaceExperience = 'chat' | 'agent' | 'studio' | 'apps' | 'market' | 'media'
 
 type FeedbackContext = {
   sourceSurface: 'quick' | 'research' | 'studio' | 'global' | 'other'
@@ -22,7 +22,8 @@ type Props = {
   onSelectChats: () => void
   onSelectProjects: () => void
   onSelectMedia: () => void
-  onSelectApps: () => void
+  onSelectLibrary: () => void
+  onSelectMarket: () => void
 }
 
 type Sheet = 'more' | null
@@ -55,7 +56,8 @@ export function MobileWorkspaceNav({
   onSelectChats,
   onSelectProjects,
   onSelectMedia,
-  onSelectApps,
+  onSelectLibrary,
+  onSelectMarket,
 }: Props) {
   const { user, loading, signOut } = useAuth()
   const [sheet, setSheet] = useState<Sheet>(null)
@@ -99,7 +101,7 @@ export function MobileWorkspaceNav({
     action()
   }
   const chatsActive = experience === 'chat' || experience === 'agent'
-  const moreActive = experience === 'apps' || sheet === 'more'
+  const moreActive = experience === 'apps' || experience === 'market' || sheet === 'more'
 
   return (
     <>
@@ -113,7 +115,7 @@ export function MobileWorkspaceNav({
         <button type="button" className={experience === 'media' ? 'active' : ''} aria-current={experience === 'media' ? 'page' : undefined} aria-label="Media: create images and video" onClick={onSelectMedia}>
           <NavIcon kind="media" /><span>Media</span>
         </button>
-        <button type="button" className={moreActive ? 'active' : ''} aria-current={experience === 'apps' ? 'page' : undefined} aria-haspopup="dialog" aria-expanded={sheet === 'more'} onClick={() => setSheet((current) => current === 'more' ? null : 'more')}>
+        <button type="button" className={moreActive ? 'active' : ''} aria-current={experience === 'apps' || experience === 'market' ? 'page' : undefined} aria-haspopup="dialog" aria-expanded={sheet === 'more'} onClick={() => setSheet((current) => current === 'more' ? null : 'more')}>
           <NavIcon kind="more" /><span>More</span>
         </button>
       </nav>
@@ -137,8 +139,11 @@ export function MobileWorkspaceNav({
                 <button ref={firstActionRef} type="button" onClick={() => choose(onOpenSidebar)}>
                   <span><SheetIcon kind="history" /></span><span><b>Search and recent chats</b><small>Find work or manage a conversation</small></span><i aria-hidden="true">›</i>
                 </button>
-                <button type="button" onClick={() => choose(onSelectApps)}>
-                  <span><SheetIcon kind="apps" /></span><span><b>Apps and outcomes</b><small>Browse focused tools and finished work</small></span><i aria-hidden="true">›</i>
+                <button type="button" onClick={() => choose(onSelectMarket)}>
+                  <span><SheetIcon kind="apps" /></span><span><b>Market</b><small>Useful tools and business kits</small></span><i aria-hidden="true">›</i>
+                </button>
+                <button type="button" onClick={() => choose(onSelectLibrary)}>
+                  <span><SheetIcon kind="history" /></span><span><b>Library</b><small>Find everything you have made</small></span><i aria-hidden="true">›</i>
                 </button>
                 <Link href="/settings" onClick={() => setSheet(null)}>
                   <span><SheetIcon kind="settings" /></span><span><b>Settings</b><small>Appearance, credits and account</small></span><i aria-hidden="true">›</i>

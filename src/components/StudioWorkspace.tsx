@@ -256,6 +256,8 @@ export function StudioWorkspace({
   homeSignal = 0,
   openProjectId = '',
   openProjectSignal = 0,
+  launchPackId = 'plan',
+  launchPackSignal = 0,
   conversations = [],
   onOpenConversation,
   onStartConversation,
@@ -273,6 +275,9 @@ export function StudioWorkspace({
    */
   openProjectId?: string
   openProjectSignal?: number
+  /** A catalogue choice starts the matching working pack at its brief. */
+  launchPackId?: PackId
+  launchPackSignal?: number
   /**
    * Project chats live in the workspace's conversation store, not here — they
    * stream, sync and recover exactly like every other conversation. This view
@@ -477,6 +482,11 @@ export function StudioWorkspace({
       setShowCreateModal(true)
     })
   }, [createSignal])
+
+  useEffect(() => {
+    if (launchPackSignal <= 0 || !hydrated) return
+    queueMicrotask(() => beginProject(launchPackId))
+  }, [hydrated, launchPackId, launchPackSignal])
 
   // The sidebar "Projects" entry bumps homeSignal. Pressing the section you are
   // already in should take you to the top of it, which for Projects is the list

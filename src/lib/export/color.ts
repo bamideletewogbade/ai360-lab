@@ -11,11 +11,16 @@
 
 /**
  * What a document builder needs to look like a customer's business rather
- * than AI360's own product: a primary and an accent colour. Nothing else —
- * body text stays a fixed, readable neutral in every builder, so a bad or
- * unlucky colour pair can never make a document hard to read.
+ * than AI360's own product: a primary and an accent colour, and optionally a
+ * logo. Body text stays a fixed, readable neutral in every builder regardless
+ * of what's set here, so a bad or unlucky colour pair can never make a
+ * document hard to read.
  */
-export type DocumentBrand = { primary: string; accent: string }
+export type DocumentBrand = {
+  primary: string
+  accent: string
+  logo?: { bytes: Uint8Array; mimeType: string }
+}
 
 const HEX_RE = /^#([0-9a-fA-F]{6})$/
 

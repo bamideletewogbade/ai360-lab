@@ -22,6 +22,7 @@ import { chatFeature } from '@/lib/billing/credits'
 import { readBalance } from '@/lib/billing/credit-repository'
 import { productKnowledgeBlock } from '@/lib/product-knowledge'
 import { projectContextBlock } from '@/lib/studio/project-context'
+import { brandKnowledgeBlock } from '@/lib/brand-knowledge'
 import { DEFAULT_LANGUAGE, isLanguageCode, languageDirective, type LanguageCode } from '@/lib/languages'
 import { policyForConversation, prepareConversationContext, type ContextMessage } from '@/lib/context-engineering'
 import {
@@ -160,6 +161,12 @@ export async function POST(req: NextRequest) {
   const projectContext = projectId && requester.workspaceKey
     ? await projectContextBlock({ workspaceKey: requester.workspaceKey, projectId })
     : ''
+  // Workspace-wide, unlike the project context above: applies to every
+  // conversation, not just ones inside a project, because a business's own
+  // facts and voice are not scoped to one piece of work.
+  const brandKnowledge = requester.workspaceKey
+    ? await brandKnowledgeBlock({ workspaceKey: requester.workspaceKey })
+    : ''
   const key = process.env.OPENROUTER_API_KEY
   const policy = policyForConversation(messages)
   const attachments = messages.flatMap((message) => message.attachments ?? [])
@@ -286,7 +293,7 @@ export async function POST(req: NextRequest) {
           ? 'Live information tools are available for this request. Use them only where freshness or verification matters.'
           : 'Live information tools are not enabled for this request. Do not claim that you searched or verified current information.'}${documentToolOffered
           ? '\n\nYou can attach a downloadable file to this answer with the create_document tool when the person asked for something to keep, send or print. Write the document body yourself in markdown. After the tool returns, still reply briefly saying what you made — do not repeat the whole document in the message.'
-          : ''}${projectContext ? `\n\n${projectContext}` : ''}`
+          : ''}${projectContext ? `\n\n${projectContext}` : ''}${brandKnowledge ? `\n\n${brandKnowledge}` : ''}`
 
         const conversation: unknown[] = [
           { role: 'system', content: systemContent },

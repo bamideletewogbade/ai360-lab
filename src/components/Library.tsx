@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { scopedStorageKey } from '@/lib/workspace'
 import { mergeProjects, sortProjects } from '@/lib/studio-projects'
 import type { StudioAsset, StudioProject } from '@/lib/studio-project-model'
+import { filterLibraryItems, type LibraryFilterKind, type LibraryFilterStatus } from '@/lib/library-filter'
 
 const PROJECTS_STORAGE_KEY = 'ai360-studio-projects-v2'
 
-type LibraryKind = 'document' | 'image' | 'video' | 'project'
-type LibraryStatus = 'ready' | 'draft'
+type LibraryKind = LibraryFilterKind
+type LibraryStatus = LibraryFilterStatus
 
 type LibraryItem = {
   id: string
@@ -237,18 +238,11 @@ export function Library({
   }, [documents, media, projects, projectNameById])
 
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase()
-  const visible = useMemo(() => items.filter((item) => {
-    if (typeFilter !== 'all' && item.kind !== typeFilter) return false
-    if (statusFilter === 'ready' && item.status !== 'ready') return false
-    if (normalizedSearch) {
-      const searchable = [item.title, item.preview, item.formatLabel, item.sourceLabel, KIND_LABEL[item.kind]]
-        .filter(Boolean)
-        .join(' ')
-        .toLocaleLowerCase()
-      if (!searchable.includes(normalizedSearch)) return false
-    }
-    return true
-  }), [items, normalizedSearch, statusFilter, typeFilter])
+  const visible = useMemo(() => filterLibraryItems(items, {
+    type: typeFilter,
+    status: statusFilter,
+    query: searchQuery,
+  }), [items, searchQuery, statusFilter, typeFilter])
 
   const counts = useMemo(() => ({
     all: items.length,

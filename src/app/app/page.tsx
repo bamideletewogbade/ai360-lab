@@ -12,6 +12,7 @@ import {
 } from '@/lib/languages'
 import { StudioWorkspace } from '@/components/StudioWorkspace'
 import { Library } from '@/components/Library'
+import { Market } from '@/components/Market'
 import { MediaStudio } from '@/components/MediaStudio'
 import { AccountControls } from '@/components/AccountControls'
 import { BrandMark } from '@/components/BrandMark'
@@ -28,6 +29,7 @@ import { useWorkspaceIdentity } from '@/components/WorkspaceIdentityProvider'
 import { scopedStorageKey } from '@/lib/workspace'
 import { syncableOnly } from '@/lib/conversation-sync'
 import { routeIntentDeterministically, type IntentRoute } from '@/lib/intent-router'
+import type { PackId } from '@/lib/studio/packs'
 import {
   personalizedIntro, personalizedTasks, readStoredProfile, resolveFirstRun, SKIPPED, type OnboardingProfile,
 } from '@/lib/onboarding'
@@ -77,7 +79,7 @@ type MessageFailure = {
   creditNotice: string
   requestId: string
 }
-type Experience = 'chat' | 'agent' | 'studio' | 'apps' | 'media'
+type Experience = 'chat' | 'agent' | 'studio' | 'apps' | 'market' | 'media'
 type AgentStep = { id: string; label: string; status: 'pending' | 'active' | 'complete' | 'failed' }
 type AgentActivity = { type: string; summary: string; createdAt: string }
 type AgentDepth = 'quick' | 'standard' | 'thorough'
@@ -202,6 +204,14 @@ const MODE_META: Record<Experience, {
     eyebrow: 'Workspace library',
     heading: <>Everything you&rsquo;ve made<br />in one place.</>,
     intro: 'Every document, image, video and project outcome created across your workspace, kept together and easy to find again.',
+  },
+  market: {
+    label: 'Market',
+    short: 'Useful tools and business kits',
+    description: 'Practical AI360 workflows ready to use',
+    eyebrow: 'AI360 Market',
+    heading: <>Useful work,<br />ready when you are.</>,
+    intro: 'Choose a practical tool or business kit and continue the work privately inside a Project.',
   },
   media: {
     label: 'Media Studio',
@@ -411,6 +421,8 @@ function LabWorkspace({
   const [projectsHomeSignal, setProjectsHomeSignal] = useState(0)
   /** Which project to reopen when leaving one of its chats. */
   const [openProjectRequest, setOpenProjectRequest] = useState({ id: '', signal: 0 })
+  /** A Market item opens the real Studio pack behind it, never a dead detail page. */
+  const [marketPackRequest, setMarketPackRequest] = useState<{ id: PackId; signal: number }>({ id: 'plan', signal: 0 })
   const [helpOpen, setHelpOpen] = useState(false)
   const [showReturnToLatest, setShowReturnToLatest] = useState(false)
   const [copiedPromptId, setCopiedPromptId] = useState('')
@@ -1634,6 +1646,11 @@ function LabWorkspace({
     setSidebarOpen(false)
   }
 
+  function useMarketPack(packId: PackId) {
+    setMarketPackRequest((current) => ({ id: packId, signal: current.signal + 1 }))
+    selectExperience('studio')
+  }
+
   /** Start a new conversation owned by a project. */
   function startProjectChat(projectId: string, projectName: string) {
     const next: Conversation = { ...freshConversation('chat'), projectId, projectName }
@@ -1685,6 +1702,8 @@ function LabWorkspace({
     ? 'Projects'
     : experience === 'media'
       ? 'Media Studio'
+      : experience === 'market'
+        ? 'Market'
       : experience === 'apps'
         ? 'Library'
         : 'Chats'
@@ -1692,6 +1711,8 @@ function LabWorkspace({
     ? 'Build and improve lasting work'
     : experience === 'media'
       ? 'Create images and short video'
+      : experience === 'market'
+        ? 'Useful tools and business kits'
       : experience === 'apps'
         ? 'Everything you have made'
         : experience === 'agent'
@@ -1770,6 +1791,17 @@ function LabWorkspace({
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
             </span>
             <span>Library</span>
+          </button>
+
+          <button
+            type="button"
+            className={`nav-menu-item${experience === 'market' ? ' active' : ''}`}
+            onClick={() => { selectExperience('market'); setSidebarOpen(false) }}
+          >
+            <span className="nav-menu-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 9h16l-1-5H5L4 9Z"/><path d="M5 9v11h14V9M9 20v-6h6v6"/><path d="M4 9a3 3 0 0 0 5 2 3 3 0 0 0 6 0 3 3 0 0 0 5-2"/></svg>
+            </span>
+            <span>Market</span>
           </button>
         </nav>
 
@@ -1874,12 +1906,16 @@ function LabWorkspace({
             homeSignal={projectsHomeSignal}
             openProjectId={openProjectRequest.id}
             openProjectSignal={openProjectRequest.signal}
+            launchPackId={marketPackRequest.id}
+            launchPackSignal={marketPackRequest.signal}
             conversations={projectConversations}
             onOpenConversation={openProjectChat}
             onStartConversation={startProjectChat}
           />
         ) : experience === 'apps' ? (
           <Library signedIn={signedIn} workspaceScope={workspaceScope} onOpenProject={openProjectWorkspace} />
+        ) : experience === 'market' ? (
+          <Market onUsePack={useMarketPack} />
         ) : experience === 'media' ? (
           <MediaStudio />
         ) : (
@@ -2181,7 +2217,8 @@ function LabWorkspace({
           onSelectChats={openChatsHome}
           onSelectProjects={() => { selectExperience('studio'); setProjectsHomeSignal((n) => n + 1) }}
           onSelectMedia={() => selectExperience('media')}
-          onSelectApps={() => selectExperience('apps')}
+          onSelectLibrary={() => selectExperience('apps')}
+          onSelectMarket={() => selectExperience('market')}
         />
       </section>
       {helpOpen && (

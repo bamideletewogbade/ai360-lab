@@ -1,15 +1,18 @@
 'use client'
+/* eslint-disable @next/next/no-img-element -- the logo preview is a locally-created blob URL, not an optimizable remote image */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
 import { isHexColor, normalizeHex, readableTextHex, tint } from '@/lib/export/color'
+import { BrandKnowledge } from '@/components/settings/BrandKnowledge'
 import styles from './Settings.module.css'
 
 const DEFAULT_PRIMARY = '#101112'
 const DEFAULT_ACCENT = '#56595C'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+type LogoState = 'idle' | 'uploading' | 'error'
 
 export function BrandSettings() {
   const { configured, loading: authLoading, user } = useAuth()
@@ -19,6 +22,12 @@ export function BrandSettings() {
   const [accent, setAccent] = useState(DEFAULT_ACCENT)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [errorText, setErrorText] = useState('')
+
+  const [hasLogo, setHasLogo] = useState(false)
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState('')
+  const [logoState, setLogoState] = useState<LogoState>('idle')
+  const [logoError, setLogoError] = useState('')
+  const logoInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!user) return
@@ -37,6 +46,63 @@ export function BrandSettings() {
       .catch(() => setLoading(false))
     return () => controller.abort()
   }, [user])
+
+  // The logo image itself is fetched as a blob (not a direct <img src=...>)
+  // so a missing logo never shows a broken-image icon — the request result
+  // decides whether a preview renders at all.
+  useEffect(() => {
+    if (!user) return
+    let revoke = ''
+    fetch('/api/brand-kit/logo', { cache: 'no-store' })
+      .then((response) => (response.ok ? response.blob() : null))
+      .then((blob) => {
+        if (!blob) return
+        const url = URL.createObjectURL(blob)
+        revoke = url
+        setLogoPreviewUrl(url)
+        setHasLogo(true)
+      })
+      .catch(() => undefined)
+    return () => { if (revoke) URL.revokeObjectURL(revoke) }
+  }, [user])
+
+  async function uploadLogo(fileList: FileList | null) {
+    const file = fileList?.[0]
+    if (!file || logoState === 'uploading') return
+    setLogoState('uploading')
+    setLogoError('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const response = await fetch('/api/brand-kit/logo', { method: 'POST', body: form })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'That logo could not be saved.')
+      setLogoPreviewUrl(URL.createObjectURL(file))
+      setHasLogo(true)
+      setLogoState('idle')
+    } catch (cause) {
+      setLogoError(cause instanceof Error ? cause.message : 'That logo could not be saved.')
+      setLogoState('error')
+    } finally {
+      if (logoInputRef.current) logoInputRef.current.value = ''
+    }
+  }
+
+  async function removeLogo() {
+    setLogoState('uploading')
+    setLogoError('')
+    try {
+      const response = await fetch('/api/brand-kit/logo', { method: 'DELETE' })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'That logo could not be removed.')
+      setLogoPreviewUrl('')
+      setHasLogo(false)
+      setLogoState('idle')
+    } catch (cause) {
+      setLogoError(cause instanceof Error ? cause.message : 'That logo could not be removed.')
+      setLogoState('error')
+    }
+  }
 
   const primaryValid = isHexColor(primary)
   const accentValid = isHexColor(accent)
@@ -177,12 +243,64 @@ export function BrandSettings() {
 
       <section className={styles.card}>
         <div className={styles.cardHead}>
+          <h2>Logo</h2>
+          <p>
+            Replaces AI360&rsquo;s own mark in the header of generated PDF and Word documents — it becomes
+            your document, not a co-branded one. PNG or JPEG, up to 3 MB.
+          </p>
+        </div>
+        {!configured || authLoading ? (
+          <div className={styles.empty}>Loading…</div>
+        ) : !user ? (
+          <p className={styles.notice}>Sign in to add a logo.</p>
+        ) : (
+          <>
+            <div className={styles.colorRow}>
+              {logoPreviewUrl ? (
+                <img src={logoPreviewUrl} alt="Your logo" className={styles.logoPreview} />
+              ) : (
+                <span className={styles.logoPreviewEmpty} aria-hidden="true">No logo</span>
+              )}
+              <div className={styles.colorField}>
+                <strong>{hasLogo ? 'Logo set' : 'No logo yet'}</strong>
+                <span>Shown at natural proportions, scaled to fit the header</span>
+              </div>
+              <div className={styles.brandActions}>
+                <label className={styles.uploadButton}>
+                  {logoState === 'uploading' ? 'Uploading…' : hasLogo ? 'Replace' : 'Upload'}
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    onChange={(event) => void uploadLogo(event.target.files)}
+                    disabled={logoState === 'uploading'}
+                    hidden
+                  />
+                </label>
+                {hasLogo ? (
+                  <button type="button" className={styles.textButton} onClick={() => void removeLogo()} disabled={logoState === 'uploading'}>
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {logoState === 'error' ? <p className={styles.notice}>{logoError}</p> : null}
+          </>
+        )}
+      </section>
+
+      {user ? <BrandKnowledge /> : null}
+
+      <section className={styles.card}>
+        <div className={styles.cardHead}>
           <h2>Preview</h2>
           <p>A rough sense of how these colours land on a document.</p>
         </div>
         <div className={styles.brandPreview}>
           <div className={styles.brandPreviewHead}>
-            <span className={styles.brandPreviewEyebrow}>AI360</span>
+            {logoPreviewUrl
+              ? <img src={logoPreviewUrl} alt="" className={styles.brandPreviewLogo} />
+              : <span className={styles.brandPreviewEyebrow}>AI360</span>}
             <span className={styles.brandPreviewTitle} style={{ color: previewPrimary }}>Wholesale price list</span>
           </div>
           <div className={styles.brandPreviewTable}>

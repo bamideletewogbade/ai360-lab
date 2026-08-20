@@ -10,6 +10,7 @@ import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import { buildXlsx, sheetsFromBlocks } from '@/lib/export/xlsx'
 import { buildPptx } from '@/lib/export/pptx'
 import { hexToOoxml, hexToRgb01, tint, type DocumentBrand } from '@/lib/export/color'
+import { fitWithin, readImageDimensions } from '@/lib/export/image-dimensions'
 
 export type { DocumentBrand }
 
@@ -150,7 +151,13 @@ export function safeFilename(title: string, extension: string) {
 }
 
 async function buildDocx(title: string, blocks: ExportBlock[], brand?: DocumentBrand) {
-  const logo = await readFile(path.join(process.cwd(), 'public', 'icon-mark-black.png'))
+  // A workspace's own logo replaces AI360's mark in the header — it is their
+  // document now, not a co-branded one. AI360's own credit stays in the small
+  // footer line below, unaffected either way.
+  const logoBytes = brand?.logo?.bytes ?? await readFile(path.join(process.cwd(), 'public', 'icon-mark-black.png'))
+  const logoMime = brand?.logo?.mimeType ?? 'image/png'
+  const logoNativeSize = brand?.logo ? readImageDimensions(logoBytes, logoMime) : null
+  const logoBox = logoNativeSize ? fitWithin(logoNativeSize, 90, 26) : { width: 18, height: 21 }
   const primary = brand ? hexToOoxml(brand.primary) : '101112'
   const headerFill = brand ? hexToOoxml(tint(brand.primary, 0.88)) : 'F1F0EC'
   const children: Array<Paragraph | Table> = [
@@ -310,10 +317,12 @@ async function buildDocx(title: string, blocks: ExportBlock[], brand?: DocumentB
           default: new Header({
             children: [
               new Paragraph({
-                children: [
-                  new ImageRun({ data: logo, transformation: { width: 18, height: 21 }, type: 'png' }),
-                  new TextRun({ text: '   AI THREE SIXTY', bold: true, size: 16, font: 'Arial', color: '56595C' }),
-                ],
+                children: brand?.logo
+                  ? [new ImageRun({ data: logoBytes, transformation: logoBox, type: logoMime === 'image/jpeg' ? 'jpg' : 'png' })]
+                  : [
+                      new ImageRun({ data: logoBytes, transformation: logoBox, type: 'png' }),
+                      new TextRun({ text: '   AI THREE SIXTY', bold: true, size: 16, font: 'Arial', color: '56595C' }),
+                    ],
               }),
             ],
           }),
@@ -387,16 +396,23 @@ async function buildPdf(title: string, blocks: ExportBlock[], brand?: DocumentBr
   const headerFillRgb: [number, number, number] = brand ? hexToRgb01(tint(brand.primary, 0.88)) : [0.94, 0.93, 0.91]
   const primary = rgb(...primaryRgb)
   const headerFill = rgb(...headerFillRgb)
-  const logoBytes = await readFile(path.join(process.cwd(), 'public', 'icon-mark-black.png'))
-  const logo = await pdf.embedPng(logoBytes)
+  // A workspace's own logo replaces AI360's mark in the header, the same call
+  // `buildDocx` makes — it is their document, not a co-branded one.
+  const logoBytes = brand?.logo?.bytes ?? await readFile(path.join(process.cwd(), 'public', 'icon-mark-black.png'))
+  const logoMime = brand?.logo?.mimeType ?? 'image/png'
+  const logo = logoMime === 'image/jpeg' ? await pdf.embedJpg(logoBytes) : await pdf.embedPng(logoBytes)
+  const logoNativeSize = brand?.logo ? readImageDimensions(logoBytes, logoMime) : null
+  const logoBox = logoNativeSize ? fitWithin(logoNativeSize, 60, 20) : { width: 17, height: 20 }
   const margin = 58
   const width = 612 - margin * 2
   const states: PdfState[] = []
 
   const addPage = () => {
     const page = pdf.addPage([612, 792])
-    page.drawImage(logo, { x: margin, y: 744, width: 17, height: 20 })
-    page.drawText('AI THREE SIXTY', { x: margin + 25, y: 749, size: 8, font: bold, color: rgb(.34, .35, .36) })
+    page.drawImage(logo, { x: margin, y: 764 - logoBox.height, width: logoBox.width, height: logoBox.height })
+    if (!brand?.logo) {
+      page.drawText('AI THREE SIXTY', { x: margin + 25, y: 749, size: 8, font: bold, color: rgb(.34, .35, .36) })
+    }
     const state = { page, y: 716 }
     states.push(state)
     return state

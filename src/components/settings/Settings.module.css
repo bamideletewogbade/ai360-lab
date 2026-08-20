@@ -436,6 +436,44 @@
 .brandPreviewTableHead { font-weight: 750; }
 .brandPreviewTableRow { color: var(--charcoal); border-top: 1px solid var(--line); }
 
+/* Logo */
+.logoPreview {
+  flex: none;
+  width: 64px;
+  height: 44px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--warm-white);
+  padding: 4px;
+}
+.logoPreviewEmpty {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 64px;
+  height: 44px;
+  border: 1px dashed var(--line-dark);
+  border-radius: 10px;
+  color: var(--grey);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+.uploadButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: var(--black);
+  color: var(--paper);
+  font-size: 15px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.brandPreviewLogo { display: block; max-width: 90px; max-height: 26px; object-fit: contain; }
+
 @media (min-width: 860px) {
   .layout { grid-template-columns: 232px minmax(0, 1fr); align-items: start; }
   .nav { position: sticky; top: 86px; flex-direction: column; overflow: visible; gap: 4px; }
