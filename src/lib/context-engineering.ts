@@ -58,20 +58,46 @@ export function prepareConversationContext(input: Array<{
 }
 
 export type ContextPolicy = {
+  freshness: 'off' | 'auto' | 'required'
   liveInformation: boolean
+  deepResearch: boolean
   hasAttachments: boolean
   hasVideo: boolean
   hasPdf: boolean
   contextCharacters: number
 }
 
+const OFFLINE = /\b(do not|don't|dont|no) (browse|search|use the web|look online)\b/i
+const REQUIRED_FRESHNESS = /(?:https?:\/\/|\b(?:latest|current|currently|today|tonight|now|recent|this (?:week|month|year)|news|weather|forecast|score|fixture|schedule|deadline|admission|application portal|available|availability|price|cost|exchange rate|interest rate|stock|market|law|policy|regulation|tax|visa|passport|requirement|president|minister|mayor|ceo|government|election|officeholder|release date|version|update|recommend|best|where (?:can|should) i buy|fact[ -]?check|verify)\b)/i
+const DEEP_RESEARCH = /\b(?:deep research|research|investigate|market analysis|competitor analysis|compare (?:several|multiple|the market)|report with sources|multiple sources|evidence|citations?)\b/i
+const NO_RETRIEVAL_NEEDED = /^(?:hi|hello|hey|yo|thanks|thank you|good (?:morning|afternoon|evening))\b|^(?:rewrite|rephrase|proofread|edit|translate|brainstorm|draft|compose)\b/i
+
+/**
+ * Freshness is separate from product routing. A short current fact belongs in
+ * everyday chat; a multi-source investigation belongs in Research. The model
+ * gets discretion for ordinary factual questions, while mutable claims are
+ * never allowed to rely silently on training data.
+ */
+export function freshnessForPrompt(prompt: string): 'off' | 'auto' | 'required' {
+  const text = prompt.replace(/\s+/g, ' ').trim().slice(0, 20_000)
+  if (!text || OFFLINE.test(text)) return 'off'
+  if (REQUIRED_FRESHNESS.test(text)) return 'required'
+  if (NO_RETRIEVAL_NEEDED.test(text)) return 'off'
+  return 'auto'
+}
+
 export function policyForConversation(messages: ContextMessage[]): ContextPolicy {
   const attachments = messages.flatMap((message) => message.attachments ?? [])
   const latestUser = [...messages].reverse().find((message) => message.role === 'user')?.content ?? ''
-  const explicitlyOffline = /\b(do not|don't|dont|no) (browse|search|use the web|look online)\b/i.test(latestUser)
-  const needsCurrentInformation = routeIntentDeterministically(latestUser).route === 'research' || /https?:\/\//i.test(latestUser)
+  const freshness = freshnessForPrompt(latestUser)
+  const deepResearch = freshness !== 'off' && (
+    routeIntentDeterministically(latestUser).reason === 'explicit_research'
+    || DEEP_RESEARCH.test(latestUser)
+  )
   return {
-    liveInformation: !explicitlyOffline && needsCurrentInformation,
+    freshness,
+    liveInformation: freshness !== 'off',
+    deepResearch,
     hasAttachments: attachments.length > 0,
     hasVideo: attachments.some((attachment) => attachment.kind === 'video'),
     hasPdf: attachments.some((attachment) => attachment.kind === 'pdf'),

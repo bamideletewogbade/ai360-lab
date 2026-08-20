@@ -6095,6 +6095,33 @@ button {
   font-size: 14px;
   line-height: 1.5;
 }
+.grounding-receipt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: 620px;
+  margin: 13px 0 2px;
+  color: #356044;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.grounding-receipt > span {
+  display: grid;
+  width: 19px;
+  height: 19px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dcecdf;
+  font-size: 11px;
+}
+.grounding-receipt.unavailable {
+  color: #8a542c;
+}
+.grounding-receipt.unavailable > span {
+  background: #f5e5d7;
+}
 .source-drawer summary {
   padding: 9px 11px;
   color: var(--grey);

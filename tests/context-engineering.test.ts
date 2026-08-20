@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { policyForConversation, prepareConversationContext } from '../src/lib/context-engineering.ts'
+import { freshnessForPrompt, policyForConversation, prepareConversationContext } from '../src/lib/context-engineering.ts'
+import { LIVE_INFORMATION_TOOLS } from '../src/lib/live-tools.ts'
 
 test('client supplied system messages never reach provider context', () => {
   const prepared = prepareConversationContext([
@@ -30,7 +31,41 @@ test('tools are granted only when current information or a URL needs them', () =
   assert.equal(policyForConversation(url).liveInformation, true)
 })
 
+test('mutable real-world questions require current evidence without needing the word latest', () => {
+  const prompts = [
+    'Who is the president of Ghana?',
+    'What is the cedi to dollar exchange rate?',
+    'Is the University of Ghana admission portal open?',
+    'Who is the CEO of MTN Ghana?',
+    'What are the requirements for passport renewal in Ghana?',
+    'Recommend an affordable laptop for a student in Accra.',
+  ]
+  for (const prompt of prompts) assert.equal(freshnessForPrompt(prompt), 'required', prompt)
+})
+
+test('ordinary factual questions may search while transformations stay offline', () => {
+  assert.equal(freshnessForPrompt('Explain photosynthesis.'), 'auto')
+  assert.equal(freshnessForPrompt('Rewrite this paragraph clearly.'), 'off')
+  assert.equal(freshnessForPrompt('Hello'), 'off')
+})
+
+test('basic freshness and deep research are different product workloads', () => {
+  const lookup = prepareConversationContext([{ role: 'user', content: 'Who is the president of Ghana?' }])
+  const research = prepareConversationContext([{ role: 'user', content: 'Research Ghana solar policy with multiple sources.' }])
+  assert.equal(policyForConversation(lookup).freshness, 'required')
+  assert.equal(policyForConversation(lookup).deepResearch, false)
+  assert.equal(policyForConversation(research).freshness, 'required')
+  assert.equal(policyForConversation(research).deepResearch, true)
+})
+
 test('an explicit offline request keeps web tools disabled', () => {
   const prepared = prepareConversationContext([{ role: 'user', content: "Don't browse. Explain the current idea from what you know." }])
   assert.equal(policyForConversation(prepared).liveInformation, false)
+})
+
+test('live search is localized for AI360 users in Ghana', () => {
+  const search = LIVE_INFORMATION_TOOLS[0]
+  assert.equal(search.parameters.user_location.country, 'GH')
+  assert.equal(search.parameters.user_location.city, 'Accra')
+  assert.equal(search.parameters.user_location.timezone, 'Africa/Accra')
 })

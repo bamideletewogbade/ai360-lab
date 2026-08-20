@@ -57,6 +57,7 @@ type Msg = {
    */
   agentRunId?: string
   sources?: SourceLink[]
+  grounding?: GroundingReceipt
   usage?: { totalTokens?: number; cost?: number; credits?: number }
   /** Files the assistant produced for this answer, stored and downloadable later. */
   files?: GeneratedFile[]
@@ -91,6 +92,10 @@ type AgentPlan = {
   estimatedCredits: number
 }
 type SourceLink = { title: string; url: string }
+type GroundingReceipt = {
+  status: 'checking' | 'verified' | 'not_needed' | 'unavailable'
+  asOf?: string
+}
 type ActionKind = 'email' | 'calendar' | 'task'
 function ActionKindIcon({ kind }: { kind: ActionKind }) {
   if (kind === 'email') {
@@ -276,6 +281,7 @@ function fileToDataUrl(file: Blob) {
 type ChatStreamEvent =
   | { type: 'delta'; text: string }
   | { type: 'done' }
+  | { type: 'grounding'; status: GroundingReceipt['status']; sources?: SourceLink[]; asOf?: string }
   | { type: 'attachment'; assetId: string; filename: string; title: string; format: string; byteSize: number }
   | { type: 'error'; code: string; message: string; retryable: boolean; creditNotice: string; requestId: string }
 
@@ -1513,7 +1519,7 @@ function LabWorkspace({
                         ? message
                         : event.type === 'delta'
                           ? { ...message, content: currentText, failure: undefined }
-                          : event.type === 'attachment'
+                        : event.type === 'attachment'
                             ? {
                                 ...message,
                                 files: [
@@ -1524,6 +1530,12 @@ function LabWorkspace({
                                   },
                                 ],
                               }
+                            : event.type === 'grounding'
+                              ? {
+                                  ...message,
+                                  grounding: { status: event.status, asOf: event.asOf },
+                                  sources: event.sources ?? message.sources,
+                                }
                             : event.type === 'error'
                               ? { ...message, content: '', failure: event }
                               : message,
@@ -2072,9 +2084,18 @@ function LabWorkspace({
                     ) : (
                       <span className="thinking">
                         <span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
-                        <span>Working...</span>
+                        <span>{message.grounding?.status === 'checking' ? 'Checking current sources...' : 'Working...'}</span>
                       </span>
                     )}
+                    {message.grounding?.status === 'verified' ? (
+                      <p className="grounding-receipt">
+                        <span aria-hidden="true">✓</span>
+                        Checked against current sources
+                        {message.grounding.asOf ? ` · ${new Date(message.grounding.asOf).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                      </p>
+                    ) : message.grounding?.status === 'unavailable' ? (
+                      <p className="grounding-receipt unavailable"><span aria-hidden="true">!</span>Current sources could not be verified</p>
+                    ) : null}
                     {/* The honest receipt under metered work: what this task
                         actually settled, not the estimate shown before it ran. */}
                     {message.usage?.credits ? (

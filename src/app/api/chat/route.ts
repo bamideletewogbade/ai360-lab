@@ -36,6 +36,12 @@ type Msg = ContextMessage
 type ChatStreamEvent =
   | { type: 'delta'; text: string }
   | { type: 'done' }
+  | {
+      type: 'grounding'
+      status: 'checking' | 'verified' | 'not_needed' | 'unavailable'
+      sources?: Array<{ title: string; url: string }>
+      asOf?: string
+    }
   /** A file the assistant produced and stored; the browser renders it as a download. */
   | {
       type: 'attachment'
@@ -175,6 +181,8 @@ export async function POST(req: NextRequest) {
     messageCount: messages.length,
     attachmentCount: attachments.length,
     attachmentKinds: attachments.map((attachment) => attachment.kind),
+    freshness: policy.freshness,
+    deepResearch: policy.deepResearch,
     liveInformation: policy.liveInformation,
     contextCharacters: policy.contextCharacters,
     aiConfigured: Boolean(key),
@@ -201,7 +209,9 @@ export async function POST(req: NextRequest) {
   }
 
   let feature = chatFeature({
-    liveResearch: policy.liveInformation,
+    // A short lookup is part of a useful everyday answer. Only an explicitly
+    // research-shaped request enters the metered multi-source workflow.
+    liveResearch: policy.deepResearch,
     hasAttachment: policy.hasAttachments,
     premium: isPremiumChatMode(mode),
   })
@@ -280,6 +290,7 @@ export async function POST(req: NextRequest) {
           ...(policy.liveInformation ? LIVE_INFORMATION_TOOLS : []),
           ...(documentToolOffered ? [CREATE_DOCUMENT_TOOL] : []),
         ]
+        if (policy.liveInformation) send({ type: 'grounding', status: 'checking' })
         const providerStartedAt = performance.now()
         log.info('provider.request.started', {
           provider: 'openrouter',
@@ -289,8 +300,10 @@ export async function POST(req: NextRequest) {
           documentToolOffered,
         })
 
-        const systemContent = `${SYSTEM_PROMPT}\n\n${productKnowledgeBlock()}\n\n${languageDirective(language)}\n\n${policy.liveInformation
-          ? 'Live information tools are available for this request. Use them only where freshness or verification matters.'
+        const systemContent = `${SYSTEM_PROMPT}\n\n${productKnowledgeBlock()}\n\n${languageDirective(language)}\n\n${policy.freshness === 'required'
+          ? 'This request depends on mutable real-world information. You must search before answering, prefer authoritative or primary sources, and do not present a current claim unless the live evidence supports it. Use Ghana and Accra context when location matters.'
+          : policy.liveInformation
+            ? 'Live information tools are available. Decide whether fresh evidence would improve the answer, and search when it would. Prefer authoritative or primary sources and use Ghana and Accra context when location matters.'
           : 'Live information tools are not enabled for this request. Do not claim that you searched or verified current information.'}${documentToolOffered
           ? '\n\nYou can attach a downloadable file to this answer with the create_document tool when the person asked for something to keep, send or print. Write the document body yourself in markdown. After the tool returns, still reply briefly saying what you made — do not repeat the whole document in the message.'
           : ''}${projectContext ? `\n\n${projectContext}` : ''}${brandKnowledge ? `\n\n${brandKnowledge}` : ''}`
@@ -431,7 +444,10 @@ export async function POST(req: NextRequest) {
                 if (delta) {
                   outputCharacters += delta.length
                   outputText += delta
-                  send({ type: 'delta', text: delta })
+                  // Required-freshness answers stay buffered until at least
+                  // one supporting source is present. This prevents a fluent
+                  // but stale answer reaching the browser before verification.
+                  if (policy.freshness !== 'required') send({ type: 'delta', text: delta })
                 }
                 toolCalls = accumulateToolCalls(toolCalls, json.choices?.[0]?.delta?.tool_calls)
                 const annotations =
@@ -547,15 +563,35 @@ export async function POST(req: NextRequest) {
           if (second.failed) return
         }
 
-        appendLiveSources()
+        const groundedSources = [...sources.entries()].map(([url, title]) => ({ url, title }))
+        const asOf = new Date().toISOString()
+        const groundingUnavailable = policy.freshness === 'required' && groundedSources.length === 0
+        if (policy.freshness === 'required') {
+          if (groundedSources.length) {
+            send({ type: 'delta', text: outputText })
+          } else {
+            outputText = 'I could not verify this against a current source, so I will not present recalled information as up to date. Please try again in a moment.'
+            outputCharacters = outputText.length
+            send({ type: 'delta', text: outputText })
+          }
+        }
+        if (groundedSources.length) {
+          appendLiveSources()
+          send({ type: 'grounding', status: 'verified', sources: groundedSources, asOf })
+        } else if (policy.freshness === 'required') {
+          send({ type: 'grounding', status: 'unavailable', asOf })
+        } else if (policy.liveInformation) {
+          send({ type: 'grounding', status: 'not_needed' })
+        }
         const truncated = wasTruncated(finishReason)
         const leaked = looksLikeLeakedReasoning(outputText)
-        if (truncated || leaked) {
+        if (truncated || leaked || groundingUnavailable) {
           // The person still receives whatever arrived. Recording it is what
           // makes an intermittent provider fault countable instead of a thing
           // one user mentions once.
           log.warn('chat.answer.degraded', {
-            model: answeredBy, finishReason, truncated, leakedReasoning: leaked, outputCharacters,
+            model: answeredBy, finishReason, truncated, leakedReasoning: leaked,
+            groundingUnavailable, outputCharacters,
           })
         }
         await recordUsageEventSafe({
@@ -564,8 +600,9 @@ export async function POST(req: NextRequest) {
           inputTokens: usage?.prompt_tokens, outputTokens: usage?.completion_tokens,
           actualCostUsd: totalCostUsd || usage?.cost,
           latencyMs: Math.round(performance.now() - providerStartedAt),
-          outcome: truncated || leaked ? 'success_degraded' : 'success', metadata: {
-            mode, liveWebUsed: sources.size > 0, sourceCount: sources.size,
+          outcome: truncated || leaked || groundingUnavailable ? 'success_degraded' : 'success', metadata: {
+            mode, freshness: policy.freshness, deepResearch: policy.deepResearch,
+            groundingUnavailable, liveWebUsed: sources.size > 0, sourceCount: sources.size,
             webSearchRequests: usage?.server_tool_use?.web_search_requests || 0,
             attachmentCount: attachments.length,
             requestedModel: model, finishReason: finishReason ?? null,
@@ -577,7 +614,7 @@ export async function POST(req: NextRequest) {
         })
         await gate?.settle('success', totalCostUsd || usage?.cost)
         log.finish(200, {
-          outcome: truncated || leaked ? 'success_degraded' : 'success',
+          outcome: truncated || leaked || groundingUnavailable ? 'success_degraded' : 'success',
           provider: 'openrouter',
           model: answeredBy,
           requestedModel: model,
@@ -591,6 +628,9 @@ export async function POST(req: NextRequest) {
           cost: totalCostUsd || usage?.cost,
           webSearchRequests: usage?.server_tool_use?.web_search_requests,
           liveWebUsed: sources.size > 0,
+          freshness: policy.freshness,
+          deepResearch: policy.deepResearch,
+          groundingUnavailable,
           sourceCount: sources.size,
           providerPasses: passes,
           documentsCreated: producedFiles.length,
