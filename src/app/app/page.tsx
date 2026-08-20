@@ -210,7 +210,7 @@ const MODE_META: Record<Experience, {
     short: 'Ready-to-use help for work and life',
     description: 'Practical AI360 workflows ready to use',
     eyebrow: 'AI360 Tools & Kits',
-    heading: <>What do you need<br />to get done?</>,
+    heading: <>Pick a useful<br />starting point.</>,
     intro: 'Choose practical help for study, career, creative, personal or business work and continue privately inside a Project.',
   },
   media: {
@@ -1799,7 +1799,7 @@ function LabWorkspace({
             onClick={() => { selectExperience('market'); setSidebarOpen(false) }}
           >
             <span className="nav-menu-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 9h16l-1-5H5L4 9Z"/><path d="M5 9v11h14V9M9 20v-6h6v6"/><path d="M4 9a3 3 0 0 0 5 2 3 3 0 0 0 6 0 3 3 0 0 0 5-2"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.5"/><path d="M17.25 14v6.5M14 17.25h6.5"/></svg>
             </span>
             <span>Tools &amp; Kits</span>
           </button>

@@ -16,11 +16,30 @@ const CATEGORIES: Array<{ id: Category; label: string }> = [
 ]
 
 function ProductIcon({ product }: { product: MarketProduct }) {
-  if (product.category === 'study') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-5 9 5-9 5Z" /><path d="M7 12v5c3 2 7 2 10 0v-5M21 9v6" /></svg>
-  if (product.category === 'career') return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V4h6v3M3 12h18M10 12v2h4v-2" /></svg>
-  if (product.category === 'create') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h11l3 3V20.5H5Z" /><path d="M15.5 3.5v4h3.5M8 12h8M8 16h6" /></svg>
-  if (product.category === 'business') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9l7-5 7 5v10" /><path d="M9 19v-5h6v5M3 19h18" /></svg>
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4.5 4.5M8 10.5h5M10.5 8v5" /></svg>
+  switch (product.packId) {
+    case 'learn':
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5c3-.7 5.7-.1 8 1.7v12c-2.3-1.8-5-2.4-8-1.7Z" /><path d="M20 5.5c-3-.7-5.7-.1-8 1.7v12c2.3-1.8 5-2.4 8-1.7Z" /></svg>
+    case 'write':
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h10l4 4v13H5Z" /><path d="M15 3.5v4h4M8 16l1.2-3.2 5.9-5.9 2 2-5.9 5.9Z" /></svg>
+    case 'plan':
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16H6Z" /><path d="m9 9 1 1 2-2M13.5 9H16m-7 5 1 1 2-2m1.5 1H16" /></svg>
+    case 'research':
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4.5 4.5M8 10.5h5M10.5 8v5" /></svg>
+    case 'decide':
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M12 7H6l-3 5h6L6 7M12 7h6l3 5h-6l3-5M8 20h8" /></svg>
+    case 'launch':
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4c3-1 5-1 6-1 0 1 0 3-1 6l-6 6-4-4Z" /><path d="m9 11-4 1-2 3 6 1 1 5 3-2v-4M16 7h.01" /></svg>
+    case 'naming':
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h8l8 8-7 7-9-9Z" /><circle cx="8" cy="9" r="1.2" /><path d="M12 5h4l4 4" /></svg>
+    case 'marketing':
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 13-5v14L4 14Z" /><path d="M4 10v4M7 15l1 5h4l-2-5M17 9c2 1 2 5 0 6" /></svg>
+    case 'calendar':
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="15" rx="2" /><path d="M7.5 3.5v4M16.5 3.5v4M3.5 10h17M8 14h2M13 14h3M8 17h3" /></svg>
+    case 'ads':
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><path d="m12 12 7-7M16 5h3v3" /></svg>
+    case 'pitch':
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="12" rx="2" /><path d="M8 20h8M12 16v4m-5-8 3-3 2 2 4-4" /></svg>
+  }
 }
 
 function ProductCard({ product, onUse }: { product: MarketProduct; onUse: (packId: PackId, starterPrompt: string) => void }) {
@@ -59,13 +78,16 @@ export function Market({ onUsePack }: { onUsePack: (packId: PackId, starterPromp
       <section className="market-hero">
         <div>
           <span className="market-eyebrow"><i /> AI360 Tools &amp; Kits</span>
-          <h1>What do you need<br />to get done?</h1>
-          <p>Practical help for studying, starting a career, creating, making decisions and growing a business.</p>
+          <h1>Pick a useful<br />starting point.</h1>
+          <p>Choose a guided tool for study, career, creative work, decisions or business. AI360 will help shape the details with you.</p>
         </div>
         <aside aria-label="Tools and kits promise">
-          <span>Built by AI360</span>
-          <b>Every item here works today.</b>
-          <small>Choose one, answer a few useful questions and continue in a private Project.</small>
+          <span>How it works</span>
+          <ol>
+            <li><b>Choose a starting point</b><small>Pick the closest match—you can adapt it.</small></li>
+            <li><b>Add your situation</b><small>Answer only the questions that change the work.</small></li>
+            <li><b>Keep it in a Project</b><small>Review, improve and return to the result later.</small></li>
+          </ol>
         </aside>
       </section>
 
@@ -73,7 +95,7 @@ export function Market({ onUsePack }: { onUsePack: (packId: PackId, starterPromp
         <label className="market-search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4.5 4.5" /></svg>
           <span className="sr-only">Search tools and kits</span>
-          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="What do you need to get done?" />
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tools and kits" />
           {query ? <button type="button" onClick={() => setQuery('')} aria-label="Clear tools and kits search">×</button> : <kbd>⌕</kbd>}
         </label>
         <div className="market-categories" aria-label="Tools and kits categories">
@@ -83,7 +105,7 @@ export function Market({ onUsePack }: { onUsePack: (packId: PackId, starterPromp
         </div>
       </section>
 
-      <div className="market-result-count" aria-live="polite"><b>{visible.length}</b> useful {visible.length === 1 ? 'option' : 'options'}</div>
+      <div className="market-result-count" aria-live="polite">Showing <b>{visible.length}</b> {visible.length === 1 ? 'tool or kit' : 'tools and kits'}</div>
       {visible.length ? (
         <section className="market-grid" aria-label="Available tools and kits">
           {visible.map((product) => <ProductCard key={product.id} product={product} onUse={onUsePack} />)}

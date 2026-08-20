@@ -3041,14 +3041,16 @@ button {
 
 .ms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr));
+  /* One shelf is four items, so four tracks use the whole row instead of
+     leaving two empty auto-fill columns on a wide laptop. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   align-items: stretch;
 }
 .ms-card {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 15px;
   background: var(--white);
@@ -3075,34 +3077,19 @@ button {
   position: relative;
   min-height: 0;
   flex: 0 0 auto;
-  /* A shape nobody asked for: falls back to 4:3 only for a ratio this list
-     does not yet know, never for the formats the studio actually offers. */
+  /* The gallery is a contact sheet, not the final canvas. A shared frame keeps
+     portrait, square and landscape work from stretching one another's cards;
+     object-fit below preserves the complete result inside that frame. */
   aspect-ratio: 4 / 3;
   overflow: hidden;
-  background: var(--warm-white);
-}
-/* The card mirrors the shape it was actually made in — cover-cropping a 9:16
-   Status shot into a stubby 4:3 box would hide the top and bottom of the
-   person's own result, in the exact format ("Status, TikTok") this studio
-   sells. */
-.ms-card-media[data-ratio="1:1"] {
-  aspect-ratio: 1 / 1;
-}
-.ms-card-media[data-ratio="9:16"] {
-  aspect-ratio: 9 / 16;
-}
-.ms-card-media[data-ratio="16:9"] {
-  aspect-ratio: 16 / 9;
-}
-.ms-card-media[data-ratio="2:3"] {
-  aspect-ratio: 2 / 3;
+  background: #171819;
 }
 .ms-card-media img,
 .ms-card-media video {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 .ms-card-tag {
   position: absolute;
@@ -3136,6 +3123,7 @@ button {
   padding: 13px 14px 14px;
 }
 .ms-card-body p {
+  min-height: calc(2 * 1.45em);
   margin: 0;
   font-size: 15px;
   line-height: 1.45;
@@ -3386,6 +3374,12 @@ button {
   }
 }
 
+@media (max-width: 1100px) {
+  .ms-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 620px) {
   .ms-compose-head {
     flex-direction: column;
@@ -3403,6 +3397,10 @@ button {
   }
   .ms-stage {
     padding: 6px 14px 28px;
+  }
+  .ms-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
   .ms-dock {
     padding: 14px;
@@ -12561,7 +12559,7 @@ button {
   .project-completion-card { min-height: 118px; }
 }
 
-/* AI360 Market — a small catalogue of working outcomes. The warmer storefront
+/* AI360 Tools & Kits — a catalogue of working outcomes. The warmer discovery
    treatment separates things a person can start from work they already own in
    Library, while preserving the same workspace shell and touch targets. */
 .market-container {
@@ -12581,15 +12579,14 @@ button {
 .market-grid,
 .market-empty,
 .market-community-note {
-  width: min(1180px, 100%);
-  margin-inline: auto;
+  width: 100%;
 }
 .market-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(250px, 0.7fr);
   align-items: end;
   gap: clamp(28px, 6vw, 92px);
-  padding-bottom: clamp(28px, 4vw, 52px);
+  padding-bottom: clamp(26px, 3vw, 42px);
 }
 .market-eyebrow {
   display: inline-flex;
@@ -12610,10 +12607,10 @@ button {
   transform: rotate(12deg);
 }
 .market-hero h1 {
-  max-width: 760px;
+  max-width: 680px;
   margin: 12px 0 13px;
   font-family: var(--font-heading);
-  font-size: clamp(43px, 5.2vw, 76px);
+  font-size: clamp(43px, 4.6vw, 68px);
   font-weight: 820;
   letter-spacing: -0.067em;
   line-height: 0.98;
@@ -12651,12 +12648,19 @@ button {
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.market-hero aside b { font-size: 15px; line-height: 1.35; }
-.market-hero aside small { color: var(--grey); font-size: 12px; line-height: 1.5; }
+.market-hero aside ol { display: grid; gap: 12px; margin: 4px 0 0; padding: 0; list-style: none; counter-reset: market-step; }
+.market-hero aside li { position: relative; display: grid; gap: 2px; padding-left: 29px; counter-increment: market-step; }
+.market-hero aside li::before { position: absolute; top: 1px; left: 0; display: grid; width: 20px; height: 20px; place-items: center; border-radius: 50%; background: #f3d6c9; color: #7f3d28; content: counter(market-step); font-size: 10px; font-weight: 850; }
+.market-hero aside b { font-size: 13px; line-height: 1.35; }
+.market-hero aside small { color: var(--grey); font-size: 11.5px; line-height: 1.45; }
 .market-discovery {
   position: sticky;
   z-index: 5;
   top: -1px;
+  display: grid;
+  grid-template-columns: minmax(270px, 0.55fr) minmax(0, 1.45fr);
+  align-items: center;
+  gap: 10px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -12717,7 +12721,7 @@ button {
 .market-categories {
   display: flex;
   gap: 7px;
-  padding-top: 10px;
+  padding-top: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -12747,7 +12751,7 @@ button {
 .market-result-count b { color: var(--black); }
 .market-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
 .market-card {
@@ -12848,6 +12852,13 @@ button {
 .market-community-note h2 { margin: 0 0 7px; font-family: var(--font-heading); font-size: 23px; letter-spacing: -0.025em; }
 .market-community-note p { max-width: 720px; margin: 0; color: var(--grey); font-size: 13px; line-height: 1.6; }
 
+@media (max-width: 1480px) {
+  .market-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  .market-discovery { position: relative; top: auto; grid-template-columns: 1fr; }
+  .market-categories { padding-top: 2px; }
+}
 @media (max-width: 1060px) {
   .market-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -12856,7 +12867,7 @@ button {
   .market-hero { grid-template-columns: 1fr; gap: 22px; }
   .market-hero h1 { font-size: clamp(42px, 10vw, 62px); }
   .market-hero aside { max-width: 560px; }
-  .market-discovery { top: 0; margin-inline: -2px; }
+  .market-discovery { margin-inline: -2px; }
 }
 @media (max-width: 590px) {
   .market-container { padding-inline: 12px; }
