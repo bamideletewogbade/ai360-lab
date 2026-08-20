@@ -81,13 +81,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ? authUser(session.user) : null)
       setLoading(false)
-      router.refresh()
     })
     return () => {
       active = false
       listener.subscription.unsubscribe()
     }
-  }, [configured, router])
+  }, [configured])
 
   const value = useMemo<AuthState>(() => ({
     configured,
