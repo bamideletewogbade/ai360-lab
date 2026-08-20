@@ -140,7 +140,7 @@ export function MobileWorkspaceNav({
                   <span><SheetIcon kind="history" /></span><span><b>Search and recent chats</b><small>Find work or manage a conversation</small></span><i aria-hidden="true">›</i>
                 </button>
                 <button type="button" onClick={() => choose(onSelectMarket)}>
-                  <span><SheetIcon kind="apps" /></span><span><b>Market</b><small>Useful tools and business kits</small></span><i aria-hidden="true">›</i>
+                  <span><SheetIcon kind="apps" /></span><span><b>Tools &amp; Kits</b><small>Help for study, career, creative and business work</small></span><i aria-hidden="true">›</i>
                 </button>
                 <button type="button" onClick={() => choose(onSelectLibrary)}>
                   <span><SheetIcon kind="history" /></span><span><b>Library</b><small>Find everything you have made</small></span><i aria-hidden="true">›</i>

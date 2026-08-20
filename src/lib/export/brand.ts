@@ -69,7 +69,21 @@ export async function writeBrandKit(context: WorkspaceAuthContext, brand: Docume
 
 export async function deleteBrandKit(context: WorkspaceAuthContext) {
   if (!isPostgresConfigured()) return { deleted: false }
-  await getPostgres()`delete from public.lab_brand_kits where workspace_key = ${context.workspace.key}`
+  // "Reset colours" must not discard the pointer to a separately managed
+  // logo. Keep a logo-only row; delete the row only when it owns nothing.
+  await getPostgres().begin(async (tx) => {
+    const [row] = await tx<{ logo_asset_id: string | null }[]>`
+      select logo_asset_id from public.lab_brand_kits
+       where workspace_key = ${context.workspace.key}`
+    if (row?.logo_asset_id) {
+      await tx`
+        update public.lab_brand_kits
+           set primary_color = null, accent_color = null, updated_at = now()
+         where workspace_key = ${context.workspace.key}`
+    } else {
+      await tx`delete from public.lab_brand_kits where workspace_key = ${context.workspace.key}`
+    }
+  })
   return { deleted: true }
 }
 

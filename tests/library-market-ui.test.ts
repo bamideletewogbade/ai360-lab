@@ -7,17 +7,18 @@ const studio = readFileSync(new URL('../src/components/StudioWorkspace.tsx', imp
 const mobileNav = readFileSync(new URL('../src/components/MobileWorkspaceNav.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8')
 
-test('Library and Market remain separate destinations on desktop and mobile', () => {
+test('Library and Tools & Kits remain separate destinations on desktop and mobile', () => {
   assert.match(page, /<span>Library<\/span>/)
-  assert.match(page, /<span>Market<\/span>/)
+  assert.match(page, /<span>Tools &amp; Kits<\/span>/)
   assert.match(mobileNav, /<b>Library<\/b>/)
-  assert.match(mobileNav, /<b>Market<\/b>/)
+  assert.match(mobileNav, /<b>Tools &amp; Kits<\/b>/)
 })
 
 test('a Market choice is handed to the real Studio pack launcher', () => {
   assert.match(page, /setMarketPackRequest/)
   assert.match(page, /launchPackId=\{marketPackRequest\.id\}/)
-  assert.match(studio, /beginProject\(launchPackId\)/)
+  assert.match(page, /launchPackPrompt=\{marketPackRequest\.prompt\}/)
+  assert.match(studio, /beginProject\(launchPackId, launchPackPrompt\)/)
 })
 
 test('Library and Market have explicit laptop-to-phone layout changes', () => {
@@ -26,4 +27,3 @@ test('Library and Market have explicit laptop-to-phone layout changes', () => {
   assert.match(css, /\.outcomes-grid,[\s\S]*?grid-template-columns: minmax\(0, 1fr\)/)
   assert.match(css, /\.outcomes-filter-bar button \{[\s\S]*?min-height: 44px/)
 })
-

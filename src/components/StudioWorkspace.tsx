@@ -257,6 +257,7 @@ export function StudioWorkspace({
   openProjectId = '',
   openProjectSignal = 0,
   launchPackId = 'plan',
+  launchPackPrompt = '',
   launchPackSignal = 0,
   conversations = [],
   onOpenConversation,
@@ -277,6 +278,8 @@ export function StudioWorkspace({
   openProjectSignal?: number
   /** A catalogue choice starts the matching working pack at its brief. */
   launchPackId?: PackId
+  /** Catalogue-specific context, so two experiences can share one engine. */
+  launchPackPrompt?: string
   launchPackSignal?: number
   /**
    * Project chats live in the workspace's conversation store, not here — they
@@ -485,8 +488,8 @@ export function StudioWorkspace({
 
   useEffect(() => {
     if (launchPackSignal <= 0 || !hydrated) return
-    queueMicrotask(() => beginProject(launchPackId))
-  }, [hydrated, launchPackId, launchPackSignal])
+    queueMicrotask(() => beginProject(launchPackId, launchPackPrompt))
+  }, [hydrated, launchPackId, launchPackPrompt, launchPackSignal])
 
   // The sidebar "Projects" entry bumps homeSignal. Pressing the section you are
   // already in should take you to the top of it, which for Projects is the list
@@ -1154,14 +1157,14 @@ export function StudioWorkspace({
     setGuestProjects([])
   }
 
-  function beginProject(packId: PackId = 'plan') {
+  function beginProject(packId: PackId = 'plan', starterPrompt = '') {
     const pack = findPack(packId) ?? PACKS[0]
     setProject(null)
     setView('kickoff')
     setSelectedPackId(pack.id)
     setDraftId(requestId())
     setIntake(EMPTY_INTAKE)
-    setBriefInput('')
+    setBriefInput(starterPrompt)
     setBriefTurns([])
     setBuildSpecialists(initialProjectSpecialists(pack))
     setBuildSectionsCount(0)

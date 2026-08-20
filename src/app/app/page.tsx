@@ -206,12 +206,12 @@ const MODE_META: Record<Experience, {
     intro: 'Every document, image, video and project outcome created across your workspace, kept together and easy to find again.',
   },
   market: {
-    label: 'Market',
-    short: 'Useful tools and business kits',
+    label: 'Tools & Kits',
+    short: 'Ready-to-use help for work and life',
     description: 'Practical AI360 workflows ready to use',
-    eyebrow: 'AI360 Market',
-    heading: <>Useful work,<br />ready when you are.</>,
-    intro: 'Choose a practical tool or business kit and continue the work privately inside a Project.',
+    eyebrow: 'AI360 Tools & Kits',
+    heading: <>What do you need<br />to get done?</>,
+    intro: 'Choose practical help for study, career, creative, personal or business work and continue privately inside a Project.',
   },
   media: {
     label: 'Media Studio',
@@ -422,7 +422,7 @@ function LabWorkspace({
   /** Which project to reopen when leaving one of its chats. */
   const [openProjectRequest, setOpenProjectRequest] = useState({ id: '', signal: 0 })
   /** A Market item opens the real Studio pack behind it, never a dead detail page. */
-  const [marketPackRequest, setMarketPackRequest] = useState<{ id: PackId; signal: number }>({ id: 'plan', signal: 0 })
+  const [marketPackRequest, setMarketPackRequest] = useState<{ id: PackId; prompt: string; signal: number }>({ id: 'plan', prompt: '', signal: 0 })
   const [helpOpen, setHelpOpen] = useState(false)
   const [showReturnToLatest, setShowReturnToLatest] = useState(false)
   const [copiedPromptId, setCopiedPromptId] = useState('')
@@ -1646,8 +1646,8 @@ function LabWorkspace({
     setSidebarOpen(false)
   }
 
-  function useMarketPack(packId: PackId) {
-    setMarketPackRequest((current) => ({ id: packId, signal: current.signal + 1 }))
+  function useMarketPack(packId: PackId, starterPrompt: string) {
+    setMarketPackRequest((current) => ({ id: packId, prompt: starterPrompt, signal: current.signal + 1 }))
     selectExperience('studio')
   }
 
@@ -1703,7 +1703,7 @@ function LabWorkspace({
     : experience === 'media'
       ? 'Media Studio'
       : experience === 'market'
-        ? 'Market'
+        ? 'Tools & Kits'
       : experience === 'apps'
         ? 'Library'
         : 'Chats'
@@ -1712,7 +1712,7 @@ function LabWorkspace({
     : experience === 'media'
       ? 'Create images and short video'
       : experience === 'market'
-        ? 'Useful tools and business kits'
+        ? 'Ready-to-use help for work and life'
       : experience === 'apps'
         ? 'Everything you have made'
         : experience === 'agent'
@@ -1801,7 +1801,7 @@ function LabWorkspace({
             <span className="nav-menu-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 9h16l-1-5H5L4 9Z"/><path d="M5 9v11h14V9M9 20v-6h6v6"/><path d="M4 9a3 3 0 0 0 5 2 3 3 0 0 0 6 0 3 3 0 0 0 5-2"/></svg>
             </span>
-            <span>Market</span>
+            <span>Tools &amp; Kits</span>
           </button>
         </nav>
 
@@ -1907,6 +1907,7 @@ function LabWorkspace({
             openProjectId={openProjectRequest.id}
             openProjectSignal={openProjectRequest.signal}
             launchPackId={marketPackRequest.id}
+            launchPackPrompt={marketPackRequest.prompt}
             launchPackSignal={marketPackRequest.signal}
             conversations={projectConversations}
             onOpenConversation={openProjectChat}

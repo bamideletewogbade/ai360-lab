@@ -131,13 +131,15 @@ export function BrandSettings() {
     setSaveState('saving')
     setErrorText('')
     try {
-      await fetch('/api/brand-kit', { method: 'DELETE' })
+      const response = await fetch('/api/brand-kit', { method: 'DELETE' })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Your brand kit could not be cleared.')
       setPrimary(DEFAULT_PRIMARY)
       setAccent(DEFAULT_ACCENT)
       setHasKit(false)
       setSaveState('idle')
-    } catch {
-      setErrorText('Your brand kit could not be cleared.')
+    } catch (cause) {
+      setErrorText(cause instanceof Error ? cause.message : 'Your brand kit could not be cleared.')
       setSaveState('error')
     }
   }

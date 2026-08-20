@@ -8,20 +8,22 @@ type Category = 'all' | MarketCategory
 
 const CATEGORIES: Array<{ id: Category; label: string }> = [
   { id: 'all', label: 'Everything' },
-  { id: 'start', label: 'Start a business' },
-  { id: 'grow', label: 'Grow and sell' },
-  { id: 'create', label: 'Create content' },
-  { id: 'decide', label: 'Research and decide' },
+  { id: 'study', label: 'Study & school' },
+  { id: 'career', label: 'Career' },
+  { id: 'create', label: 'Create' },
+  { id: 'business', label: 'Business' },
+  { id: 'decide', label: 'Research & decisions' },
 ]
 
 function ProductIcon({ product }: { product: MarketProduct }) {
-  if (product.category === 'start') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9l7-5 7 5v10" /><path d="M9 19v-5h6v5M3 19h18" /></svg>
-  if (product.category === 'grow') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 17 5-5 4 3 7-8" /><path d="M15 7h5v5" /></svg>
+  if (product.category === 'study') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-5 9 5-9 5Z" /><path d="M7 12v5c3 2 7 2 10 0v-5M21 9v6" /></svg>
+  if (product.category === 'career') return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V4h6v3M3 12h18M10 12v2h4v-2" /></svg>
   if (product.category === 'create') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h11l3 3V20.5H5Z" /><path d="M15.5 3.5v4h3.5M8 12h8M8 16h6" /></svg>
+  if (product.category === 'business') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9l7-5 7 5v10" /><path d="M9 19v-5h6v5M3 19h18" /></svg>
   return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4.5 4.5M8 10.5h5M10.5 8v5" /></svg>
 }
 
-function ProductCard({ product, onUse }: { product: MarketProduct; onUse: (packId: PackId) => void }) {
+function ProductCard({ product, onUse }: { product: MarketProduct; onUse: (packId: PackId, starterPrompt: string) => void }) {
   const pack = findPack(product.packId)
   if (!pack) return null
   return (
@@ -41,13 +43,13 @@ function ProductCard({ product, onUse }: { product: MarketProduct; onUse: (packI
       </ul>
       <footer>
         <span><b>{packCredits(pack)}</b> credits · by AI360</span>
-        <button type="button" onClick={() => onUse(product.packId)}>Use this {product.format === 'Quick tool' ? 'tool' : 'kit'} <span aria-hidden="true">→</span></button>
+        <button type="button" onClick={() => onUse(product.packId, product.starterPrompt)}>Use this {product.format.endsWith('tool') ? 'tool' : 'kit'} <span aria-hidden="true">→</span></button>
       </footer>
     </article>
   )
 }
 
-export function Market({ onUsePack }: { onUsePack: (packId: PackId) => void }) {
+export function Market({ onUsePack }: { onUsePack: (packId: PackId, starterPrompt: string) => void }) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category>('all')
   const visible = useMemo(() => filterMarketProducts(MARKET_PRODUCTS, category, query), [category, query])
@@ -56,11 +58,11 @@ export function Market({ onUsePack }: { onUsePack: (packId: PackId) => void }) {
     <main className="market-container">
       <section className="market-hero">
         <div>
-          <span className="market-eyebrow"><i /> AI360 Market</span>
-          <h1>Useful work,<br />ready when you are.</h1>
-          <p>Practical tools and guided business kits made for getting real work done—not a shelf of demos.</p>
+          <span className="market-eyebrow"><i /> AI360 Tools &amp; Kits</span>
+          <h1>What do you need<br />to get done?</h1>
+          <p>Practical help for studying, starting a career, creating, making decisions and growing a business.</p>
         </div>
-        <aside aria-label="Market promise">
+        <aside aria-label="Tools and kits promise">
           <span>Built by AI360</span>
           <b>Every item here works today.</b>
           <small>Choose one, answer a few useful questions and continue in a private Project.</small>
@@ -70,11 +72,11 @@ export function Market({ onUsePack }: { onUsePack: (packId: PackId) => void }) {
       <section className="market-discovery" aria-label="Find a tool or kit">
         <label className="market-search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4.5 4.5" /></svg>
-          <span className="sr-only">Search the Market</span>
+          <span className="sr-only">Search tools and kits</span>
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="What do you need to get done?" />
-          {query ? <button type="button" onClick={() => setQuery('')} aria-label="Clear Market search">×</button> : <kbd>⌕</kbd>}
+          {query ? <button type="button" onClick={() => setQuery('')} aria-label="Clear tools and kits search">×</button> : <kbd>⌕</kbd>}
         </label>
-        <div className="market-categories" aria-label="Market categories">
+        <div className="market-categories" aria-label="Tools and kits categories">
           {CATEGORIES.map((item) => (
             <button key={item.id} type="button" className={category === item.id ? 'active' : ''} aria-pressed={category === item.id} onClick={() => setCategory(item.id)}>{item.label}</button>
           ))}
@@ -95,8 +97,8 @@ export function Market({ onUsePack }: { onUsePack: (packId: PackId) => void }) {
       )}
 
       <section className="market-community-note">
-        <span>Community products are next</span>
-        <div><h2>A trusted place to build and earn.</h2><p>Creator-made agents, prompt packs and simple tools will join the Market after review, safe execution and payouts are ready. The first release stays small so everything people see is useful.</p></div>
+        <span>Creator marketplace comes next</span>
+        <div><h2>A trusted place to build and earn.</h2><p>Tools &amp; Kits starts with working experiences built by AI360. Creator-made agents, prompt packs and simple tools can join a future marketplace after review, safe execution and payouts are ready.</p></div>
       </section>
     </main>
   )

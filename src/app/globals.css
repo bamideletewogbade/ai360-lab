@@ -2668,6 +2668,24 @@ button {
   scroll-snap-type: x proximity;
   margin-inline: -4px;
   padding-inline: 4px;
+  /* A hidden scrollbar with no other cue reads as "that's all of them" — the
+     fade at each edge is the only sign more starters sit off-screen. Harmless
+     on a row that already fits: with nothing to scroll, the fade lands on
+     4px of padding no one notices. */
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 12px,
+    black calc(100% - 20px),
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 12px,
+    black calc(100% - 20px),
+    transparent
+  );
 }
 .ms-starters::-webkit-scrollbar {
   display: none;
@@ -3057,9 +3075,27 @@ button {
   position: relative;
   min-height: 0;
   flex: 0 0 auto;
+  /* A shape nobody asked for: falls back to 4:3 only for a ratio this list
+     does not yet know, never for the formats the studio actually offers. */
   aspect-ratio: 4 / 3;
   overflow: hidden;
   background: var(--warm-white);
+}
+/* The card mirrors the shape it was actually made in — cover-cropping a 9:16
+   Status shot into a stubby 4:3 box would hide the top and bottom of the
+   person's own result, in the exact format ("Status, TikTok") this studio
+   sells. */
+.ms-card-media[data-ratio="1:1"] {
+  aspect-ratio: 1 / 1;
+}
+.ms-card-media[data-ratio="9:16"] {
+  aspect-ratio: 9 / 16;
+}
+.ms-card-media[data-ratio="16:9"] {
+  aspect-ratio: 16 / 9;
+}
+.ms-card-media[data-ratio="2:3"] {
+  aspect-ratio: 2 / 3;
 }
 .ms-card-media img,
 .ms-card-media video {
@@ -12737,8 +12773,10 @@ button {
   background: var(--market-accent);
   content: "";
 }
-.market-card-grow { --market-accent: #50795f; --market-soft: #eaf4ed; }
+.market-card-study { --market-accent: #a25b2a; --market-soft: #fff0df; }
+.market-card-career { --market-accent: #50795f; --market-soft: #eaf4ed; }
 .market-card-create { --market-accent: #7662b2; --market-soft: #f0edfb; }
+.market-card-business { --market-accent: #b6503e; --market-soft: #fcebe7; }
 .market-card-decide { --market-accent: #426f91; --market-soft: #eaf3f8; }
 .market-card:hover {
   border-color: color-mix(in srgb, var(--market-accent) 38%, var(--line));
