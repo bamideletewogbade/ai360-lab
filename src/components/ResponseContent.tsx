@@ -130,38 +130,46 @@ function CodeBlock({ children, className }: { children: ReactNode; className?: s
   )
 }
 
+const markdownComponents = {
+  h1: ({ children }: { children?: ReactNode }) => <h2>{children}</h2>,
+  h2: ({ children }: { children?: ReactNode }) => <h2>{children}</h2>,
+  h3: ({ children }: { children?: ReactNode }) => <h3>{children}</h3>,
+  h4: ({ children }: { children?: ReactNode }) => <h3>{children}</h3>,
+  a: ({ children, href }: { children?: ReactNode; href?: string }) => (
+    <a href={href} target="_blank" rel="noreferrer">
+      {children}
+      <ArrowUpRightIcon className="external-mark" />
+    </a>
+  ),
+  blockquote: ({ children }: { children?: ReactNode }) => (
+    <blockquote>{children}</blockquote>
+  ),
+  pre: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  code: ({ children, className }: { children?: ReactNode; className?: string }) => {
+    const isInline = !className && typeof children === 'string' && !children.includes('\n')
+    if (isInline) {
+      return <code className="inline-code">{children}</code>
+    }
+    return <CodeBlock className={className}>{children}</CodeBlock>
+  },
+  table: ({ children }: { children?: ReactNode }) => <div className="table-scroll"><table>{children}</table></div>,
+}
+
+/** The shared markdown pipeline. Reused wherever generated content needs the
+ * same code blocks, tables and links, whether flat (chat) or split into
+ * sections (a project document). */
+export function MarkdownBody({ content }: { content: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {polishProse(content)}
+    </ReactMarkdown>
+  )
+}
+
 export function ResponseContent({ content }: { content: string }) {
   return (
     <div className="response-content">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          h1: ({ children }) => <h2>{children}</h2>,
-          h2: ({ children }) => <h2>{children}</h2>,
-          h3: ({ children }) => <h3>{children}</h3>,
-          h4: ({ children }) => <h3>{children}</h3>,
-          a: ({ children, href }) => (
-            <a href={href} target="_blank" rel="noreferrer">
-              {children}
-              <ArrowUpRightIcon className="external-mark" />
-            </a>
-          ),
-          blockquote: ({ children }) => (
-            <blockquote>{children}</blockquote>
-          ),
-          pre: ({ children }) => <>{children}</>,
-          code: ({ children, className }) => {
-            const isInline = !className && typeof children === 'string' && !children.includes('\n')
-            if (isInline) {
-              return <code className="inline-code">{children}</code>
-            }
-            return <CodeBlock className={className}>{children}</CodeBlock>
-          },
-          table: ({ children }) => <div className="table-scroll"><table>{children}</table></div>,
-        }}
-      >
-        {polishProse(content)}
-      </ReactMarkdown>
+      <MarkdownBody content={content} />
     </div>
   )
 }

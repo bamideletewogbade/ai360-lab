@@ -12,6 +12,20 @@ export type ChangelogRelease = {
 
 export const CHANGELOG_RELEASES: readonly ChangelogRelease[] = [
   {
+    id: "document-reader",
+    date: "2026-08-21",
+    displayDate: "21 August 2026",
+    status: "Now",
+    title: "Long documents are easier to scan",
+    summary:
+      "A generated document like Research findings now opens as short, collapsible sections instead of one long scroll.",
+    changes: [
+      "Jump straight to a section from a row of labelled tabs at the top of the document.",
+      "Each section opens and closes on its own, so you can scan headings before reading in full.",
+      "A read-time and section count replace a raw character count.",
+    ],
+  },
+  {
     id: "answer-verification",
     date: "2026-08-20",
     displayDate: "20 August 2026",

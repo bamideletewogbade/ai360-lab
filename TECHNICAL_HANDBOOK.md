@@ -45,7 +45,12 @@ current-facts question gets verified and visibly receipted instead of either
 being assumed current or billed as Research. See `DECISIONS.md` for each. On
 2026-08-21 the Library entry was removed from the desktop side navigation
 (commented out, not deleted) pending a clearer use case; the module itself is
-unchanged.
+unchanged. Also on 2026-08-21, a project document (Research findings and
+similar long outputs) renders as a rail of collapsible sections instead of
+one continuous scroll, using the new `motion` package for the collapse
+animation, the active-section highlight and scroll-spy; see
+`src/components/DocumentReader.tsx` and the 2026-08-21 decision in
+`DECISIONS.md`.
 
 When documents disagree, use this authority order:
 

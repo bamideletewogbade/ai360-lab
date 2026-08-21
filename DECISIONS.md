@@ -1,5 +1,51 @@
 # Decision and incident log
 
+## 2026-08-21 · Decision · A project document is a rail of collapsible sections, not one long scroll
+
+**Why.** A generated document such as Research findings rendered as one
+continuous flow of headings and paragraphs, however long the model wrote it.
+The only way to see its shape was to scroll the whole thing, which read as
+"a lot of information" rather than a structured piece of work.
+
+**What.** `src/lib/markdown-sections.ts` (`splitMarkdownSections`) splits a
+document on its top-level (`##`) headings; anything before the first heading
+becomes an untitled lede, always shown. `src/components/DocumentReader.tsx`
+renders that lede, a horizontal rail of section pills, and each section as an
+independently collapsible block, defaulting to only the first section open.
+A document with fewer than two named sections falls back to the plain
+`ResponseContent` renderer unchanged, so the rail and accordion chrome never
+appear for a short note. `ResponseContent.tsx` was refactored to export a
+`MarkdownBody` component (the shared `ReactMarkdown` pipeline: code blocks,
+tables, links) so both the flat and sectioned renderers use exactly the same
+markdown handling instead of two copies drifting apart.
+
+**Why Motion.** Added the `motion` package (`motion/react`, formerly Framer
+Motion) for three things plain CSS handles poorly: animating a section's
+height from `0` to `auto` on expand/collapse (CSS cannot transition to
+`auto`), a `layoutId`-based sliding highlight behind the active rail pill,
+and `onViewportEnter` to drive scroll-spy on the rail as the reader scrolls
+past section headers, which works correctly against whatever ancestor
+actually owns the scrollbar (`.studio-main`, not the window) because
+`IntersectionObserver` accounts for clipping ancestors automatically.
+
+**Why progress is section-based, not pixel-based.** `useScroll`'s pixel
+tracking needs the exact scrollable ancestor passed as its `container`
+option; that ancestor differs by where the reader is opened and would have
+meant threading a ref down through `StudioWorkspace`. Driving the progress
+bar from "how many of N sections has the reader reached" instead is simpler,
+has no container-detection failure mode, and is arguably the more honest
+number for an accordion anyway.
+
+**Guardrail.** `tests/markdown-sections.test.ts` locks the splitting rules: a
+heading-looking line inside a fenced code block must never be treated as a
+section break, `h1`/`h3` must never split a section (only `##`), and
+duplicate heading titles must get distinct ids.
+
+**Revisit if.** A document commonly needs three levels of structure (h2 and
+h3 both meaningful enough to collapse independently) rather than two, or the
+default "first section open" turns out wrong against how people actually read
+these documents.
+
 ## 2026-08-21 · Decision · Library stays off the side navigation for now
 
 **What.** The Library entry was removed from the desktop side navigation in

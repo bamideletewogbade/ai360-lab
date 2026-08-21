@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ArrowUpRightIcon } from '@/components/ArrowUpRightIcon'
-import { ResponseContent } from '@/components/ResponseContent'
+import { DocumentReader } from '@/components/DocumentReader'
 import { ProjectStageNavigator } from '@/components/ProjectStageNavigator'
 import { ProjectKnowledge } from '@/components/ProjectKnowledge'
 import { ProjectHeader } from '@/components/ProjectHeader'
@@ -1787,9 +1787,8 @@ export function StudioWorkspace({
                           <div className="project-document">
                             <div className="project-document-head">
                               <span><b>{asset.title}</b><small>{asset.purpose}</small></span>
-                              <span>{asset.content.length.toLocaleString()} characters</span>
                             </div>
-                            <ResponseContent content={asset.content} />
+                            <DocumentReader content={asset.content} />
                           </div>
                         )}
                         {media ? (

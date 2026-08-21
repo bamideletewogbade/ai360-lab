@@ -12562,6 +12562,54 @@ button {
 .project-document .response-content { max-width: 760px; margin: 0 auto; padding: clamp(20px, 4vw, 42px); font-size: 14px; line-height: 1.72; }
 .project-document .response-content h3 { margin-top: 2em; scroll-margin-top: 90px; }
 .project-document .response-content p, .project-document .response-content li { max-width: 72ch; }
+
+/* Document reader: a long generated document broken into a rail of jump
+   links and collapsible sections instead of one continuous scroll. */
+.doc-progress-track { height: 3px; background: var(--line); overflow: hidden; }
+.doc-progress-fill { height: 100%; width: 100%; transform-origin: 0 50%; background: var(--clay); }
+.doc-lede { border-bottom: 1px solid var(--line); background: var(--warm-white); }
+.doc-rail-row {
+  display: flex; align-items: center; gap: 10px;
+  max-width: 760px; margin: 0 auto; padding: 16px clamp(20px, 4vw, 42px) 0;
+}
+.doc-rail { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.doc-rail::-webkit-scrollbar { display: none; }
+.doc-rail-pill {
+  position: relative; flex: 0 0 auto; display: flex; align-items: center;
+  padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--white); color: var(--grey); font-size: 12px; font-weight: 650;
+  cursor: pointer; transition: color 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.doc-rail-pill:hover { border-color: var(--line-dark); color: var(--charcoal); }
+.doc-rail-pill.active { color: var(--white); border-color: transparent; }
+.doc-rail-pill-bg { position: absolute; inset: 0; border-radius: 999px; background: var(--black); z-index: 0; }
+.doc-rail-pill-label { position: relative; z-index: 1; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.doc-rail-pill-label em { font-style: normal; opacity: 0.55; font-size: 10px; }
+.doc-toggle-all {
+  flex: 0 0 auto; padding: 7px 10px; border: 0; background: none; color: var(--grey);
+  font-size: 12px; font-weight: 650; cursor: pointer; text-decoration: underline;
+  text-underline-offset: 3px; text-decoration-color: var(--line-dark);
+}
+.doc-toggle-all:hover { color: var(--charcoal); }
+.doc-meta {
+  display: flex; gap: 8px; max-width: 760px; margin: 0 auto;
+  padding: 10px clamp(20px, 4vw, 42px) 0; color: var(--soft-grey); font-size: 11px;
+}
+.doc-sections { padding-bottom: 8px; }
+.doc-section { max-width: 760px; margin: 0 auto; padding: 0 clamp(20px, 4vw, 42px); }
+.doc-section + .doc-section { border-top: 1px solid var(--line); }
+.doc-section-head {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 16px 0;
+  border: 0; background: none; text-align: left; cursor: pointer;
+}
+.doc-section-index { color: var(--soft-grey); font-size: 11px; font-weight: 650; letter-spacing: 0.02em; }
+.doc-section-title { flex: 1; min-width: 0; color: var(--black); font-size: 14px; font-weight: 750; }
+.doc-section-chevron { color: var(--soft-grey); font-size: 16px; display: inline-flex; }
+.doc-section-head:hover .doc-section-title { color: var(--clay); }
+.doc-section-body-wrap { overflow: hidden; }
+.doc-section .doc-section-body { max-width: none; margin: 0; padding: 0 0 20px; font-size: 14px; line-height: 1.72; }
+.doc-section-body > :first-child { margin-top: 0; }
+
 .project-stage-section[data-project-stage="build"] .project-knowledge { margin-top: 0; }
 .studio-intake.build-active { align-items: stretch; }
 .studio-intake.build-active .build-intro h1 { max-width: 680px; font-size: clamp(38px, 4.25vw, 58px); }
@@ -12576,6 +12624,8 @@ button {
   .project-document-head { display: block; }
   .project-document-head > span:last-child { display: block; margin-top: 8px; }
   .project-document .response-content { padding: 20px 16px 28px; font-size: 14px; }
+  .doc-rail-row, .doc-meta, .doc-section { padding-left: 16px; padding-right: 16px; }
+  .doc-rail-pill-label em { display: none; }
   .project-activity-details .project-build-record { grid-template-columns: 1fr; }
 }
 
