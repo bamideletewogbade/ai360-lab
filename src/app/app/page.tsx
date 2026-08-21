@@ -1794,6 +1794,7 @@ function LabWorkspace({
             <span>Media Studio</span>
           </button>
 
+          {/* Library nav item hidden for v1 — may bring back later.
           <button
             type="button"
             className={`nav-menu-item${experience === 'apps' ? ' active' : ''}`}
@@ -1804,6 +1805,7 @@ function LabWorkspace({
             </span>
             <span>Library</span>
           </button>
+          */}
 
           <button
             type="button"
