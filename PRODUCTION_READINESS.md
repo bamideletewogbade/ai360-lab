@@ -1,6 +1,6 @@
 # AI360 production readiness
 
-Last reviewed: 2026-08-15
+Last reviewed: 2026-08-21
 
 This document is the release truth for AI360. A feature is only marked
 ready when its code, configuration, external service and failure path have been
@@ -19,6 +19,33 @@ video reliability fixes deployed pending a final render retest. Unrestricted
 public launch remains blocked by shared rate limiting, durable background
 replay, external monitoring, backup restoration, load testing and the unproven
 payment failure paths (delayed notification, reversal, refund).
+
+Three further capabilities shipped 2026-08-20: Tools & Kits (the renamed,
+job-organised discovery catalogue), Brand Kit (workspace-wide knowledge and
+logo, applied to generated documents) and answer verification (chat verifies
+and visibly receipts time-sensitive claims instead of assuming freshness).
+The Library entry was removed from the desktop side navigation on 2026-08-21,
+commented out rather than deleted.
+
+## Audit snapshot: 2026-08-21
+
+Scope: full local verification of everything shipped since the 2026-08-16
+snapshot (Tools & Kits, Brand Kit, answer verification, two data-access
+closes), run end to end against the live production database and deployment.
+
+- `npm test`: 359/359 pass.
+- `npm run lint`: pass.
+- `npm run build`: compiles without errors on Next.js 16.3.
+- `npm run smoke:deploy -- https://ai360.africa`: 59/59 pass (health,
+  readiness, database connectivity, all public pages, security headers,
+  `/app` noindex, `robots.txt`/`sitemap.xml`/`llms.txt`/`manifest.webmanifest`).
+- `npm run db:postgres:verify`: 37 tables, row-level security on every one,
+  zero grants to `anon`, 22 migrations applied through
+  `0022_cost_ledger_privileges.sql`.
+- `npm run prod:check`: READY. Email, billing-adjacent and browser-pilot flags
+  remain intentionally disabled and reported as warnings.
+- Brand Kit (`0020`/`0021`), the cost-ledger privilege close (`0022`) and the
+  Tools & Kits rename are live in production; recorded in `DECISIONS.md`.
 
 ## Audit snapshot: 2026-08-16
 
@@ -199,6 +226,9 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
 | Error monitoring                   | Sentry (server + browser errors, traces, warn/error logs) and Axiom (structured log shipping) wired through Next.js instrumentation; console and `lab_usage_events` remain                                            | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` (provisioned), `SENTRY_AUTH_TOKEN` for source maps, and `AXIOM_TOKEN` / `AXIOM_DATASET` in the hosting environment | DSN provisioned; live verification pending a first event via `/sentry-example-page`                                                            | Configured, verify live              |
 | Security headers                   | Hardened for Supabase Auth and hosted providers                                                                                                                                                                    | Production domains                                                                                     | Local smoke checks pass; production header scan pending                                                                                        | Implemented                          |
 | Dependency security                | Production dependency audit clean                                                                                                                                                                                  | Regular update process                                                                                 | `npm audit --omit=dev` passes                                                                                                                  | Ready                                |
+| Tools & Kits (discovery catalogue) | 17 listings across 11 project engines, organised by job (`src/lib/market-catalog.ts`); every listing carries the chosen intent into its Project brief                                                             | None                                                                                                    | `tests/market-catalog.test.ts` asserts every listing resolves to a real, deliverable-producing pack                                            | Live                                  |
+| Brand Kit (knowledge and logo)     | Workspace-wide brand knowledge and logo, applied to generated documents; logo reuses the private asset pipeline; colours optional                                                                                 | None                                                                                                    | `tests/brand-update-contract.test.ts`, `tests/image-dimensions.test.ts` pass; migrations `0020`/`0021` applied and RLS-verified                | Live                                  |
+| Answer verification (grounding)    | Freshness split from deep research; a required-freshness answer buffers until a source is found and is withheld, not guessed, if none is; a receipt line shows the check to the person                           | None                                                                                                    | `tests/context-engineering.test.ts` covers the freshness classifier; production behaviour not yet observed against real query volume           | Live, needs live-traffic review       |
 
 ## Architecture boundary
 
@@ -225,9 +255,10 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
 - [x] Create the Supabase production project in the approved region.
 - [ ] Keep the project spend cap enabled and enforce MFA for administrators.
 - [ ] Rotate the database password used during initial setup.
-- [x] Apply the migration sequence through `0017_chat_daily_cap.sql` using the
-      direct migration URL. Verified with `npm run db:postgres:verify`: RLS on
-      every table and zero grants to the anon role.
+- [x] Apply the migration sequence through `0022_cost_ledger_privileges.sql`
+      using the direct migration URL. Verified with
+      `npm run db:postgres:verify`: RLS on every table (37) and zero grants to
+      the anon role.
 - [x] Percent-encode reserved characters in the database password. The password
       contains a literal `@` and must be written as `%40` in any connection URL.
 - [x] Connect through Supabase's shared session pooler (port 5432). Verified

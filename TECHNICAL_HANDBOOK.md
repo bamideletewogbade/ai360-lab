@@ -4,7 +4,7 @@ For unfinished brief recovery, shared intent routing, African connectivity const
 
 For the layer-by-layer path from a person’s words to a checked result, read [CONTEXT_ENGINEERING.md](./CONTEXT_ENGINEERING.md).
 
-Last reviewed: 2026-08-15
+Last reviewed: 2026-08-21
 
 This is the canonical entry point for engineers and operators picking up AI360
 Lab. It explains what the product is, how the system is divided, how work moves
@@ -35,6 +35,17 @@ Unrestricted public launch remains gated by shared rate limiting, durable
 background replay, external monitoring and the unproven payment failure paths
 (delayed notification, reversal, refund). The exact checklist lives in
 [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md).
+
+Three further capabilities shipped 2026-08-20: the discovery catalogue was
+renamed from "Market" to **Tools & Kits** and reorganised by job rather than
+category; a workspace can now hold its own **Brand Kit** (knowledge and logo,
+both workspace-wide) and apply it to generated documents; and chat now
+separates a short freshness check from the metered Research workflow, so a
+current-facts question gets verified and visibly receipted instead of either
+being assumed current or billed as Research. See `DECISIONS.md` for each. On
+2026-08-21 the Library entry was removed from the desktop side navigation
+(commented out, not deleted) pending a clearer use case; the module itself is
+unchanged.
 
 When documents disagree, use this authority order:
 
@@ -154,6 +165,23 @@ a model route. Current-information work can use server-side search tools.
 Provider keys and provider routing policy stay on the server. Streams carry
 request references so a visible failure can be matched to redacted logs.
 
+### Answer verification
+
+A chat request first passes through `freshnessForPrompt`, which classifies it
+`off`, `auto` or `required`. `off` and `auto` proceed like any other chat
+turn, with live tools offered when they might help. `required` covers prompts
+that depend on mutable real-world facts (a price, a law, a current
+officeholder, an availability question); those turns buffer their reply until
+at least one supporting source is found, and if none is found the person is
+told the claim could not be verified rather than shown an unverified answer.
+A separate `deepResearch` classification decides whether the metered Research
+workflow is entered at all: a short current-facts question stays inside an
+ordinary chat turn and is never billed as Research. The stream carries a
+`grounding` event (`checking`, `verified`, `not_needed`, `unavailable`) and
+the interface shows a receipt line under the answer, so the check is visible
+to the person and not only in server logs. See the 2026-08-20 decision in
+`DECISIONS.md`.
+
 ### Agent runtime
 
 The agent plans, executes, synthesizes, verifies and may revise within explicit
@@ -184,6 +212,16 @@ run events.
 The pilot remains disabled until every browser environment value is present.
 It is not yet a model tool and it cannot click, type, upload, submit, pay or use
 the customer's desktop. See `BROWSER_COMPUTER_USE_IMPLEMENTATION_PLAN.md`.
+
+### Discovery (Tools & Kits)
+
+The `apps` experience (label: Tools & Kits, `src/lib/market-catalog.ts`) is the
+plain-language entry point into Studio: a person picks a recognisable job from
+`MARKET_PRODUCTS`, and the choice opens the matching Project engine with their
+stated intent already carried into the brief. Every listing maps to one of 11
+working engines (`packId`); `tests/market-catalog.test.ts` asserts no listing
+is decorative. The catalogue was renamed from "Market" on 2026-08-20 because
+nothing on the page is bought or sold; see `DECISIONS.md`.
 
 ### Studio production
 
@@ -243,6 +281,19 @@ contracts rather than adding provider-shaped fields to the UI.
 A payment redirect or client response never grants credits. Pack runs still
 need durable run IDs and event persistence before a disconnected browser can
 recover their final result.
+
+### Brand Kit
+
+A workspace can hold its own brand knowledge (uploaded documents, extracted to
+text) and a logo, both scoped to the workspace rather than one project or
+conversation, so the same identity applies across every document AI360
+generates for it. The logo is stored as an ordinary private asset
+(`lab_assets`) and referenced by ID from the brand kit row; brand colours are
+optional. `src/lib/export/brand.ts` and `src/lib/export/render.ts` apply
+knowledge, logo and colours when a document is exported, and
+`src/lib/export/image-dimensions.ts` reads a logo's real pixel dimensions from
+its file header so it embeds at the correct aspect ratio. See the 2026-08-20
+decision in `DECISIONS.md`.
 
 ### Credits
 
@@ -306,6 +357,11 @@ Supabase Postgres is the only application database. The ordered migrations are:
 15. `0015_credit_release_integrity.sql`
 16. `0016_supabase_auth.sql`
 17. `0017_chat_daily_cap.sql`
+18. `0018_project_conversations.sql`
+19. `0019_cost_ledger_view.sql`
+20. `0020_brand_kits.sql`
+21. `0021_brand_knowledge_and_logo.sql`
+22. `0022_cost_ledger_privileges.sql`
 
 Use `DATABASE_URL` for the Hostinger runtime and `DIRECT_URL` for migrations.
 The Hostinger runtime should use the Supabase shared session pooler on port

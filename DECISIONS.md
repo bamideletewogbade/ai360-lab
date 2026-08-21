@@ -1,5 +1,138 @@
 # Decision and incident log
 
+## 2026-08-21 · Decision · Library stays off the side navigation for now
+
+**What.** The Library entry was removed from the desktop side navigation in
+`src/app/app/page.tsx`. The button is commented out, not deleted, and the
+`apps` experience, its route handling and `Library.tsx` itself are unchanged.
+Mobile navigation still exposes Library.
+
+**Why.** The module is being set aside pending a clearer use case rather than
+expanded on. Keeping the code in place, only hidden, means it can be restored
+without rebuilding it once that use case is defined.
+
+**Revisit if.** A concrete Library use case is defined, or usage data on the
+mobile entry point suggests the desktop entry should return.
+
+## 2026-08-20 · Decision · Discovery renamed from Market to Tools & Kits
+
+**Why.** "Market" reads as a storefront. Nothing on the page is bought or
+sold: every listing opens a working Project engine directly. The name
+promised commerce that does not exist yet, and commerce is a separate, later
+idea (reviewed creator-made agents, prompt packs and tools), so "Market" is
+reserved for that instead of spent on the current catalogue.
+
+**What.** `src/lib/market-catalog.ts` (`MARKET_PRODUCTS`) now organises 17
+listings by job rather than by category: study and school, career, create and
+business. Every listing maps to one of 11 project engines (`packId`) that
+already run end to end, verified by counting distinct `packId` values against
+`MARKET_PRODUCTS.length`. The UI component and its filters
+(`src/components/Market.tsx`, `src/lib/library-filter.ts`) kept their internal
+names; only the surfaced label and framing changed.
+
+**Guardrail.** A listing must resolve to a real engine before it is added to
+the catalogue. `tests/market-catalog.test.ts` asserts every product's pack
+exists and produces at least one deliverable, so a decorative or dead-end
+listing fails the suite.
+
+**Revisit if.** A genuine creator-commerce layer is built. At that point
+"Market" becomes available again for the thing it originally implied.
+
+## 2026-08-20 · Decision · Brand Kit: workspace-wide knowledge, and a logo that does not require colours
+
+**Why.** A workspace's brand voice and facts are true across every
+conversation, not one project, so scoping brand knowledge to a project would
+mean re-entering the same context repeatedly. Separately, the original
+brand-kit table required both `primary_color` and `accent_color`; a workspace
+that only had a logo and no defined colours was an invalid row, which was
+never actually true of how people set up a brand.
+
+**What.** Migration `0021_brand_knowledge_and_logo.sql` adds
+`lab_brand_knowledge`, keyed by `workspace_key` (not project), with the same
+row-level-security shape as `lab_project_files`. A workspace's logo is stored
+as an ordinary `lab_assets` row (`asset_kind = 'upload'`, the same private
+bucket every generated file already uses) and referenced from
+`lab_brand_kits.logo_asset_id`, a plain column rather than a declared foreign
+key, matching how `lab_media_outputs.asset_id` already works. `primary_color`
+and `accent_color` on `lab_brand_kits` are now nullable: the existing
+hex-format check constraints already tolerated a null value (a check
+constraint only rejects a value that evaluates to false, and
+`null ~* pattern` evaluates to null), so relaxing `NOT NULL` needed no
+constraint rewrite. `src/lib/brand-knowledge.ts`,
+`src/app/api/brand-kit/knowledge/route.ts` and
+`src/app/api/brand-kit/logo/route.ts` are new; `src/lib/export/brand.ts` and
+`src/lib/export/render.ts` apply knowledge, logo and colours to generated
+documents, with `src/lib/export/image-dimensions.ts` reading a logo's real
+pixel dimensions from its PNG or JPEG header so it embeds at the right aspect
+ratio without an image library.
+
+**Guardrail.** Brand identity belongs to the workspace, never to one
+conversation or project. A document generated next week must still reflect
+the same organisation without the person re-entering anything.
+
+**Revisit if.** A workspace needs more than one brand identity (for example, a
+Team workspace representing multiple client brands). That is a materially
+different data shape and should not be retrofitted onto the current
+one-kit-per-workspace table.
+
+## 2026-08-20 · Decision · Chat verifies time-sensitive answers instead of routing them into Research
+
+**Why.** Before this change, any question that looked research-shaped,
+including a short current-facts question such as a date, a price or a
+schedule, routed into the same metered, multi-source Research workflow used
+for genuine investigations. The two needs are different: a short lookup
+belongs inside an ordinary reply, and a paid multi-source workflow should be
+reserved for requests that actually ask for one.
+
+**What.** `src/lib/context-engineering.ts` adds `freshnessForPrompt`, which
+classifies a prompt into `off`, `auto` or `required` based on whether it
+depends on mutable real-world facts (prices, laws, current officeholders,
+availability, schedules) versus whether it explicitly asks for research,
+comparison or cited sources. `policyForConversation` now keeps
+`liveInformation` (whether search tools are offered at all) separate from
+`deepResearch` (whether the metered Research workflow is entered), and
+`src/app/api/chat/route.ts` bills only `deepResearch` against the credit gate.
+A `required` freshness answer is buffered: the reply is not streamed to the
+browser until at least one supporting source is found, and if none is found
+the person is told the claim could not be verified rather than being shown an
+unverified answer. The chat stream gained a `grounding` event (`checking`,
+`verified`, `not_needed`, `unavailable`) and the UI shows a receipt line under
+the answer, either "Checked against current sources" with a date or a flag
+that sources could not be verified, so the check is visible to the person, not
+only in server logs.
+
+**Guardrail.** A required-freshness claim must never reach the browser
+unverified. `outcome` is recorded as `success_degraded` whenever
+`groundingUnavailable` is true, so an unverifiable answer is countable, not
+silent.
+
+**Revisit if.** The freshness classifier over- or under-triggers in practice
+(either routing ordinary conversation into buffered mode, or letting a
+genuinely mutable claim through as `auto` without a check) once there is
+enough live traffic to judge it against.
+
+## 2026-08-20 · Fix · Two small closes: a reopened spend-data grant, and a missing index
+
+**What.** Migration `0022_cost_ledger_privileges.sql` revokes
+`lab_cost_ledger` from `anon` and `authenticated` explicitly. Migration `0019`
+had already revoked it from `public`, but Supabase grants its own
+browser-facing roles separate default privileges that a `public` revoke does
+not touch, so the ledger stayed reachable. The same migration adds an index on
+`lab_brand_knowledge.owner_id`, a cascading foreign key that Postgres does not
+index automatically; without it, deleting a user would have scanned the
+entire knowledge table while holding locks. Separately, `AuthProvider.tsx` no
+longer calls `router.refresh()` on every Supabase auth state change.
+
+**Why.** Spend data is an operator-only concern and should never be reachable
+from a browser role, however the migration sequence revoked access. A missing
+index on a foreign key is a performance and lock-contention risk that only
+shows up under real data volume, so it is worth closing before the table has
+enough rows to make it expensive to add.
+
+**Guardrail.** A `REVOKE ... FROM public` is not sufficient on Supabase;
+browser roles (`anon`, `authenticated`) need their own explicit revoke when a
+table must be operator-only.
+
 ## 2026-08-19 · Decision · Every video tier now survives a Veo outage
 
 **Why.** Draft, Standard and Premium were all secretly the same vendor —

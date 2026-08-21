@@ -12,6 +12,48 @@ export type ChangelogRelease = {
 
 export const CHANGELOG_RELEASES: readonly ChangelogRelease[] = [
   {
+    id: "answer-verification",
+    date: "2026-08-20",
+    displayDate: "20 August 2026",
+    status: "Now",
+    title: "Chat now shows when an answer was checked",
+    summary:
+      "When you ask something that depends on a current fact, AI360 checks it against a live source and tells you so, instead of guessing.",
+    changes: [
+      "A short receipt appears under an answer that depended on a current fact, showing it was checked and when.",
+      "If nothing could be verified, you are told that directly instead of being shown an unverified answer.",
+      "A quick current-facts question no longer gets routed into the slower, metered Research workflow by mistake.",
+    ],
+  },
+  {
+    id: "brand-kit",
+    date: "2026-08-20",
+    displayDate: "20 August 2026",
+    status: "Now",
+    title: "Your documents can now carry your brand",
+    summary:
+      "Add your logo and a few brand facts once, and every document AI360 generates for your workspace can use them.",
+    changes: [
+      "Upload a logo and brand knowledge in Settings, once for the whole workspace.",
+      "Generated documents can now apply your logo and brand colours automatically.",
+      "A brand kit no longer requires colours to be set before a logo can be used.",
+    ],
+  },
+  {
+    id: "tools-and-kits",
+    date: "2026-08-20",
+    displayDate: "20 August 2026",
+    status: "Now",
+    title: "Tools & Kits replaces the old catalogue",
+    summary:
+      "The discovery page is now organised around real jobs, like preparing for an exam or naming a business, instead of product categories.",
+    changes: [
+      "17 starting points across study, career, creative and business needs, each opening straight into a working project.",
+      "Picking a kit carries your goal straight into the project brief.",
+      "Renamed from \"Market\" because nothing on the page is bought or sold.",
+    ],
+  },
+  {
     id: "media-studio-live",
     date: "2026-08-15",
     displayDate: "15 August 2026",
