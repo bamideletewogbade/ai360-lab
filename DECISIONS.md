@@ -1,5 +1,42 @@
 # Decision and incident log
 
+## 2026-08-21 · Decision · The document reader also applies to chat, not only project documents
+
+**Why.** A long assistant reply (a report, a structured guide) rendered flat
+in chat even after project documents got the collapsible-section treatment
+the same day. There was no reason the two surfaces should look different for
+the same kind of content.
+
+**What.** `src/app/app/page.tsx`: an assistant message renders through
+`DocumentReader` once it has finished streaming; while it is still the
+actively-streaming last message (`busy && index === messages.length - 1`) it
+stays on the flat `ResponseContent` renderer, because re-splitting into
+sections on every delta would reset the accordion and replay the collapse
+animation mid-type. A user's own message is never passed through
+`DocumentReader`, only `ResponseContent`, so someone's own input is never
+reformatted into an accordion.
+
+**The padding scheme had to become context-aware.** `.doc-rail-row`,
+`.doc-meta` and `.doc-section` previously hardcoded the project-document
+card's `clamp(20px, 4vw, 42px)` inset. A chat message has no padding of its
+own to match (`.message-body` sets none; `.response-content` relies entirely
+on the surrounding bubble), so that padding now only applies inside
+`.project-document`; everywhere else the reader sits flush with the
+surrounding message text, matching how a normal reply already looks. Checked
+with computed styles in a temporary local preview: 42px padding and 14px text
+inside the document card, 0px padding and 16px text inside a chat bubble, and
+the rail, lede and section body share the same value within each context so
+nothing misaligns against the paragraph text next to it.
+
+**Guardrail.** `DocumentReader` must stay presentation-agnostic: it should
+never assume a `.project-document` ancestor, since it now renders in at least
+two structurally different containers.
+
+**Revisit if.** Streaming ever needs the rail visible mid-generation (for
+example, a very long agent report where jumping ahead while it is still
+writing would be useful) — that would need a different signal than
+`busy && last message`, since sections would still be arriving.
+
 ## 2026-08-21 · Decision · A project document is a rail of collapsible sections, not one long scroll
 
 **Why.** A generated document such as Research findings rendered as one
