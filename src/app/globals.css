@@ -12569,8 +12569,7 @@ button {
 .doc-progress-fill { height: 100%; width: 100%; transform-origin: 0 50%; background: var(--clay); }
 .doc-lede { border-bottom: 1px solid var(--line); background: var(--warm-white); }
 .doc-rail-row {
-  display: flex; align-items: center; gap: 10px;
-  max-width: 760px; margin: 0 auto; padding: 16px clamp(20px, 4vw, 42px) 0;
+  display: flex; align-items: center; gap: 10px; padding-top: 16px;
 }
 .doc-rail { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .doc-rail::-webkit-scrollbar { display: none; }
@@ -12592,12 +12591,20 @@ button {
 }
 .doc-toggle-all:hover { color: var(--charcoal); }
 .doc-meta {
-  display: flex; gap: 8px; max-width: 760px; margin: 0 auto;
-  padding: 10px clamp(20px, 4vw, 42px) 0; color: var(--soft-grey); font-size: 11px;
+  display: flex; gap: 8px; padding-top: 10px; color: var(--soft-grey); font-size: 11px;
 }
 .doc-sections { padding-bottom: 8px; }
-.doc-section { max-width: 760px; margin: 0 auto; padding: 0 clamp(20px, 4vw, 42px); }
+.doc-section { }
 .doc-section + .doc-section { border-top: 1px solid var(--line); }
+/* Inside the wide project-document card, the rail, meta and each section
+   share the card's own reading measure and padding. Inside a chat message
+   (no .project-document ancestor) they stay flush with the surrounding
+   message text instead, which has no padding of its own. */
+.project-document .doc-rail-row,
+.project-document .doc-meta,
+.project-document .doc-section {
+  max-width: 760px; margin-inline: auto; padding-left: clamp(20px, 4vw, 42px); padding-right: clamp(20px, 4vw, 42px);
+}
 .doc-section-head {
   width: 100%; display: flex; align-items: center; gap: 12px; padding: 16px 0;
   border: 0; background: none; text-align: left; cursor: pointer;
@@ -12624,7 +12631,7 @@ button {
   .project-document-head { display: block; }
   .project-document-head > span:last-child { display: block; margin-top: 8px; }
   .project-document .response-content { padding: 20px 16px 28px; font-size: 14px; }
-  .doc-rail-row, .doc-meta, .doc-section { padding-left: 16px; padding-right: 16px; }
+  .project-document .doc-rail-row, .project-document .doc-meta, .project-document .doc-section { padding-left: 16px; padding-right: 16px; }
   .doc-rail-pill-label em { display: none; }
   .project-activity-details .project-build-record { grid-template-columns: 1fr; }
 }

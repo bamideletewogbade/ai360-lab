@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { type ChatMode } from '@/lib/models'
 import { ArrowUpRightIcon } from '@/components/ArrowUpRightIcon'
 import { ResponseContent } from '@/components/ResponseContent'
+import { DocumentReader } from '@/components/DocumentReader'
 import {
   browserSpeechLocale, DEFAULT_LANGUAGE, DEFAULT_SPEECH_INPUT,
   type LanguageCode, type SpeechInputCode,
@@ -2080,7 +2081,15 @@ function LabWorkspace({
                         </div>
                       </section>
                     ) : message.content ? (
-                      <ResponseContent content={message.content} />
+                      // A message still being streamed renders flat: re-splitting into
+                      // sections on every delta would reset the accordion and replay
+                      // the collapse animation mid-type. Once it settles, a
+                      // multi-section reply gets the same reader as a project document.
+                      message.role === 'assistant' && !(busy && index === messages.length - 1) ? (
+                        <DocumentReader content={message.content} />
+                      ) : (
+                        <ResponseContent content={message.content} />
+                      )
                     ) : message.agentSteps?.length ? (
                       <span className="agent-wait">Working...</span>
                     ) : (
