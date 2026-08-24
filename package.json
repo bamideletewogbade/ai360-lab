@@ -14,6 +14,7 @@
     "db:postgres:migrate": "node scripts/migrate-postgres.mjs",
     "db:postgres:verify": "node scripts/verify-postgres.mjs",
     "credits:verify": "node --experimental-strip-types scripts/verify-credits.mjs",
+    "credits:pilot": "node scripts/grant-pilot-credits.mjs",
     "payments:contract": "node --import ./scripts/register-alias.mjs --experimental-strip-types --test tests/expresspay.test.ts tests/billing.test.ts",
     "payments:sandbox": "node --experimental-strip-types scripts/test-expresspay-sandbox.mjs",
     "payments:verify": "node --experimental-strip-types scripts/verify-payments.mjs",
