@@ -36,6 +36,8 @@ localhost auth testing does not require editing production hPanel values.
   behavior
 - [`HOSTINGER_DEPLOYMENT.md`](HOSTINGER_DEPLOYMENT.md): production deployment
 - [`PRICING_STRATEGY.md`](PRICING_STRATEGY.md): plan and credit economics
+- [`docs/INTERN_ACCOUNTS.md`](docs/INTERN_ACCOUNTS.md): the platforms we run on,
+  what each does, and the accounts a new joiner needs
 
 ## Required verification
 
