@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRightIcon } from '@/components/ArrowUpRightIcon'
 import { DocumentReader } from '@/components/DocumentReader'
 import { ProjectStageNavigator } from '@/components/ProjectStageNavigator'
@@ -23,7 +23,7 @@ import {
 import type { PackEvent } from '@/lib/studio/coordinator'
 import { scopedStorageKey } from '@/lib/workspace'
 import { newerDraft, studioDraftSchema, type StudioDraft, type StudioBriefTurn } from '@/lib/studio-draft'
-import { currentProjectStage, type ProjectStage } from '@/lib/studio-stages'
+import { type ProjectStage } from '@/lib/studio-stages'
 import {
   downloadDocument, hasTabularContent, EXPORT_LABELS, type ExportFormat,
 } from '@/lib/export/download'
@@ -325,7 +325,7 @@ export function StudioWorkspace({
   const [projectGoalInput, setProjectGoalInput] = useState('')
   const [briefTurns, setBriefTurns] = useState<StudioBriefTurn[]>([])
   const [briefBusy, setBriefBusy] = useState(false)
-  const [activeProjectStage, setActiveProjectStage] = useState<ProjectStage>('review')
+  const [activeProjectStage, setActiveProjectStage] = useState<ProjectStage>('brief')
   const [draftId, setDraftId] = useState('')
   const [draftCloudLoaded, setDraftCloudLoaded] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
@@ -509,7 +509,7 @@ export function StudioWorkspace({
     queueMicrotask(() => {
       setProject(target)
       setView('project')
-      setActiveProjectStage('chats')
+      setActiveProjectStage('brief')
     })
   }, [openProjectSignal, openProjectId, hydrated, projects])
 
@@ -1223,12 +1223,9 @@ export function StudioWorkspace({
   function openProject(next: StudioProject) {
     setProject(next)
     setView('project')
-    setExpandedId(next.assets[0]?.id || '')
+    setExpandedId('')
     setProjectGoalInput('')
-    setActiveProjectStage(currentProjectStage({
-      approved: next.assets.filter((asset) => asset.status === 'approved').length,
-      total: next.assets.length,
-    }))
+    setActiveProjectStage('brief')
     setError('')
     requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
   }
@@ -1261,7 +1258,11 @@ export function StudioWorkspace({
 
   /** Switch which stage is on screen, and start it from the top. */
   function goToProjectStage(stage: ProjectStage) {
-    setActiveProjectStage(stage)
+    // Chats and exports used to be separate destinations. They now live beside
+    // the work they relate to, so old in-session links still land somewhere
+    // useful without bringing the five-tab interface back.
+    const destination = stage === 'chats' ? 'brief' : stage === 'deliverables' ? 'review' : stage
+    setActiveProjectStage(destination)
     mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -1587,38 +1588,29 @@ export function StudioWorkspace({
             </div>
           </div>
 
-          <div className="project-next-action">
+          <aside className="project-focus-card">
             <div>
-              <span className="workspace-eyebrow">Best next step</span>
-              <h2>{nextReviewAsset ? `Open ${nextReviewAsset.title}` : 'Your outputs are ready to use'}</h2>
+              <span className="workspace-eyebrow">Up next</span>
+              <h2>{nextReviewAsset ? nextReviewAsset.title : 'Everything is ready'}</h2>
               <p>{nextReviewAsset
-                ? `${project.assets.length - approvedCount} ${project.assets.length - approvedCount === 1 ? 'item is' : 'items are'} still in draft. Read what matters, improve anything that is off, and mark useful work as ready.`
-                : 'Everything is marked ready. Download individual files or export the complete project.'}</p>
+                ? 'Review this draft, adjust what matters, then mark it ready.'
+                : 'Your finished work is ready to open, download or share.'}</p>
+            </div>
+            <div className="project-focus-progress">
+              <span><b>{approvedCount} of {project.assets.length}</b> ready</span>
+              <span>{progress}%</span>
+              <i aria-hidden="true"><span style={{ width: `${progress}%` }} /></i>
             </div>
             <button
               type="button"
               onClick={() => {
-                if (nextReviewAsset) {
-                  setExpandedId(nextReviewAsset.id)
-                  goToProjectStage('review')
-                } else {
-                  goToProjectStage('deliverables')
-                }
+                setExpandedId((nextReviewAsset || project.assets[0])?.id || '')
+                goToProjectStage('review')
               }}
             >
-              {nextReviewAsset ? 'Continue the work' : 'Open outputs'} <span aria-hidden="true">→</span>
+              {nextReviewAsset ? 'Continue work' : 'View finished work'} <span aria-hidden="true">→</span>
             </button>
-          </div>
-
-          <div className="project-completion-card">
-            <div className="completion-dial" style={{ '--progress': `${progress * 3.6}deg` } as CSSProperties}>
-              <span><b>{progress}%</b><small>complete</small></span>
-            </div>
-            <div>
-              <b>{approvedCount} of {project.assets.length} ready</b>
-              <small>{approvedCount === project.assets.length ? 'Every output is ready.' : 'Mark work ready when it is useful to you.'}</small>
-            </div>
-          </div>
+          </aside>
         </section>
 
         <ProjectStageNavigator
@@ -1626,7 +1618,6 @@ export function StudioWorkspace({
           activeStage={activeProjectStage}
           approved={approvedCount}
           total={project.assets.length}
-          count={projectChats.length}
           onSelect={goToProjectStage}
         />
 
@@ -1685,32 +1676,101 @@ export function StudioWorkspace({
         ) : null}
 
         {activeProjectStage === 'brief' ? (
-        <section className="project-stage-section" id="project-stage-brief" data-project-stage="brief">
-          <div className="project-stage-heading">
-            <span>01</span>
-            <div><b>Project overview</b><small>The outcome, context and current direction in one place.</small></div>
+        <section className="project-stage-section project-home" id="project-stage-brief" data-project-stage="brief">
+          <div className="project-screen-heading">
+            <div><span className="workspace-eyebrow">Project home</span><h2>Pick up where you left off.</h2></div>
+            <button type="button" onClick={() => beginProject()}>New project</button>
           </div>
-          {/* The completion figure is already on the hero dial directly above.
-              Repeating it here — and again as "x of y ready" beside the dial —
-              put one number on screen three times. The hero owns it now. */}
-          <div className="project-summary">
-          <div><span>Objective</span><b>{project.campaign.objective}</b></div>
-          <div><span>{project.pack ? 'Outcome' : 'Big idea'}</span><b>{project.campaign.bigIdea}</b></div>
-          <div><span>{project.pack ? 'Build status' : 'Primary action'}</span><b>{project.run ? `${project.run.producedSections} deliverables · ${project.run.review?.passed ? 'quality checked' : project.run.status}` : project.campaign.callToAction}</b></div>
+
+          <div className="project-home-grid">
+            <section className="project-home-card project-home-work">
+              <header>
+                <span><b>Your work</b><small>Open one item and focus on it.</small></span>
+                <button type="button" onClick={() => goToProjectStage('review')}>View all</button>
+              </header>
+              <div className="project-home-work-list">
+                {project.assets.map((asset) => (
+                  <button
+                    type="button"
+                    key={asset.id}
+                    onClick={() => { setExpandedId(asset.id); goToProjectStage('review') }}
+                  >
+                    <span className="asset-icon">{ASSET_ICONS[asset.type] || 'Aa'}</span>
+                    <span><b>{asset.title}</b><small>{asset.purpose}</small></span>
+                    <em className={asset.status === 'approved' ? 'ready' : ''}>{asset.status === 'approved' ? 'Ready' : 'Draft'}</em>
+                    <span aria-hidden="true">→</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <div className="project-home-side">
+              <section className="project-home-card project-home-chats">
+                <header>
+                  <span><b>Project chats</b><small>Every chat already knows this project.</small></span>
+                  <button type="button" onClick={() => onStartConversation?.(project.id, project.campaign.name)}>+ New</button>
+                </header>
+                {projectChats.length ? (
+                  <div className="project-home-chat-list">
+                    {projectChats.slice(0, 3).map((conversation) => (
+                      <button type="button" key={conversation.id} onClick={() => onOpenConversation?.(conversation.id)}>
+                        <span><b>{conversation.title}</b><small>{relativeTime(conversation.updatedAt)}</small></span>
+                        <ArrowUpRightIcon />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button type="button" className="project-home-chat-empty" onClick={() => onStartConversation?.(project.id, project.campaign.name)}>
+                    <span aria-hidden="true">+</span><span><b>Start the first chat</b><small>Ask a question or work through a decision.</small></span>
+                  </button>
+                )}
+              </section>
+
+              <button type="button" className="project-context-shortcut" onClick={() => goToProjectStage('build')}>
+                <span className="context-shortcut-icon" aria-hidden="true">↗</span>
+                <span><b>Files &amp; context</b><small>{project.sources?.length || 0} live source{project.sources?.length === 1 ? '' : 's'} plus your project knowledge</small></span>
+                <span aria-hidden="true">→</span>
+              </button>
+
+              <details className="project-direction-details">
+                <summary><span><b>Project direction</b><small>Objective, outcome and build status</small></span><span aria-hidden="true">+</span></summary>
+                <div className="project-direction-body">
+                  <span><small>Objective</small><b>{project.campaign.objective}</b></span>
+                  <span><small>{project.pack ? 'Outcome' : 'Big idea'}</small><b>{project.campaign.bigIdea}</b></span>
+                  <span><small>{project.pack ? 'Build status' : 'Primary action'}</small><b>{project.run ? `${project.run.producedSections} deliverables · ${project.run.review?.passed ? 'quality checked' : project.run.status}` : project.campaign.callToAction}</b></span>
+                </div>
+              </details>
+            </div>
           </div>
         </section>
         ) : null}
 
         {activeProjectStage === 'build' ? (
-        <section className="project-stage-section" id="project-stage-build" data-project-stage="build">
-          <div className="project-stage-heading">
-            <span>02</span>
-            <div><b>Files and context</b><small>Sources, notes and reference material available across this project.</small></div>
-            <em>Project memory</em>
+        <section className="project-stage-section project-context-screen" id="project-stage-build" data-project-stage="build">
+          <div className="project-screen-heading">
+            <div><span className="workspace-eyebrow">Project memory</span><h2>Give the work better context.</h2><p>Files, sources and direction here are available across the entire project.</p></div>
           </div>
-          <ProjectKnowledge projectId={project.id} signedIn={signedIn} />
+
+          <div className="project-context-grid">
+            <ProjectKnowledge projectId={project.id} signedIn={signedIn} />
+            <section className="project-source-library">
+              <header><span><b>Live sources</b><small>Research used while creating this project.</small></span><em>{project.sources?.length || 0}</em></header>
+              {project.sources?.length ? (
+                <div>
+                  {project.sources.map((source, index) => (
+                    <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>
+                      <span>{String(index + 1).padStart(2, '0')}</span>
+                      <span>{source.title}</span>
+                      <ArrowUpRightIcon />
+                    </a>
+                  ))}
+                </div>
+              ) : <p>No live sources were needed for this project yet.</p>}
+            </section>
+          </div>
+
           <details className="project-activity-details">
-            <summary>Creation activity</summary>
+            <summary><span>Creation activity</span><small>See how the project was assembled</small></summary>
           <div className="project-build-record">
             {(project.run?.specialists ?? [
               { id: 'brand', label: 'Direction', working: 'The project direction was shaped from the brief.', status: 'complete' as const },
@@ -1729,11 +1789,10 @@ export function StudioWorkspace({
         ) : null}
 
         {activeProjectStage === 'review' ? (
-        <section className="project-stage-section" id="project-stage-review" data-project-stage="review">
-          <div className="project-stage-heading">
-            <span>03</span>
-            <div><b>Project work</b><small>Open a draft, read its structure, improve it and mark it ready when it is useful.</small></div>
-            <em>{approvedCount} of {project.assets.length} ready</em>
+        <section className={`project-stage-section project-work-screen${activeAsset ? ' has-active-work' : ''}`} id="project-stage-review" data-project-stage="review">
+          <div className="project-screen-heading project-work-heading">
+            <div><span className="workspace-eyebrow">Project work</span><h2>{activeAsset ? activeAsset.title : 'Choose one thing to work on.'}</h2><p>{activeAsset ? 'Review, improve and finish this item without the rest of the project competing for attention.' : 'Each draft opens in its own focused reading space.'}</p></div>
+            <span className="project-work-count">{approvedCount}/{project.assets.length} ready</span>
           </div>
 
         <div className={`project-layout${project.pack ? ' pack-project' : ''}`}>
@@ -1759,7 +1818,7 @@ export function StudioWorkspace({
 
           <section className="asset-board">
             <div className="asset-board-head">
-              <span><b>Work in this project</b><small>Each item opens as a structured document, with actions kept close to the work.</small></span>
+              <span><b>Work items</b><small>Select a draft to open it.</small></span>
               <span>{project.assets.length} item{project.assets.length === 1 ? '' : 's'}</span>
             </div>
             <div className="asset-list">
@@ -1773,10 +1832,76 @@ export function StudioWorkspace({
                       <span className="asset-icon">{ASSET_ICONS[asset.type] || 'Aa'}</span>
                       <span><b>{asset.title}</b><small>{asset.channel} · Version {asset.version ?? 1} · {asset.purpose}</small></span>
                       <span className="asset-status">{asset.status === 'approved' ? '✓ Ready' : 'Draft'}</span>
-                      <span className="asset-chevron">{expanded ? '−' : '+'}</span>
+                      <span className="asset-chevron">{expanded ? '×' : '→'}</span>
                     </button>
                     {expanded && (
                       <div className="asset-content">
+                        <button type="button" className="work-mobile-back" onClick={() => setExpandedId('')}><span aria-hidden="true">←</span> All work</button>
+                        <div className="asset-focus-toolbar">
+                          <span className={asset.status === 'approved' ? 'ready' : ''}>{asset.status === 'approved' ? '✓ Ready' : 'Draft'}</span>
+                          <div className="asset-focus-actions">
+                            <button onClick={() => { setRevisionId(asset.id); setRevisionInstruction('') }}>Improve</button>
+                            <button onClick={() => editingId === asset.id ? finishManualEdit(asset) : setEditingId(asset.id)}>
+                              {editingId === asset.id ? 'Save version' : 'Edit'}
+                            </button>
+                            <button
+                              className={asset.status === 'approved' ? 'approved' : 'approve'}
+                              disabled={media?.status === 'generating' || media?.status === 'pending' || media?.status === 'in_progress'}
+                              onClick={() => updateAsset(asset.id, { status: asset.status === 'approved' ? 'draft' : 'approved' })}
+                            >
+                              {asset.status === 'approved' ? 'Mark as draft' : 'Mark ready'}
+                            </button>
+                            {canRender && asset.status === 'approved' ? (
+                              <button
+                                className="execute"
+                                onClick={() => prepareExecution(asset)}
+                                disabled={mediaBusy === asset.id || media?.status === 'generating' || media?.status === 'pending' || media?.status === 'in_progress'}
+                              >
+                                {mediaBusy === asset.id
+                                  ? 'Checking…'
+                                  : media?.status === 'completed'
+                                    ? `Create another ${asset.type === 'video' ? 'video' : 'design'}`
+                                    : asset.type === 'video'
+                                      ? 'Produce video'
+                                      : 'Create design'}
+                              </button>
+                            ) : null}
+                            <details className="asset-more-actions">
+                              <summary>More</summary>
+                              <div>
+                                <button onClick={() => navigator.clipboard.writeText(asset.content)}>Copy</button>
+                                <button onClick={() => shareAsset(asset)}>Share</button>
+                                {(hasTabularContent(asset.content)
+                                  ? (['pdf', 'docx', 'xlsx', 'pptx'] as ExportFormat[])
+                                  : (['pdf', 'docx', 'pptx'] as ExportFormat[])
+                                ).map((format) => (
+                                  <button key={format} onClick={() => void exportAsset(asset, format)} disabled={Boolean(exporting)}>
+                                    {exporting === `${asset.id}:${format}` ? 'Creating…' : `Download ${EXPORT_LABELS[format]}`}
+                                  </button>
+                                ))}
+                              </div>
+                            </details>
+                          </div>
+                        </div>
+                        {revisionId === asset.id && (
+                          <div className="asset-revision asset-revision-top">
+                            <label>
+                              What should change?
+                              <textarea
+                                rows={3}
+                                value={revisionInstruction}
+                                onChange={(event) => setRevisionInstruction(event.target.value)}
+                                placeholder="For example: make it shorter, clearer and more practical."
+                              />
+                            </label>
+                            <div>
+                              <button onClick={() => { setRevisionId(''); setRevisionInstruction('') }}>Cancel</button>
+                              <button className="dark" onClick={() => regenerateAsset(asset)} disabled={busy}>
+                                {busy ? 'Improving…' : 'Improve draft'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         {editingId === asset.id ? (
                           <textarea
                             rows={14}
@@ -1816,69 +1941,6 @@ export function StudioWorkspace({
                             ) : null}
                           </div>
                         ) : null}
-                        {revisionId === asset.id && (
-                          <div className="asset-revision">
-                            <label>
-                              What should change?
-                              <textarea
-                                rows={3}
-                                value={revisionInstruction}
-                                onChange={(event) => setRevisionInstruction(event.target.value)}
-                                placeholder="For example: make it shorter, more premium and focused on young professionals."
-                              />
-                            </label>
-                            <div>
-                              <button onClick={() => { setRevisionId(''); setRevisionInstruction('') }}>Cancel</button>
-                              <button className="dark" onClick={() => regenerateAsset(asset)} disabled={busy}>
-                                {busy ? 'Improving…' : 'Improve asset'}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        <div className="asset-actions">
-                          <button onClick={() => navigator.clipboard.writeText(asset.content)}>Copy</button>
-                          <button onClick={() => shareAsset(asset)}>Share</button>
-                          {/* Excel is offered only when this deliverable
-                              actually contains a table to fill it with. */}
-                          {(hasTabularContent(asset.content)
-                            ? (['pdf', 'docx', 'xlsx', 'pptx'] as ExportFormat[])
-                            : (['pdf', 'docx', 'pptx'] as ExportFormat[])
-                          ).map((format) => (
-                            <button
-                              key={format}
-                              onClick={() => void exportAsset(asset, format)}
-                              disabled={Boolean(exporting)}
-                            >
-                              {exporting === `${asset.id}:${format}` ? 'Creating…' : EXPORT_LABELS[format]}
-                            </button>
-                          ))}
-                          <button onClick={() => editingId === asset.id ? finishManualEdit(asset) : setEditingId(asset.id)}>
-                            {editingId === asset.id ? 'Save new version' : 'Edit'}
-                          </button>
-                          <button onClick={() => { setRevisionId(asset.id); setRevisionInstruction('') }}>Improve with AI</button>
-                          <button
-                            className={asset.status === 'approved' ? 'approved' : 'approve'}
-                            disabled={media?.status === 'generating' || media?.status === 'pending' || media?.status === 'in_progress'}
-                            onClick={() => updateAsset(asset.id, { status: asset.status === 'approved' ? 'draft' : 'approved' })}
-                          >
-                            {asset.status === 'approved' ? '✓ Ready' : 'Mark ready'}
-                          </button>
-                          {canRender && asset.status === 'approved' ? (
-                            <button
-                              className="execute"
-                              onClick={() => prepareExecution(asset)}
-                              disabled={mediaBusy === asset.id || media?.status === 'generating' || media?.status === 'pending' || media?.status === 'in_progress'}
-                            >
-                              {mediaBusy === asset.id
-                                ? 'Checking…'
-                                : media?.status === 'completed'
-                                  ? `Create another ${asset.type === 'video' ? 'video' : 'design'}`
-                                  : asset.type === 'video'
-                                    ? 'Produce video'
-                                    : 'Create design'}
-                            </button>
-                          ) : null}
-                        </div>
                         {canRender && asset.status !== 'approved' ? (
                           <div className="asset-production-hint">
                             <span>Locked</span>
@@ -1895,31 +1957,20 @@ export function StudioWorkspace({
               })}
             </div>
 
-            <section className="execution-next live">
-              <span className="execution-mark">01</span>
-              <span>
-                <b>{project.pack ? 'Your project stays editable' : 'Studio production is live'}</b>
-                <small>{project.pack ? 'Review the work, request an improvement, approve it, then export the project.' : 'Approve an asset, then create its design or video. Approved copy can be shared from any device.'}</small>
-              </span>
-              <span>Ready</span>
-            </section>
-            {project.sources?.length ? (
-              <section className="studio-sources">
-                <div>
-                  <ArrowUpRightIcon className="execution-mark" />
-                  <span><b>Live research used</b><small>Current information was checked while building this campaign.</small></span>
-                </div>
-                <div>
-                  {project.sources.map((source, index) => (
-                    <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>
-                      <span>{String(index + 1).padStart(2, '0')}</span>
-                      <span>{source.title}</span>
-                      <ArrowUpRightIcon />
-                    </a>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+            <details className="project-export-details">
+              <summary>
+                <span><b>Export the complete project</b><small>Overview, sources and every work item in one file.</small></span>
+                <span>{approvedCount}/{project.assets.length} ready <i aria-hidden="true">+</i></span>
+              </summary>
+              <div>
+                <button onClick={() => exportPack('pdf')} disabled={Boolean(exporting)}>{exporting === 'pdf' ? 'Creating…' : 'Export PDF'}</button>
+                <button onClick={() => exportPack('docx')} disabled={Boolean(exporting)}>{exporting === 'docx' ? 'Creating…' : 'Export Word'}</button>
+                {hasTabularContent(projectMarkdown(project)) ? (
+                  <button onClick={() => exportPack('xlsx')} disabled={Boolean(exporting)}>{exporting === 'xlsx' ? 'Creating…' : 'Export Excel'}</button>
+                ) : null}
+                <button onClick={() => exportPack('pptx')} disabled={Boolean(exporting)}>{exporting === 'pptx' ? 'Creating…' : 'Export PowerPoint'}</button>
+              </div>
+            </details>
           </section>
         </div>
         </section>
