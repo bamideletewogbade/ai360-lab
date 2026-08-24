@@ -1,7 +1,7 @@
 const PILOT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PILOT_COHORT = /^[a-z0-9](?:[a-z0-9_-]{0,62}[a-z0-9])?$/
 
-export const DEFAULT_PILOT_CREDITS = 100
+export const DEFAULT_PILOT_CREDITS = 25
 export const MAX_PILOT_CREDITS_PER_USER = 10_000
 export const MAX_PILOT_BATCH_SIZE = 100
 

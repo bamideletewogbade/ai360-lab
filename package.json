@@ -24,6 +24,7 @@
     "domains:verify": "node --experimental-strip-types scripts/verify-domains.mjs",
     "prod:check": "node scripts/check-production.mjs",
     "smoke:deploy": "node scripts/smoke-deployment.mjs",
+    "smoke:pilot": "node scripts/smoke-pilot-production.mjs",
     "smoke:documents": "node scripts/smoke-chat-documents.mjs",
     "release:check": "npm audit --omit=dev && npm run lint && npm test && npm run build && npm run prod:check"
   },

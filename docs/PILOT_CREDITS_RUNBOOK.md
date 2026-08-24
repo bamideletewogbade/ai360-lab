@@ -10,13 +10,13 @@ repository using the exact account emails:
 
 ```csv
 email,credits
-first.tester@example.com,100
-media.tester@example.com,150
+first.tester@example.com,25
+media.tester@example.com,40
 third.tester@example.com,
 ```
 
 The `credits` column is optional. An empty value receives the command default,
-which is 100 credits. A batch is capped at 100 users as an operational safety
+which is 25 credits. A batch is capped at 100 users as an operational safety
 guard.
 
 ## 2. Preview against production
@@ -44,3 +44,24 @@ Use a new cohort label for a deliberate refill, for example
 `pilot-2026-09-refill-1`.
 
 Do not commit the real tester CSV. It contains personal information.
+
+## 4. Open the private cohort report
+
+Allow only the staff accounts that should see tester emails and account-level
+usage. Configure one of these server-side values and redeploy:
+
+```dotenv
+AI360_PILOT_OPERATOR_IDS=authenticated_user_id
+# Or, for simpler setup with a verified account:
+AI360_PILOT_OPERATOR_EMAILS=founder@example.com
+```
+
+Sign in with an allowed account and open `/pilot`. The newest sponsored cohort
+is selected automatically. The dashboard shows activation, repeat use, feature
+counts, settled credits, failures and measured provider cost. **Export CSV**
+downloads the same metadata-only report for follow-up.
+
+The report never selects prompt or response content. Counts begin at each
+tester's first grant in the chosen cohort. "Current balance" can include other
+grants, while "credits used" is the settled consumption recorded after the
+cohort grant.

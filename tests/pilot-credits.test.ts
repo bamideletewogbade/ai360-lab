@@ -9,7 +9,7 @@ import {
 test('pilot CSV grants the default amount and permits deliberate per-user overrides', () => {
   const rows = parsePilotCreditCsv('\uFEFFemail,credits\r\nOne@Example.com,\r\ntwo@example.com,150\r\n')
   assert.deepEqual(rows, [
-    { rowNumber: 2, email: 'one@example.com', credits: 100 },
+    { rowNumber: 2, email: 'one@example.com', credits: 25 },
     { rowNumber: 3, email: 'two@example.com', credits: 150 },
   ])
 })
