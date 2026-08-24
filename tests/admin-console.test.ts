@@ -9,6 +9,7 @@ import {
   type AdminCohortUserMetrics,
 } from '../src/lib/admin/contracts.ts'
 import { canManageAdminCredits, isAdminOperator } from '../src/lib/admin/access.ts'
+import { isMissingAdminAuditTable } from '../src/lib/admin/audit.ts'
 import { createWorkspaceAuthContext } from '../src/lib/workspace.ts'
 
 function user(overrides: Partial<AdminCohortUserMetrics> = {}): AdminCohortUserMetrics {
@@ -51,6 +52,21 @@ test('admin filters classify activity, balances and date windows consistently', 
   assert.equal(adminBalanceHealth(11), 'healthy')
   assert.equal(adminRangeStart('7d', now)?.toISOString(), '2026-08-17T00:00:00.000Z')
   assert.equal(adminRangeStart('all', now), null)
+})
+
+test('only the missing admin audit relation activates read-only compatibility mode', () => {
+  assert.equal(isMissingAdminAuditTable({
+    code: '42P01',
+    message: 'relation "public.lab_admin_audit_events" does not exist',
+  }), true)
+  assert.equal(isMissingAdminAuditTable({
+    code: '42P01',
+    message: 'relation "public.some_other_table" does not exist',
+  }), false)
+  assert.equal(isMissingAdminAuditTable({
+    code: '42501',
+    message: 'permission denied for table lab_admin_audit_events',
+  }), false)
 })
 
 test('read access and credit mutations use separate operator capabilities', () => {

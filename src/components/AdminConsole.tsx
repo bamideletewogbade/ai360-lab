@@ -294,6 +294,12 @@ export function AdminConsole() {
 
         {dashboard ? (
           <div className={styles.content}>
+            {!dashboard.infrastructure.auditTrailReady ? (
+              <section className={styles.systemNotice} role="status">
+                <span>Read-only safety mode</span>
+                <p>The dashboard is available, but privileged credit actions are paused until the admin audit migration is applied.</p>
+              </section>
+            ) : null}
             {tab === 'overview' ? (
               <>
                 <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Live operating picture</span><h1>What needs attention.</h1><p>Users, credit exposure, product reliability, and real provider cost in one place.</p></div><div className={styles.healthScore}><span>Request health</span><b>{dashboard.summary.requestSuccessRate}%</b><i><span style={{ width: `${dashboard.summary.requestSuccessRate}%` }} /></i></div></section>

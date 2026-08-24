@@ -10,6 +10,10 @@ export type AdminCapabilities = {
   runAiInsights: boolean
 }
 
+export type AdminInfrastructure = {
+  auditTrailReady: boolean
+}
+
 export type AdminUser = {
   id: string
   workspaceKey: string
@@ -188,6 +192,7 @@ export type AdminDashboardPayload = {
   generatedAt: string
   range: AdminRange
   capabilities: AdminCapabilities
+  infrastructure: AdminInfrastructure
   summary: AdminSummary
   users: AdminUser[]
   features: AdminFeatureMetric[]

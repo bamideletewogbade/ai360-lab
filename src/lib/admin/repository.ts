@@ -17,6 +17,7 @@ import {
   type AdminUserDetail,
 } from '@/lib/admin/contracts'
 import { listAdminCohorts } from '@/lib/admin/cohorts'
+import { isMissingAdminAuditTable } from '@/lib/admin/audit'
 
 export const SUCCESSFUL_ADMIN_OUTCOMES = [
   'success', 'success_without_done_event', 'submitted', 'completed', 'quote', 'status',
@@ -339,26 +340,34 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
      order by ledger.created_at desc
      limit 400`
 
-  const auditPromise = sql<AuditRow[]>`
-    select audit.id, audit.actor_id, actor.email as actor_email,
-           target.clerk_user_id as target_user_id, target.email as target_email,
-           audit.action, audit.credits_delta, audit.balance_before, audit.balance_after,
-           audit.reason, audit.request_id, audit.created_at
-      from public.lab_admin_audit_events audit
-      left join public.lab_users actor on actor.clerk_user_id = audit.actor_id
-      left join public.lab_workspaces workspace on workspace.workspace_key = audit.target_workspace_key
-      left join public.lab_users target on target.clerk_user_id = case
-        when workspace.workspace_type = 'user' then workspace.subject_id else workspace.created_by_user_id end
-     where (${since}::timestamptz is null or audit.created_at >= ${since})
-     order by audit.created_at desc
-     limit 250`
+  const auditPromise = (async () => {
+    try {
+      const rows = await sql<AuditRow[]>`
+        select audit.id, audit.actor_id, actor.email as actor_email,
+               target.clerk_user_id as target_user_id, target.email as target_email,
+               audit.action, audit.credits_delta, audit.balance_before, audit.balance_after,
+               audit.reason, audit.request_id, audit.created_at
+          from public.lab_admin_audit_events audit
+          left join public.lab_users actor on actor.clerk_user_id = audit.actor_id
+          left join public.lab_workspaces workspace on workspace.workspace_key = audit.target_workspace_key
+          left join public.lab_users target on target.clerk_user_id = case
+            when workspace.workspace_type = 'user' then workspace.subject_id else workspace.created_by_user_id end
+         where (${since}::timestamptz is null or audit.created_at >= ${since})
+         order by audit.created_at desc
+         limit 250`
+      return { rows, ready: true }
+    } catch (error) {
+      if (isMissingAdminAuditTable(error)) return { rows: [] as AuditRow[], ready: false }
+      throw error
+    }
+  })()
 
   const reservationPromise = sql<{ held: string | number; stale: string | number }[]>`
     select count(*) filter (where status = 'held')::int as held,
            count(*) filter (where status = 'held' and expires_at < now())::int as stale
       from public.lab_credit_reservations`
 
-  const [userRows, featureRows, technicalRows, qualityRows, ledgerRows, auditRows, reservationRows, cohorts] = await Promise.all([
+  const [userRows, featureRows, technicalRows, qualityRows, ledgerRows, auditResult, reservationRows, cohorts] = await Promise.all([
     usersPromise, featuresPromise, technicalErrorsPromise, qualityErrorsPromise,
     ledgerPromise, auditPromise, reservationPromise, listAdminCohorts(),
   ])
@@ -430,7 +439,7 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
     entryType: row.entry_type, creditsDelta: n(row.credits_delta), balanceAfter: n(row.balance_after),
     sourceType: row.source_type, sourceId: row.source_id, createdAt: iso(row.created_at)!,
   }))
-  const auditEvents: AdminAuditEvent[] = auditRows.map((row) => ({
+  const auditEvents: AdminAuditEvent[] = auditResult.rows.map((row) => ({
     id: row.id, actorId: row.actor_id, actorEmail: row.actor_email, targetUserId: row.target_user_id,
     targetEmail: row.target_email, action: row.action, creditsDelta: n(row.credits_delta),
     balanceBefore: n(row.balance_before), balanceAfter: n(row.balance_after), reason: row.reason,
@@ -462,7 +471,9 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
   summary.providerCostUsd = Number(summary.providerCostUsd.toFixed(6))
 
   return {
-    generatedAt: new Date().toISOString(), range, summary, users, features, errors,
+    generatedAt: new Date().toISOString(), range,
+    infrastructure: { auditTrailReady: auditResult.ready },
+    summary, users, features, errors,
     creditLedger, auditEvents, cohorts,
     insights: buildAdminInsights({ summary, users, features, errors }),
   }

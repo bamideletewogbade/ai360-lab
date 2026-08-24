@@ -5,6 +5,7 @@ import { grantCredits } from '@/lib/billing/credit-repository'
 import { createWorkspaceAuthContext } from '@/lib/workspace'
 import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { errorDetails, requestLogger } from '@/lib/observability'
+import { isMissingAdminAuditTable } from '@/lib/admin/audit'
 
 export const runtime = 'nodejs'
 
@@ -58,6 +59,12 @@ export async function POST(request: Request) {
     }, { headers: log.headers({ 'Cache-Control': 'private, no-store' }) })
   } catch (error) {
     log.error('admin.credit_failed', errorDetails(error))
+    if (isMissingAdminAuditTable(error)) {
+      log.finish(503, { outcome: 'audit_migration_required' })
+      return Response.json({
+        error: 'Credit management is temporarily read-only while the admin audit migration is applied.',
+      }, { status: 503, headers: log.headers() })
+    }
     log.finish(500, { outcome: 'credit_failed' })
     return Response.json({ error: 'The credit action could not be completed.' }, { status: 500, headers: log.headers() })
   }

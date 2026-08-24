@@ -17,11 +17,14 @@ export async function GET(request: Request) {
     if (!isPostgresConfigured()) return Response.json({ error: 'Admin reporting is not connected yet.' }, { status: 503, headers: log.headers() })
     const range = parseAdminRange(new URL(request.url).searchParams.get('range'))
     const dashboard = await readAdminDashboardData(range)
+    if (!dashboard.infrastructure.auditTrailReady) {
+      log.info('admin.audit_migration_required', { range })
+    }
     log.finish(200, { outcome: 'success', range, userCount: dashboard.summary.users })
     return Response.json({
       ...dashboard,
       capabilities: {
-        manageCredits: canManageAdminCredits(context),
+        manageCredits: dashboard.infrastructure.auditTrailReady && canManageAdminCredits(context),
         runAiInsights: Boolean(process.env.OPENROUTER_API_KEY),
       },
     }, { headers: log.headers({ 'Cache-Control': 'private, no-store' }) })
