@@ -504,9 +504,15 @@ export async function settleReservation(input: {
 export async function grantCredits(input: {
   context: WorkspaceAuthContext
   credits: number
-  sourceType: 'plan_allowance' | 'top_up' | 'sponsored_seat' | 'adjustment'
+  sourceType: 'plan_allowance' | 'top_up' | 'sponsored_seat' | 'adjustment' | 'refund'
   sourceId: string
   idempotencyKey: string
+  operatorAudit?: {
+    actorId: string
+    action: 'credit_grant' | 'credit_refund'
+    reason: string
+    requestId: string
+  }
 }) {
   if (!isPostgresConfigured()) return { granted: false as const, reason: 'database_not_configured' as const }
   if (!Number.isFinite(input.credits) || input.credits <= 0) {
@@ -527,6 +533,11 @@ export async function grantCredits(input: {
        limit 1`
     if (existing) return { granted: false as const, reason: 'already_granted' as const }
 
+    const [beforeAccount] = await tx<{ available_credits: string }[]>`
+      select available_credits from public.lab_credit_accounts
+       where workspace_key = ${input.context.workspace.key} for update`
+    const balanceBefore = toNumber(beforeAccount?.available_credits)
+
     await tx`
       update public.lab_credit_accounts
          set available_credits = available_credits + ${credits},
@@ -537,6 +548,8 @@ export async function grantCredits(input: {
       workspaceKey: input.context.workspace.key,
       entryType: input.sourceType === 'top_up'
         ? 'top_up'
+        : input.sourceType === 'refund'
+          ? 'refund'
         : input.sourceType === 'adjustment'
           ? 'adjustment'
           : 'grant',
@@ -545,8 +558,23 @@ export async function grantCredits(input: {
       sourceId: input.sourceId,
       idempotencyKey: key,
     })
-    return { granted: true as const }
-  }) as Promise<{ granted: boolean; reason?: string }>
+    if (input.operatorAudit) {
+      const audit = input.operatorAudit
+      await tx`
+        insert into public.lab_admin_audit_events
+          (id, actor_id, target_workspace_key, action, credits_delta, balance_before,
+           balance_after, reason, request_id, idempotency_key)
+        values (${`adm_${crypto.randomUUID()}`}, ${audit.actorId}, ${input.context.workspace.key},
+                ${audit.action}, ${credits}, ${balanceBefore}, ${balanceBefore + credits},
+                ${audit.reason.slice(0, 240)}, ${audit.requestId.slice(0, 80)}, ${key})`
+    }
+    return { granted: true as const, balanceBefore, balanceAfter: balanceBefore + credits }
+  }) as Promise<{
+    granted: boolean
+    reason?: string
+    balanceBefore?: number
+    balanceAfter?: number
+  }>
 }
 
 export type { CreditFeature }

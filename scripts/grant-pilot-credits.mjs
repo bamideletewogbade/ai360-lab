@@ -22,7 +22,6 @@ const { grantCredits } = await import('../src/lib/billing/credit-repository.ts')
 const { getPostgres } = await import('../src/lib/postgres.ts')
 const { createWorkspaceAuthContext } = await import('../src/lib/workspace.ts')
 
-const POSTGRES_TEXT_OID = 25
 const USAGE = `
 Grant sponsored credits to a private pilot cohort by registered account email.
 
@@ -113,7 +112,7 @@ async function main() {
        left join public.lab_credit_accounts a
           on a.workspace_key = 'user:' || u.clerk_user_id
        where u.deleted_at is null
-         and lower(btrim(u.email)) = any(${sql.array(emails, POSTGRES_TEXT_OID)})
+         and lower(btrim(u.email)) in ${sql(emails)}
        order by u.created_at desc`
 
     const usersByEmail = new Map()

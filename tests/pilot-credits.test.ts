@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import {
   normalizePilotCohort,
@@ -42,4 +43,10 @@ test('pilot cohorts produce stable retry keys and reject unsafe labels', () => {
   assert.equal(normalizePilotCohort(' Pilot-2026-09 '), 'pilot-2026-09')
   assert.equal(pilotGrantIdempotencyKey('pilot-2026-09'), 'pilot:pilot-2026-09')
   assert.throws(() => normalizePilotCohort('Pilot September!'), /Cohort must be/)
+})
+
+test('pilot account lookup works on a cold database connection', async () => {
+  const script = await readFile(new URL('../scripts/grant-pilot-credits.mjs', import.meta.url), 'utf8')
+  assert.match(script, /lower\(btrim\(u\.email\)\) in \$\{sql\(emails\)\}/)
+  assert.doesNotMatch(script, /= any\(\$\{sql\.array\(emails/)
 })

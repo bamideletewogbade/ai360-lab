@@ -5,6 +5,7 @@ import test from 'node:test'
 const runtimeMigrationUrl = new URL('../database/postgres/0002_runtime_foundation.sql', import.meta.url)
 const onboardingMigrationUrl = new URL('../database/postgres/0013_workspace_onboarding.sql', import.meta.url)
 const onboardingMemberMigrationUrl = new URL('../database/postgres/0014_onboarding_per_member.sql', import.meta.url)
+const adminMigrationUrl = new URL('../database/postgres/0023_admin_console.sql', import.meta.url)
 
 test('the Supabase runtime foundation persists every durable agent boundary', async () => {
   const migration = await readFile(runtimeMigrationUrl, 'utf8')
@@ -62,4 +63,14 @@ test('task dependencies cannot cross agent runs', async () => {
   assert.match(migration, /foreign key \(workspace_key, run_id, task_id\)/)
   assert.match(migration, /references public\.lab_agent_tasks\(workspace_key, run_id, id\)/)
   assert.match(migration, /check \(task_id <> depends_on_task_id\)/)
+})
+
+test('admin credit mutations have a private immutable audit table', async () => {
+  const migration = await readFile(adminMigrationUrl, 'utf8')
+  assert.match(migration, /create table if not exists public\.lab_admin_audit_events/)
+  assert.match(migration, /action text not null check \(action in \('credit_grant', 'credit_refund'\)\)/)
+  assert.match(migration, /balance_before bigint not null/)
+  assert.match(migration, /balance_after bigint not null/)
+  assert.match(migration, /alter table public\.lab_admin_audit_events enable row level security/)
+  assert.match(migration, /revoke all on public\.lab_admin_audit_events from public, anon, authenticated/)
 })
