@@ -7,7 +7,7 @@ import {
   listRecentMediaJobs,
   readMediaJob,
 } from "@/lib/media/job-repository";
-import { downloadGeneratedMedia } from "@/lib/media/storage";
+import { deleteGeneratedMedia, downloadGeneratedMedia } from "@/lib/media/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,6 +99,74 @@ export async function GET(request: Request) {
     log.finish(500, { outcome: "exception" });
     return Response.json(
       { error: "Saved media could not be opened." },
+      { status: 500, headers: log.headers() },
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  const log = requestLogger(request, "/api/studio/media");
+  const limited = rateLimit(request, "studio_media_delete", {
+    minute: 20,
+    daily: 200,
+  });
+  if (limited)
+    return new Response(limited.body, {
+      status: limited.status,
+      headers: log.headers(limited.headers),
+    });
+
+  try {
+    const context = await getOptionalAuthContext();
+    if (!context) {
+      log.finish(401, { outcome: "sign_in_required" });
+      return Response.json(
+        { error: "Sign in to delete saved media." },
+        { status: 401, headers: log.headers() },
+      );
+    }
+    if (!isMediaJobStoreConfigured()) {
+      log.finish(503, { outcome: "not_configured" });
+      return Response.json(
+        { error: "Saved media is not configured." },
+        { status: 503, headers: log.headers() },
+      );
+    }
+
+    const body = await request.json().catch(() => null) as { jobId?: unknown } | null;
+    const jobId = typeof body?.jobId === "string" ? body.jobId.trim() : "";
+    if (!jobId || jobId.length > 96) {
+      log.finish(400, { outcome: "invalid_job" });
+      return Response.json(
+        { error: "Choose a valid media item to delete." },
+        { status: 400, headers: log.headers() },
+      );
+    }
+
+    const result = await deleteGeneratedMedia(context, jobId);
+    if (result === "not_found") {
+      log.finish(404, { outcome: "not_found" });
+      return Response.json(
+        { error: "This media item was not found." },
+        { status: 404, headers: log.headers() },
+      );
+    }
+    if (result === "active") {
+      log.finish(409, { outcome: "still_rendering" });
+      return Response.json(
+        { error: "Wait for this media item to finish before deleting it." },
+        { status: 409, headers: log.headers() },
+      );
+    }
+
+    log.info("studio.media.deleted", { jobId });
+    log.finish(200, { outcome: "deleted" });
+    return Response.json({ ok: true }, { headers: log.headers() });
+  } catch (error) {
+    log.error("studio.media.delete_failed", errorDetails(error));
+    log.finish(500, { outcome: "exception" });
+    return Response.json(
+      { error: "This media item could not be deleted." },
       { status: 500, headers: log.headers() },
     );
   }

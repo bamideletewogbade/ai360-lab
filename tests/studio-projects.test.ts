@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mergeProjects, setProjectArchived, sortProjects, upsertProject } from '../src/lib/studio-projects.ts'
+import { mergeProjects, removeProject, setProjectArchived, sortProjects, upsertProject } from '../src/lib/studio-projects.ts'
 
 type Project = { id: string; updatedAt: number; name: string; archivedAt?: number }
 
@@ -46,4 +46,12 @@ test('archive and restore preserve the project instead of deleting it', () => {
   const restored = setProjectArchived(archived, 'campaign')
   assert.equal(restored.length, 1)
   assert.equal(restored[0].archivedAt, undefined)
+})
+
+test('permanent deletion removes only the selected project', () => {
+  const projects: Project[] = [
+    { id: 'remove', updatedAt: 50, name: 'Remove me' },
+    { id: 'keep', updatedAt: 40, name: 'Keep me' },
+  ]
+  assert.deepEqual(removeProject(projects, 'remove'), [projects[1]])
 })

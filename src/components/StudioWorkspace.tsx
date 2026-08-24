@@ -8,7 +8,8 @@ import { ProjectKnowledge } from '@/components/ProjectKnowledge'
 import { ProjectHeader } from '@/components/ProjectHeader'
 import { ProjectStart } from '@/components/ProjectStart'
 import { CreateProjectModal } from '@/components/CreateProjectModal'
-import { mergeProjects, setProjectArchived, sortProjects, upsertProject } from '@/lib/studio-projects'
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog'
+import { mergeProjects, removeProject, setProjectArchived, sortProjects, upsertProject } from '@/lib/studio-projects'
 import { PACKS, findPack, packCredits, type Pack, type PackId, type SpecialistId } from '@/lib/studio/packs'
 import {
   addAssetVersion,
@@ -296,6 +297,9 @@ export function StudioWorkspace({
   const [projects, setProjects] = useState<StudioProject[]>([])
   const [view, setView] = useState<StudioView>('dashboard')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [projectToDelete, setProjectToDelete] = useState<StudioProject | null>(null)
+  const [projectDeleteBusy, setProjectDeleteBusy] = useState(false)
+  const [projectDeleteError, setProjectDeleteError] = useState('')
   const [projectFilter, setProjectFilter] = useState<'all' | 'active' | 'archived'>('all')
   const [projectSearch, setProjectSearch] = useState('')
   const [showQuickStart, setShowQuickStart] = useState(false)
@@ -1123,6 +1127,36 @@ export function StudioWorkspace({
     if (action === 'archive' && project?.id === target.id) openDashboard()
   }
 
+  async function deleteProjectPermanently(target: StudioProject) {
+    setProjectDeleteBusy(true)
+    setProjectDeleteError('')
+    if (signedIn) {
+      const id = requestId()
+      try {
+        const response = await fetch('/api/projects', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': id },
+          body: JSON.stringify({ id: target.id }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          const reference = data.requestId || response.headers.get('X-Request-Id') || id
+          throw new Error(`${data.error?.message || 'The project could not be deleted.'} Reference: ${reference}`)
+        }
+      } catch (cause) {
+        setProjectDeleteError(cause instanceof Error ? cause.message : 'The project could not be deleted.')
+        setProjectDeleteBusy(false)
+        return
+      }
+    }
+
+    setProjects((current) => removeProject(current, target.id))
+    if (project?.id === target.id) openDashboard()
+    setProjectToDelete(null)
+    setProjectDeleteBusy(false)
+    setSaveState(signedIn ? 'saved' : 'local')
+  }
+
   async function importGuestWork() {
     if (!guestProjects.length || importBusy) return
     setImportBusy(true)
@@ -1300,6 +1334,21 @@ export function StudioWorkspace({
     return (
       <main className="studio-main" ref={mainRef}>
         {showCreateModal ? <CreateProjectModal onCreate={createNamedProject} onClose={() => setShowCreateModal(false)} /> : null}
+        {projectToDelete ? (
+          <DeleteConfirmationDialog
+            title={`Delete “${projectToDelete.campaign.name}”?`}
+            description="This permanently removes the project, its work and uploaded files. Linked chats and Media Studio creations stay in their own libraries."
+            confirmLabel="Delete project"
+            busy={projectDeleteBusy}
+            error={projectDeleteError}
+            onClose={() => {
+              if (projectDeleteBusy) return
+              setProjectToDelete(null)
+              setProjectDeleteError('')
+            }}
+            onConfirm={() => void deleteProjectPermanently(projectToDelete)}
+          />
+        ) : null}
         <div className="studio-library">
           <header className="library-head">
             <div className="library-title">
@@ -1368,6 +1417,11 @@ export function StudioWorkspace({
                   project={item}
                   archived={Boolean(item.archivedAt)}
                   onOpen={() => (item.archivedAt ? changeProjectLifecycle(item, 'restore') : openProject(item))}
+                  onLifecycle={() => void changeProjectLifecycle(item, item.archivedAt ? 'restore' : 'archive')}
+                  onDelete={() => {
+                    setProjectDeleteError('')
+                    setProjectToDelete(item)
+                  }}
                 />
               ))}
               {canGhost ? (
@@ -2153,7 +2207,21 @@ function relativeTime(timestamp: number) {
   return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function ProjectCard({ project, onOpen, archived = false }: { project: StudioProject; onOpen: () => void; archived?: boolean }) {
+function ProjectCard({
+  project,
+  onOpen,
+  onLifecycle,
+  onDelete,
+  archived = false,
+}: {
+  project: StudioProject
+  onOpen: () => void
+  onLifecycle: () => void
+  onDelete: () => void
+  archived?: boolean
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const completion = projectCompletion(project)
   const accent = projectAccent(project.id)
   const total = completion.total
@@ -2163,22 +2231,68 @@ function ProjectCard({ project, onOpen, archived = false }: { project: StudioPro
   const description = project.campaign.objective || project.intake.goal
     || 'A home for the context, conversations, work and outputs that belong together.'
   const mark = (project.intake.businessName || project.campaign.name || 'Pr').slice(0, 2).toUpperCase()
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const closeOutside = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', closeOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [menuOpen])
+
   return (
-    <button className={`project-card${archived ? ' archived' : ''}`} onClick={onOpen}>
-      <span className="project-card-head">
-        <i className={`project-mark accent-${accent}`}>{mark}</i>
-        <span className="project-card-name"><b>{project.campaign.name}</b><small>{subtitle}</small></span>
-        <em className={`project-pill p-${status}`}>{statusLabel}</em>
-      </span>
-      <span className="project-card-desc">{description}</span>
-      <span className="project-card-meta">
-        <i className="meta-chip">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M20 6 9 17l-5-5"/></svg>
-          {total} work item{total === 1 ? '' : 's'}
-        </i>
-        <em className="meta-when">{archived ? 'Restore ↥' : relativeTime(project.updatedAt)}</em>
-      </span>
-    </button>
+    <article className={`project-card${archived ? ' archived' : ''}`}>
+      <button
+        type="button"
+        className="project-card-open"
+        onClick={onOpen}
+        aria-label={`${archived ? 'Restore' : 'Open'} ${project.campaign.name}`}
+      >
+        <span className="project-card-head">
+          <i className={`project-mark accent-${accent}`}>{mark}</i>
+          <span className="project-card-name"><b>{project.campaign.name}</b><small>{subtitle}</small></span>
+          <em className={`project-pill p-${status}`}>{statusLabel}</em>
+        </span>
+        <span className="project-card-desc">{description}</span>
+        <span className="project-card-meta">
+          <i className="meta-chip">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M20 6 9 17l-5-5"/></svg>
+            {total} work item{total === 1 ? '' : 's'}
+          </i>
+          <em className="meta-when">{archived ? 'Tap to restore' : relativeTime(project.updatedAt)}</em>
+        </span>
+      </button>
+      <div className="project-card-menu-wrap" ref={menuRef}>
+        <button
+          type="button"
+          className="project-card-menu-trigger"
+          aria-label={`Project actions for ${project.campaign.name}`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="19" r="1.3"/></svg>
+        </button>
+        {menuOpen ? (
+          <div className="project-card-menu" role="menu">
+            <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onLifecycle() }}>
+              {archived ? 'Restore project' : 'Archive project'}
+            </button>
+            <button type="button" role="menuitem" className="danger" onClick={() => { setMenuOpen(false); onDelete() }}>
+              Delete permanently
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </article>
   )
 }
 

@@ -869,6 +869,129 @@ button {
   box-shadow: none;
 }
 
+/* One quiet confirmation pattern for permanent deletion across the workspace. */
+.delete-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(16 17 18 / 0.55);
+  backdrop-filter: blur(8px);
+  animation: onboarding-backdrop-in 0.2s ease both;
+}
+.delete-dialog {
+  width: min(470px, 100%);
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid var(--line-dark);
+  border-radius: 18px;
+  background: var(--white);
+  color: var(--black);
+  box-shadow: 0 28px 80px rgb(16 17 18 / 0.24);
+}
+.delete-dialog-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #f8e9e7;
+  color: #a2352f;
+}
+.delete-dialog-mark svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.delete-dialog-kicker {
+  margin: 1px 0 5px;
+  color: #a2352f;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.delete-dialog h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 22px;
+  line-height: 1.2;
+}
+.delete-dialog [id="delete-dialog-description"] {
+  margin: 9px 0 0;
+  color: var(--grey);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.delete-dialog-error {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: #f8e9e7;
+  color: #8f2f29;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.delete-dialog-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+.delete-dialog-actions button {
+  min-height: 42px;
+  padding: 0 17px;
+  border: 1px solid var(--line-dark);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--charcoal);
+  font: 750 14px/1 inherit;
+  cursor: pointer;
+}
+.delete-dialog-actions button:hover:not(:disabled) {
+  background: var(--warm-white);
+}
+.delete-dialog-actions .delete-dialog-confirm {
+  border-color: #a2352f;
+  background: #a2352f;
+  color: #fff;
+}
+.delete-dialog-actions .delete-dialog-confirm:hover:not(:disabled) {
+  background: #852b26;
+}
+.delete-dialog-actions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+@media (max-width: 620px) {
+  .delete-dialog-backdrop {
+    place-items: end center;
+    padding: 0;
+  }
+  .delete-dialog {
+    width: 100%;
+    padding: 22px 18px max(18px, env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+  }
+  .delete-dialog-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .delete-dialog-actions button {
+    min-height: 48px;
+    padding-inline: 10px;
+  }
+}
+
 /* Credit balance in the top bar. Credits, not tokens: the unit the audience pays
    in. Shows the exact reserved amount while a run holds credits, flashes when the
    balance changes, and taps open a plans popover. */
@@ -1162,20 +1285,39 @@ button {
   gap: 15px;
 }
 .project-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   text-align: left;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--white);
-  overflow: hidden;
-  cursor: pointer;
+  overflow: visible;
   box-shadow: 0 6px 20px rgba(16, 17, 18, 0.045);
   transition:
     transform 0.2s var(--ease),
     box-shadow 0.2s,
     border-color 0.2s;
   animation: gallery-card-in 0.45s var(--ease) both;
+}
+.project-card-open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.project-card-open:focus-visible {
+  outline: 2px solid var(--black);
+  outline-offset: 3px;
 }
 .project-card:hover {
   transform: translateY(-4px);
@@ -1186,7 +1328,7 @@ button {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 15px 16px 12px;
+  padding: 15px 56px 12px 16px;
 }
 .project-mark {
   display: grid;
@@ -1291,6 +1433,86 @@ button {
   margin-left: auto;
   font-style: normal;
   font-variant-numeric: tabular-nums;
+}
+.project-card-menu-wrap {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  right: 12px;
+}
+.project-card-menu-trigger {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--white) 88%, transparent);
+  color: var(--grey);
+  cursor: pointer;
+}
+.project-card-menu-trigger:hover,
+.project-card-menu-trigger[aria-expanded="true"] {
+  border-color: var(--line);
+  background: var(--warm-white);
+  color: var(--black);
+}
+.project-card-menu-trigger svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+.project-card-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 184px;
+  padding: 5px;
+  border: 1px solid var(--line-dark);
+  border-radius: 12px;
+  background: var(--white);
+  box-shadow: 0 16px 38px rgb(16 17 18 / 0.16);
+}
+.project-card-menu button {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--charcoal);
+  font: 700 13px/1.2 inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.project-card-menu button:hover,
+.project-card-menu button:focus-visible {
+  background: var(--warm-white);
+  outline: none;
+}
+.project-card-menu button.danger {
+  color: #a2352f;
+}
+.project-card-menu button.danger:hover,
+.project-card-menu button.danger:focus-visible {
+  background: #f8e9e7;
+}
+@media (max-width: 620px) {
+  .project-card-menu-trigger {
+    width: 44px;
+    height: 44px;
+  }
+  .project-card-menu-wrap {
+    top: 8px;
+    right: 8px;
+  }
+  .project-card-head {
+    padding-right: 58px;
+  }
+  .project-card-menu button {
+    min-height: 44px;
+  }
 }
 
 .project-card.ghost {
@@ -3114,6 +3336,53 @@ button {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
+}
+.ms-delete-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: 10px;
+  background: rgb(16 17 18 / 0.78);
+  color: #fff;
+  opacity: 0;
+  transform: translateY(-3px);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease), background 0.16s;
+}
+.ms-card:hover .ms-delete-button,
+.ms-card:focus-within .ms-delete-button,
+.ms-delete-button:focus-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.ms-delete-button:hover,
+.ms-delete-button:focus-visible {
+  background: #a2352f;
+  outline: none;
+}
+.ms-delete-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@media (hover: none), (max-width: 620px) {
+  .ms-delete-button {
+    width: 44px;
+    height: 44px;
+    opacity: 1;
+    transform: none;
+  }
 }
 .ms-card-body {
   flex: 1;

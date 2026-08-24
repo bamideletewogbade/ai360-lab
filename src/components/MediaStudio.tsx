@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { notifyCreditsChanged } from "@/components/CreditBalance";
+import { DeleteConfirmationDialog } from "@/components/DeleteConfirmationDialog";
 
 type MediaKind = "image" | "video";
 type StudioIconName =
@@ -17,6 +18,7 @@ type StudioIconName =
   | "city"
   | "sliders"
   | "reuse"
+  | "trash"
   | "chevron";
 
 type MediaItem = {
@@ -28,6 +30,8 @@ type MediaItem = {
   url: string;
   poster?: string;
   createdAt: string;
+  /** Durable server job. Guest-only results have no job and disappear locally. */
+  jobId?: string;
   /** Examples ship with the studio; real work is the person's own. */
   example?: boolean;
 };
@@ -287,6 +291,12 @@ function StudioIcon({ name }: { name: StudioIconName }) {
         <path d="M20 4v4.5h-4.5M4 20v-4.5h4.5" />
       </>
     ),
+    trash: (
+      <>
+        <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13" />
+        <path d="M10 11v5m4-5v5" />
+      </>
+    ),
     chevron: <path d="m6 9 6 6 6-6" />,
   };
   return (
@@ -478,6 +488,9 @@ export function MediaStudio() {
   const [cameraMotion, setCameraMotion] = useState("pan");
   const [generating, setGenerating] = useState(false);
   const [gallery, setGallery] = useState<MediaItem[]>(EXAMPLE_GALLERY);
+  const [mediaToDelete, setMediaToDelete] = useState<MediaItem | null>(null);
+  const [mediaDeleteBusy, setMediaDeleteBusy] = useState(false);
+  const [mediaDeleteError, setMediaDeleteError] = useState("");
   const [galleryFilter, setGalleryFilter] = useState<"all" | MediaKind>("all");
   const [galleryPage, setGalleryPage] = useState(1);
   const [toastNotice, setToastNotice] = useState("");
@@ -744,7 +757,7 @@ export function MediaStudio() {
       }
 
       const newItem: MediaItem = {
-        id: newMediaId(),
+        id: typeof data.jobId === "string" ? data.jobId : newMediaId(),
         kind: "image",
         prompt: prompt.trim(),
         aspectRatio: imageAspect,
@@ -752,6 +765,7 @@ export function MediaStudio() {
           IMAGE_LOOKS.find((entry) => entry.value === look)?.label || look,
         url: data.image,
         createdAt: "Just now",
+        jobId: typeof data.jobId === "string" ? data.jobId : undefined,
       };
       setGallery((previous) => [newItem, ...previous]);
       setGalleryFilter("all");
@@ -1036,13 +1050,18 @@ export function MediaStudio() {
       const status = data.status || "pending";
       if (status === "completed" && data.downloadUrl) {
         const newItem: MediaItem = {
-          id: newMediaId(),
+          id:
+            typeof data.jobId === "string"
+              ? data.jobId
+              : job.jobId || newMediaId(),
           kind: "video",
           prompt: job.prompt,
           aspectRatio: job.aspectRatio || "16:9",
           styleName: `${job.duration} clip`,
           url: data.downloadUrl,
           createdAt: "Just now",
+          jobId:
+            typeof data.jobId === "string" ? data.jobId : job.jobId,
         };
         setGallery((previous) => [newItem, ...previous]);
         clearVideoJob();
@@ -1175,6 +1194,7 @@ export function MediaStudio() {
               typeof job.createdAt === "string"
                 ? new Date(job.createdAt).toLocaleDateString()
                 : "Recent",
+            jobId: job.id,
           }));
         setGallery((previous) => {
           const existingIds = new Set(
@@ -1306,6 +1326,43 @@ export function MediaStudio() {
     promptRef.current?.focus();
   };
 
+  const deleteMedia = async (item: MediaItem) => {
+    setMediaDeleteBusy(true);
+    setMediaDeleteError("");
+    if (item.jobId) {
+      try {
+        const response = await fetch("/api/studio/media", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId: item.jobId }),
+        });
+        const data = await response.json().catch(() => ({}));
+        // A stale card whose server record is already gone should still leave
+        // the gallery clean instead of becoming impossible to dismiss.
+        if (!response.ok && response.status !== 404) {
+          throw new Error(
+            typeof data.error === "string"
+              ? data.error
+              : "This media item could not be deleted.",
+          );
+        }
+      } catch (cause) {
+        setMediaDeleteError(
+          cause instanceof Error
+            ? cause.message
+            : "This media item could not be deleted.",
+        );
+        setMediaDeleteBusy(false);
+        return;
+      }
+    }
+
+    setGallery((current) => current.filter((entry) => entry.id !== item.id));
+    setMediaToDelete(null);
+    setMediaDeleteBusy(false);
+    showToast(`${item.kind === "video" ? "Video" : "Image"} deleted.`, false);
+  };
+
   /** Ctrl/⌘+Enter starts the work without reaching for the button. */
   const onPromptKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
@@ -1328,6 +1385,23 @@ export function MediaStudio() {
 
   return (
     <div className="media-studio">
+      {mediaToDelete ? (
+        <DeleteConfirmationDialog
+          title={`Delete this ${mediaToDelete.kind}?`}
+          description={mediaToDelete.jobId
+            ? `This permanently removes the ${mediaToDelete.kind} and its saved file. This cannot be undone.`
+            : `This removes the ${mediaToDelete.kind} from this gallery. This cannot be undone.`}
+          confirmLabel={`Delete ${mediaToDelete.kind}`}
+          busy={mediaDeleteBusy}
+          error={mediaDeleteError}
+          onClose={() => {
+            if (mediaDeleteBusy) return;
+            setMediaToDelete(null);
+            setMediaDeleteError("");
+          }}
+          onConfirm={() => void deleteMedia(mediaToDelete)}
+        />
+      ) : null}
       {toastNotice ? (
         <div
           className={`ms-toast${toastError ? " is-error" : ""}`}
@@ -1508,6 +1582,20 @@ export function MediaStudio() {
                       />
                       {item.example ? "Example" : item.aspectRatio}
                     </span>
+                    {!item.example ? (
+                      <button
+                        type="button"
+                        className="ms-delete-button"
+                        aria-label={`Delete this ${item.kind}`}
+                        title={`Delete ${item.kind}`}
+                        onClick={() => {
+                          setMediaDeleteError("");
+                          setMediaToDelete(item);
+                        }}
+                      >
+                        <StudioIcon name="trash" />
+                      </button>
+                    ) : null}
                   </div>
                   <div className="ms-card-body">
                     <p>{item.prompt}</p>

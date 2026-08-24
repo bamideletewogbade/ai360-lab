@@ -73,7 +73,7 @@ export function configuredLimit(key: string, fallback: number) {
 
 export type RateScope =
   | 'chat' | 'agent' | 'studio' | 'studio_image' | 'studio_video'
-  | 'studio_video_quote' | 'studio_video_status' | 'voice' | 'export' | 'documents' | 'action' | 'feedback'
+  | 'studio_video_quote' | 'studio_video_status' | 'studio_media_delete' | 'voice' | 'export' | 'documents' | 'action' | 'feedback'
   | 'billing_checkout' | 'payment_callback' | 'browser'
 
 /**

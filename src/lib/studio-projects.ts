@@ -28,3 +28,7 @@ export function setProjectArchived<T extends TimestampedProject>(
 ) {
   return projects.map((project) => project.id === projectId ? { ...project, archivedAt } : project)
 }
+
+export function removeProject<T extends TimestampedProject>(projects: T[], projectId: string) {
+  return projects.filter((project) => project.id !== projectId)
+}

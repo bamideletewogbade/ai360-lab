@@ -136,3 +136,56 @@ export async function downloadGeneratedMedia(context: WorkspaceAuthContext, asse
   if (downloaded.error) throw downloaded.error
   return { bytes: await downloaded.data.arrayBuffer(), mimeType: asset.mime_type, byteSize: Number(asset.byte_size) }
 }
+
+export async function deleteGeneratedMedia(
+  context: WorkspaceAuthContext,
+  jobId: string,
+): Promise<'deleted' | 'not_found' | 'active'> {
+  const sql = getPostgres()
+  const safeJobId = jobId.slice(0, 96)
+  const [job] = await sql<{ status: string }[]>`
+    select status from public.lab_media_jobs
+     where workspace_key = ${context.workspace.key} and id = ${safeJobId}`
+  if (!job) return 'not_found'
+  if (!['completed', 'failed', 'cancelled'].includes(job.status)) return 'active'
+
+  const assets = await sql<{
+    id: string
+    storage_bucket: string
+    storage_path: string
+  }[]>`
+    select distinct asset.id, asset.storage_bucket, asset.storage_path
+      from public.lab_media_outputs output
+      join public.lab_assets asset
+        on asset.workspace_key = output.workspace_key and asset.id = output.asset_id
+     where output.workspace_key = ${context.workspace.key} and output.job_id = ${safeJobId}`
+
+  const pathsByBucket = new Map<string, Set<string>>()
+  for (const asset of assets) {
+    const paths = pathsByBucket.get(asset.storage_bucket) || new Set<string>()
+    paths.add(asset.storage_path)
+    pathsByBucket.set(asset.storage_bucket, paths)
+  }
+  for (const [bucket, paths] of pathsByBucket) {
+    const removed = await storageClient().storage.from(bucket).remove([...paths])
+    if (removed.error) throw removed.error
+  }
+
+  await sql.begin(async (tx) => {
+    if (assets.length) {
+      const assetIds = [...new Set(assets.map((asset) => asset.id))]
+      await tx`
+        update public.lab_assets
+           set status = 'deleted', deleted_at = coalesce(deleted_at, now()), updated_at = now()
+         where workspace_key = ${context.workspace.key} and id in ${tx(assetIds)}`
+    }
+    await tx`
+      delete from public.lab_media_outputs
+       where workspace_key = ${context.workspace.key} and job_id = ${safeJobId}`
+    await tx`
+      delete from public.lab_media_jobs
+       where workspace_key = ${context.workspace.key} and id = ${safeJobId}
+         and status in ('completed', 'failed', 'cancelled')`
+  })
+  return 'deleted'
+}

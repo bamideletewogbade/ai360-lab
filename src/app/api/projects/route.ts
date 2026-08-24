@@ -115,6 +115,10 @@ const lifecycleSchema = z.object({
   action: z.enum(['archive', 'restore']),
 })
 
+const projectDeletionSchema = z.object({
+  id: z.string().min(1).max(64),
+})
+
 type ProjectRow = {
   project_data: Record<string, unknown>
   archived_at: string | number | null
@@ -188,6 +192,39 @@ export async function PATCH(request: Request) {
   } catch (error) {
     logger.error('studio.project.lifecycle_failed', errorDetails(error))
     return response(logger, { error: { code: 'PROJECT_ACTION_FAILED', message: 'The project could not be updated.' } }, 500)
+  }
+}
+
+export async function DELETE(request: Request) {
+  const logger = requestLogger(request, '/api/projects')
+  try {
+    const context = await getOptionalAuthContext()
+    if (!context) return response(logger, { error: { code: 'AUTH_REQUIRED', message: 'Sign in to delete projects.' } }, 401)
+    if (!isPostgresConfigured()) return response(logger, { error: { code: 'DATABASE_NOT_CONFIGURED', message: 'Cloud project sync is not configured yet.' } }, 503)
+
+    const parsed = projectDeletionSchema.safeParse(await request.json().catch(() => null))
+    if (!parsed.success) return response(logger, { error: { code: 'INVALID_PROJECT', message: 'Choose a valid project to delete.' } }, 400)
+
+    const sql = getPostgres()
+    const affected = await sql.begin(async (tx) => {
+      await ensureWorkspaceRecord(tx, context)
+      const result = await tx`
+        delete from public.lab_studio_projects
+         where workspace_key = ${context.workspace.key} and id = ${parsed.data.id}`
+      return result.count
+    })
+    if (!affected) return response(logger, { error: { code: 'PROJECT_NOT_FOUND', message: 'Project was not found in this workspace.' } }, 404)
+
+    // Project files cascade away, while linked conversations intentionally keep
+    // their history and simply return to the main chat list.
+    logger.info('studio.project.deleted', {
+      workspaceType: context.workspace.type,
+      projectId: parsed.data.id,
+    })
+    return response(logger, { ok: true })
+  } catch (error) {
+    logger.error('studio.project.delete_failed', errorDetails(error))
+    return response(logger, { error: { code: 'PROJECT_DELETE_FAILED', message: 'The project could not be deleted.' } }, 500)
   }
 }
 
