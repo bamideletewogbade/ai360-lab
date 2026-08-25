@@ -8,6 +8,7 @@ const onboardingMemberMigrationUrl = new URL('../database/postgres/0014_onboardi
 const adminMigrationUrl = new URL('../database/postgres/0023_admin_console.sql', import.meta.url)
 const adminFinanceMigrationUrl = new URL('../database/postgres/0024_admin_finance_indexes.sql', import.meta.url)
 const adminProgramMigrationUrl = new URL('../database/postgres/0025_admin_program_operations.sql', import.meta.url)
+const pilotInvitationMigrationUrl = new URL('../database/postgres/0026_pilot_invitations.sql', import.meta.url)
 
 test('the Supabase runtime foundation persists every durable agent boundary', async () => {
   const migration = await readFile(runtimeMigrationUrl, 'utf8')
@@ -98,4 +99,36 @@ test('pilot operations use private indexed membership, audit, and per-recipient 
   assert.match(migration, /revoke all on public\.lab_admin_program_memberships from public, anon, authenticated/)
   assert.match(migration, /revoke all on public\.lab_admin_contact_events from public, anon, authenticated/)
   assert.doesNotMatch(migration, /policy[\s\S]+for insert/i)
+})
+
+test('pilot invitations are keyed on a lower-cased address, not a user id', async () => {
+  const migration = await readFile(pilotInvitationMigrationUrl, 'utf8')
+  assert.match(migration, /create table if not exists public\.lab_admin_invitations/)
+  assert.match(migration, /unique \(program_key, email\)/)
+  // Storing the address already folded keeps the sign-in claim an index probe.
+  assert.match(migration, /check \(email = lower\(email\)\)/)
+  assert.match(migration, /idx_lab_admin_invitations_claimable/)
+  // An invitation may only ever start someone at the beginning of the funnel.
+  assert.match(migration, /participation_status in \('invited', 'enrolled'\)/)
+  assert.match(migration, /invite_status in \('pending', 'sent', 'accepted', 'bounced', 'revoked'\)/)
+  // Accepted state and its evidence cannot drift apart.
+  assert.match(migration, /\(invite_status = 'accepted'\) = \(claimed_user_id is not null\)/)
+  assert.match(migration, /\(invite_status = 'accepted'\) = \(accepted_at is not null\)/)
+})
+
+test('invitation mail has its own delivery ledger because contact events require a membership', async () => {
+  const invitations = await readFile(pilotInvitationMigrationUrl, 'utf8')
+  const programs = await readFile(adminProgramMigrationUrl, 'utf8')
+  // The reason the invitation ledger has to exist: a contact event is bound to
+  // a membership row, which an invitee has no way to have yet.
+  assert.match(programs, /references public\.lab_admin_program_memberships\(program_key, user_id\) on delete cascade/)
+  assert.match(invitations, /create table if not exists public\.lab_admin_invitation_events/)
+  assert.match(invitations, /delivery_status is null or delivery_status in \('prepared', 'sent', 'failed', 'skipped'\)/)
+  // Same claim/finish idempotency contract as `claimAdminContactEvent`.
+  assert.match(invitations, /idempotency_key text not null unique/)
+  assert.match(invitations, /alter table public\.lab_admin_invitations enable row level security/)
+  assert.match(invitations, /alter table public\.lab_admin_invitation_events enable row level security/)
+  assert.match(invitations, /revoke all on public\.lab_admin_invitations from public, anon, authenticated/)
+  assert.match(invitations, /revoke all on public\.lab_admin_invitation_events from public, anon, authenticated/)
+  assert.doesNotMatch(invitations, /policy[\s\S]+for insert/i)
 })
