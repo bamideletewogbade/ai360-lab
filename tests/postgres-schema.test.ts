@@ -6,6 +6,7 @@ const runtimeMigrationUrl = new URL('../database/postgres/0002_runtime_foundatio
 const onboardingMigrationUrl = new URL('../database/postgres/0013_workspace_onboarding.sql', import.meta.url)
 const onboardingMemberMigrationUrl = new URL('../database/postgres/0014_onboarding_per_member.sql', import.meta.url)
 const adminMigrationUrl = new URL('../database/postgres/0023_admin_console.sql', import.meta.url)
+const adminFinanceMigrationUrl = new URL('../database/postgres/0024_admin_finance_indexes.sql', import.meta.url)
 
 test('the Supabase runtime foundation persists every durable agent boundary', async () => {
   const migration = await readFile(runtimeMigrationUrl, 'utf8')
@@ -73,4 +74,12 @@ test('admin credit mutations have a private immutable audit table', async () => 
   assert.match(migration, /balance_after bigint not null/)
   assert.match(migration, /alter table public\.lab_admin_audit_events enable row level security/)
   assert.match(migration, /revoke all on public\.lab_admin_audit_events from public, anon, authenticated/)
+})
+
+test('admin finance time-window queries have partial cost indexes', async () => {
+  const migration = await readFile(adminFinanceMigrationUrl, 'utf8')
+  assert.match(migration, /lab_credit_reservations\(feature, settled_at desc\)/)
+  assert.match(migration, /where status = 'settled' and feature in \('image', 'video'\)/)
+  assert.match(migration, /lab_usage_events\(feature, created_at desc\)/)
+  assert.match(migration, /where actual_cost_usd > 0/)
 })

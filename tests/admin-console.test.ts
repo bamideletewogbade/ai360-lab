@@ -10,6 +10,7 @@ import {
 } from '../src/lib/admin/contracts.ts'
 import { canManageAdminCredits, isAdminOperator } from '../src/lib/admin/access.ts'
 import { isMissingAdminAuditTable } from '../src/lib/admin/audit.ts'
+import { buildAdminFinance } from '../src/lib/admin/finance.ts'
 import { createWorkspaceAuthContext } from '../src/lib/workspace.ts'
 
 function user(overrides: Partial<AdminCohortUserMetrics> = {}): AdminCohortUserMetrics {
@@ -69,6 +70,34 @@ test('only the missing admin audit relation activates read-only compatibility mo
   }), false)
 })
 
+test('admin finance uses the real credit engine for price, landed cost and margin', () => {
+  const finance = buildAdminFinance({
+    cashCollectedGhs: 125,
+    approvedPayments: 1,
+    chargedCredits: 9,
+    providerCostUsd: 0.1,
+    media: [
+      { mediaType: 'image', settledJobs: 1, chargedJobs: 1, chargedCredits: 3, providerCharges: 1, providerCostUsd: 0.02 },
+      { mediaType: 'video', settledJobs: 1, chargedJobs: 1, chargedCredits: 6, providerCharges: 1, providerCostUsd: 0.08 },
+    ],
+    recentMedia: [{
+      id: 'media_1', userId: 'user_1', email: 'person@example.com', displayName: 'Person',
+      mediaType: 'image', model: 'image-model', status: 'completed', chargedCredits: 3,
+      providerCostUsd: 0.02, occurredAt: '2026-08-24T12:00:00.000Z',
+    }],
+  })
+
+  assert.equal(finance.calculation.referencePlanName, 'Everyday')
+  assert.equal(finance.calculation.referenceCreditPriceGhs, 1.0417)
+  assert.equal(finance.calculation.costBudgetPerCreditGhs, 0.26)
+  assert.equal(finance.calculation.unitGrossMarginPercent, 75)
+  assert.equal(finance.media[0].referenceBilledGhs, 3.13)
+  assert.equal(finance.media[0].landedCostGhs, 0.3)
+  assert.equal(finance.media[0].grossProfitGhs, 2.82)
+  assert.equal(finance.recentMedia[0].grossMarginPercent, 90.3)
+  assert.equal(finance.creditRates.find((rate) => rate.id === 'topup-50')?.pricePerCreditGhs, 1.25)
+})
+
 test('read access and credit mutations use separate operator capabilities', () => {
   const previous = {
     admin: process.env.AI360_ADMIN_OPERATOR_IDS,
@@ -98,8 +127,12 @@ test('admin reporting and AI insights remain metadata-only', async () => {
   const repository = await readFile(new URL('../src/lib/admin/repository.ts', import.meta.url), 'utf8')
   const cohorts = await readFile(new URL('../src/lib/admin/cohorts.ts', import.meta.url), 'utf8')
   const ai = await readFile(new URL('../src/lib/admin/ai-insights.ts', import.meta.url), 'utf8')
+  const consoleUi = await readFile(new URL('../src/components/AdminConsole.tsx', import.meta.url), 'utf8')
   assert.match(repository, /from public\.lab_cost_ledger/)
   assert.match(repository, /settled_credits/)
+  assert.match(repository, /from public\.lab_payment_attempts/)
+  assert.match(consoleUi, /Know what every credit earns/)
+  assert.match(consoleUi, /How the engine gets to credits/)
   assert.doesNotMatch(`${repository}\n${cohorts}`, /message\.content|evidence_excerpt|project_data/)
   assert.match(ai, /aggregate, metadata-only evidence/)
   assert.doesNotMatch(ai, /\.users\.map|email:/)

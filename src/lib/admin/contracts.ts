@@ -70,6 +70,82 @@ export type AdminFeatureMetric = {
   providerCostUsd: number
 }
 
+export type AdminMediaFinanceMetric = {
+  mediaType: 'image' | 'video'
+  settledJobs: number
+  chargedJobs: number
+  chargedCredits: number
+  averageCreditsCharged: number
+  providerCharges: number
+  providerCostUsd: number
+  averageProviderCostUsd: number
+  landedCostGhs: number
+  averageLandedCostGhs: number
+  referenceBilledGhs: number
+  grossProfitGhs: number
+  grossMarginPercent: number | null
+}
+
+export type AdminMediaFinanceLine = {
+  id: string
+  userId: string | null
+  email: string | null
+  displayName: string | null
+  mediaType: 'image' | 'video'
+  model: string | null
+  status: string
+  chargedCredits: number
+  providerCostUsd: number
+  landedCostGhs: number
+  referenceBilledGhs: number
+  grossProfitGhs: number
+  grossMarginPercent: number | null
+  occurredAt: string
+}
+
+export type AdminCreditRate = {
+  id: string
+  name: string
+  kind: 'free' | 'plan' | 'top_up'
+  priceGhs: number
+  credits: number
+  pricePerCreditGhs: number | null
+  fullUseCostGhs: number
+  grossProfitGhs: number | null
+  grossMarginPercent: number | null
+}
+
+export type AdminFinance = {
+  cashCollectedGhs: number
+  approvedPayments: number
+  chargedCredits: number
+  providerCostUsd: number
+  landedCostGhs: number
+  referenceBilledGhs: number
+  grossProfitGhs: number
+  grossMarginPercent: number | null
+  cashGrossProfitGhs: number
+  cashGrossMarginPercent: number | null
+  media: AdminMediaFinanceMetric[]
+  recentMedia: AdminMediaFinanceLine[]
+  creditRates: AdminCreditRate[]
+  calculation: {
+    referencePlanName: string
+    referencePlanPriceGhs: number
+    referencePlanCredits: number
+    referenceCreditPriceGhs: number
+    costBudgetPerCreditGhs: number
+    unitGrossProfitGhs: number
+    unitGrossMarginPercent: number
+    targetProviderCostPercent: number
+    usdToGhs: number
+    providerFeePercent: number
+    fxBufferPercent: number
+    imageFloorCredits: number
+    videoFloorCredits: number
+  }
+}
+
 export type AdminErrorGroup = {
   id: string
   source: 'technical' | 'customer'
@@ -196,6 +272,7 @@ export type AdminDashboardPayload = {
   summary: AdminSummary
   users: AdminUser[]
   features: AdminFeatureMetric[]
+  finance: AdminFinance
   errors: AdminErrorGroup[]
   creditLedger: AdminCreditLedgerEntry[]
   auditEvents: AdminAuditEvent[]

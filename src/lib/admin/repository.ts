@@ -18,6 +18,7 @@ import {
 } from '@/lib/admin/contracts'
 import { listAdminCohorts } from '@/lib/admin/cohorts'
 import { isMissingAdminAuditTable } from '@/lib/admin/audit'
+import { buildAdminFinance } from '@/lib/admin/finance'
 
 export const SUCCESSFUL_ADMIN_OUTCOMES = [
   'success', 'success_without_done_event', 'submitted', 'completed', 'quote', 'status',
@@ -112,6 +113,33 @@ type AuditRow = {
   reason: string
   request_id: string
   created_at: Date | string
+}
+
+type FinanceMediaRow = {
+  media_type: 'image' | 'video'
+  settled_jobs: string | number
+  charged_jobs: string | number
+  charged_credits: string | number
+  provider_charges: string | number
+  provider_cost_usd: string | number
+}
+
+type FinancePaymentRow = {
+  approved_payments: string | number
+  cash_collected_ghs: string | number
+}
+
+type FinanceMediaLineRow = {
+  id: string
+  user_id: string | null
+  email: string | null
+  display_name: string | null
+  media_type: 'image' | 'video'
+  model: string | null
+  status: string
+  settled_credits: string | number | null
+  provider_cost_usd: string | number | null
+  occurred_at: Date | string
 }
 
 function n(value: unknown) {
@@ -367,9 +395,70 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
            count(*) filter (where status = 'held' and expires_at < now())::int as stale
       from public.lab_credit_reservations`
 
-  const [userRows, featureRows, technicalRows, qualityRows, ledgerRows, auditResult, reservationRows, cohorts] = await Promise.all([
+  const mediaFinancePromise = sql<FinanceMediaRow[]>`
+    with media_kinds(media_type) as (
+      values ('image'::text), ('video'::text)
+    ), reservation_totals as (
+      select reservation.feature as media_type,
+             count(*)::int as settled_jobs,
+             count(*) filter (where coalesce(reservation.settled_credits, 0) > 0)::int as charged_jobs,
+             coalesce(sum(reservation.settled_credits), 0)::int as charged_credits
+        from public.lab_credit_reservations reservation
+       where reservation.status = 'settled'
+         and reservation.feature in ('image', 'video')
+         and (${since}::timestamptz is null or coalesce(reservation.settled_at, reservation.updated_at) >= ${since})
+       group by reservation.feature
+    ), cost_totals as (
+      select case when cost.feature = 'video' then 'video' else 'image' end as media_type,
+             count(*)::int as provider_charges,
+             coalesce(sum(cost.cost_usd), 0)::numeric as provider_cost_usd
+        from public.lab_cost_ledger cost
+       where (cost.feature = 'video' or cost.feature = 'image' or cost.feature like 'image.%')
+         and (${since}::timestamptz is null or cost.occurred_at >= ${since})
+       group by case when cost.feature = 'video' then 'video' else 'image' end
+    )
+    select kinds.media_type,
+           coalesce(reservations.settled_jobs, 0)::int as settled_jobs,
+           coalesce(reservations.charged_jobs, 0)::int as charged_jobs,
+           coalesce(reservations.charged_credits, 0)::int as charged_credits,
+           coalesce(costs.provider_charges, 0)::int as provider_charges,
+           coalesce(costs.provider_cost_usd, 0)::numeric as provider_cost_usd
+      from media_kinds kinds
+      left join reservation_totals reservations on reservations.media_type = kinds.media_type
+      left join cost_totals costs on costs.media_type = kinds.media_type
+     order by kinds.media_type`
+
+  const financePaymentPromise = sql<FinancePaymentRow[]>`
+    select count(*)::int as approved_payments,
+           coalesce(sum(amount_minor), 0)::numeric / 100 as cash_collected_ghs
+      from public.lab_payment_attempts
+     where status = 'approved' and currency = 'GHS'
+       and (${since}::timestamptz is null or updated_at >= ${since})`
+
+  const recentMediaFinancePromise = sql<FinanceMediaLineRow[]>`
+    select job.id, job.owner_id as user_id, users.email, users.display_name,
+           job.media_type, job.model, job.status, reservation.settled_credits,
+           case when job.media_type = 'video' then job.actual_cost_usd
+                else usage.actual_cost_usd end as provider_cost_usd,
+           coalesce(reservation.settled_at, job.completed_at, job.updated_at) as occurred_at
+      from public.lab_media_jobs job
+      join public.lab_credit_reservations reservation on reservation.id = job.reservation_id
+      left join public.lab_users users on users.clerk_user_id = job.owner_id
+      left join public.lab_usage_events usage
+        on job.media_type = 'image' and usage.request_id = reservation.request_id
+       and usage.route = '/api/studio/image'
+     where reservation.status = 'settled'
+       and (${since}::timestamptz is null or coalesce(reservation.settled_at, job.completed_at, job.updated_at) >= ${since})
+     order by coalesce(reservation.settled_at, job.completed_at, job.updated_at) desc
+     limit 80`
+
+  const [
+    userRows, featureRows, technicalRows, qualityRows, ledgerRows, auditResult,
+    reservationRows, mediaFinanceRows, financePaymentRows, recentMediaFinanceRows, cohorts,
+  ] = await Promise.all([
     usersPromise, featuresPromise, technicalErrorsPromise, qualityErrorsPromise,
-    ledgerPromise, auditPromise, reservationPromise, listAdminCohorts(),
+    ledgerPromise, auditPromise, reservationPromise, mediaFinancePromise,
+    financePaymentPromise, recentMediaFinancePromise, listAdminCohorts(),
   ])
 
   const users: AdminUser[] = userRows.map((row) => {
@@ -469,11 +558,37 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
   })
   summary.requestSuccessRate = percentage(summary.successfulRequests, summary.requests)
   summary.providerCostUsd = Number(summary.providerCostUsd.toFixed(6))
+  const finance = buildAdminFinance({
+    cashCollectedGhs: n(financePaymentRows[0]?.cash_collected_ghs),
+    approvedPayments: n(financePaymentRows[0]?.approved_payments),
+    chargedCredits: summary.creditsSpent,
+    providerCostUsd: summary.providerCostUsd,
+    media: mediaFinanceRows.map((row) => ({
+      mediaType: row.media_type,
+      settledJobs: n(row.settled_jobs),
+      chargedJobs: n(row.charged_jobs),
+      chargedCredits: n(row.charged_credits),
+      providerCharges: n(row.provider_charges),
+      providerCostUsd: n(row.provider_cost_usd),
+    })),
+    recentMedia: recentMediaFinanceRows.map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      email: row.email,
+      displayName: row.display_name,
+      mediaType: row.media_type,
+      model: row.model,
+      status: row.status,
+      chargedCredits: n(row.settled_credits),
+      providerCostUsd: n(row.provider_cost_usd),
+      occurredAt: iso(row.occurred_at)!,
+    })),
+  })
 
   return {
     generatedAt: new Date().toISOString(), range,
     infrastructure: { auditTrailReady: auditResult.ready },
-    summary, users, features, errors,
+    summary, users, features, finance, errors,
     creditLedger, auditEvents, cohorts,
     insights: buildAdminInsights({ summary, users, features, errors }),
   }

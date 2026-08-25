@@ -12,12 +12,13 @@ import type {
 } from '@/lib/admin/contracts'
 import styles from './AdminConsole.module.css'
 
-type AdminTab = 'overview' | 'users' | 'credits' | 'errors' | 'cohorts' | 'insights'
+type AdminTab = 'overview' | 'users' | 'credits' | 'finance' | 'errors' | 'cohorts' | 'insights'
 
 const NAV: Array<{ id: AdminTab; label: string; detail: string }> = [
   { id: 'overview', label: 'Overview', detail: 'Health and attention' },
   { id: 'users', label: 'Users', detail: 'Accounts and activity' },
   { id: 'credits', label: 'Credits', detail: 'Balances and ledger' },
+  { id: 'finance', label: 'Finance', detail: 'Cost, price and margin' },
   { id: 'errors', label: 'Errors', detail: 'Failures and reports' },
   { id: 'cohorts', label: 'Cohorts', detail: 'Activation and return' },
   { id: 'insights', label: 'AI Insights', detail: 'Evidence-backed briefing' },
@@ -29,6 +30,16 @@ function number(value: number) {
 
 function usd(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value)
+}
+
+function ghs(value: number, digits = 2) {
+  return new Intl.NumberFormat('en-GH', {
+    style: 'currency', currency: 'GHS', minimumFractionDigits: digits, maximumFractionDigits: digits,
+  }).format(value)
+}
+
+function percent(value: number | null) {
+  return value === null ? '—' : `${value.toFixed(1)}%`
 }
 
 function date(value: string | null, includeTime = false) {
@@ -385,6 +396,107 @@ export function AdminConsole() {
                     <table><thead><tr><th>User</th><th>Movement</th><th>Balance after</th><th>Source</th><th>When</th></tr></thead><tbody>{visibleLedger.map((entry) => <tr key={entry.id}><td><b>{entry.displayName || entry.email || 'System account'}</b><small>{entry.email}</small></td><td><b className={entry.creditsDelta >= 0 ? styles.positive : styles.danger}>{entry.creditsDelta >= 0 ? '+' : ''}{entry.creditsDelta}</b><small>{label(entry.entryType)}</small></td><td><b>{entry.balanceAfter}</b></td><td><b>{label(entry.sourceType)}</b><small>{entry.sourceId}</small></td><td><b>{date(entry.createdAt, true)}</b></td></tr>)}</tbody></table>
                     {!visibleLedger.length ? <Empty title="No ledger entries match" detail="Try a different date window or clear the filters." /> : null}</article>
                   <aside className={styles.auditPanel}><header><span className={styles.eyebrow}>Operator history</span><h2>Admin audit</h2><p>Every privileged balance action, with its reason and before/after state.</p></header>{dashboard.auditEvents.length ? <div>{dashboard.auditEvents.slice(0, 20).map((event) => <article key={event.id}><span data-action={event.action}>{event.action === 'credit_refund' ? '↩' : '+'}</span><div><b>{event.action === 'credit_refund' ? 'Refunded' : 'Granted'} {event.creditsDelta} credits</b><small>{event.targetEmail || 'Unknown account'} · {timeAgo(event.createdAt)}</small><p>{event.reason}</p><em>{event.balanceBefore} → {event.balanceAfter}</em></div></article>)}</div> : <Empty title="No admin actions yet" detail="Grants and refunds will appear here automatically." />}</aside>
+                </section>
+              </>
+            ) : null}
+
+            {tab === 'finance' ? (
+              <>
+                <section className={styles.pageTitle}>
+                  <div><span className={styles.eyebrow}>Financial control</span><h1>Know what every credit earns.</h1><p>Track collected cash, real provider spend, media charges, and the pricing logic that turns cost into credits.</p></div>
+                  <div className={styles.resultCount}><b>{ghs(dashboard.finance.calculation.referenceCreditPriceGhs, 4)}</b><span>reference price per credit</span></div>
+                </section>
+                <section className={styles.metrics}>
+                  <Metric label="Cash collected" value={ghs(dashboard.finance.cashCollectedGhs)} detail={`${number(dashboard.finance.approvedPayments)} approved payments`} tone="green" />
+                  <Metric label="Landed provider cost" value={ghs(dashboard.finance.landedCostGhs)} detail={`${usd(dashboard.finance.providerCostUsd)} raw provider spend`} />
+                  <Metric label="Credits charged" value={number(dashboard.finance.chargedCredits)} detail={`${ghs(dashboard.finance.referenceBilledGhs)} at reference rate`} />
+                  <Metric label="Gross profit" value={ghs(dashboard.finance.grossProfitGhs)} detail="Reference billed value less landed AI cost" tone={dashboard.finance.grossProfitGhs >= 0 ? 'green' : 'red'} />
+                  <Metric label="Gross margin" value={percent(dashboard.finance.grossMarginPercent)} detail={`Target AI cost ≤ ${dashboard.finance.calculation.targetProviderCostPercent}%`} tone={(dashboard.finance.grossMarginPercent || 0) >= 0 ? 'green' : 'red'} />
+                </section>
+
+                <section className={styles.financeNote}>
+                  <b>Two honest views</b>
+                  <p><strong>Cash collected</strong> is approved payments in this window. <strong>Reference billed value</strong> prices consumed credits at the {dashboard.finance.calculation.referencePlanName} rate. They differ when subscriptions are paid before usage, or when free, sponsored, refunded, or admin credits are consumed.</p>
+                  <span>Cash-window margin {percent(dashboard.finance.cashGrossMarginPercent)} · {ghs(dashboard.finance.cashGrossProfitGhs)} contribution</span>
+                </section>
+
+                <section className={styles.financeGrid}>
+                  <article className={styles.financePanel}>
+                    <header><div><span className={styles.eyebrow}>Media unit economics</span><h2>Images and video, measured.</h2></div><span>{range === 'all' ? 'All time' : range}</span></header>
+                    <div className={styles.mediaFinanceRows}>
+                      {dashboard.finance.media.map((item) => (
+                        <article key={item.mediaType} data-media={item.mediaType}>
+                          <header><span>{item.mediaType === 'image' ? 'IMG' : 'VID'}</span><div><h3>{item.mediaType === 'image' ? 'Generated images' : 'Generated video'}</h3><p>{number(item.settledJobs)} settled jobs · {number(item.chargedJobs)} charged</p></div></header>
+                          <dl>
+                            <div><dt>Credits charged</dt><dd>{number(item.chargedCredits)}<small>{item.averageCreditsCharged.toFixed(1)} average per job</small></dd></div>
+                            <div><dt>Provider cost</dt><dd>{usd(item.providerCostUsd)}<small>{number(item.providerCharges)} measured charges</small></dd></div>
+                            <div><dt>Landed cost</dt><dd>{ghs(item.landedCostGhs)}<small>{ghs(item.averageLandedCostGhs)} average per provider charge</small></dd></div>
+                            <div><dt>Reference billed</dt><dd>{ghs(item.referenceBilledGhs)}<small>Credits × reference rate</small></dd></div>
+                            <div><dt>Gross profit</dt><dd className={item.grossProfitGhs >= 0 ? styles.positive : styles.danger}>{ghs(item.grossProfitGhs)}<small>{percent(item.grossMarginPercent)} gross margin</small></dd></div>
+                          </dl>
+                        </article>
+                      ))}
+                    </div>
+                  </article>
+
+                  <aside className={styles.unitEconomics}>
+                    <header><span className={styles.eyebrow}>One credit</span><h2>The reference unit.</h2><p>The {dashboard.finance.calculation.referencePlanName} plan anchors the operating price.</p></header>
+                    <div className={styles.unitEquation}>
+                      <span><small>Sell</small><b>{ghs(dashboard.finance.calculation.referenceCreditPriceGhs, 4)}</b></span>
+                      <i>−</i>
+                      <span><small>AI cost budget</small><b>{ghs(dashboard.finance.calculation.costBudgetPerCreditGhs, 2)}</b></span>
+                      <i>=</i>
+                      <span><small>Gross profit</small><b>{ghs(dashboard.finance.calculation.unitGrossProfitGhs, 4)}</b></span>
+                    </div>
+                    <div className={styles.marginGauge}><span style={{ width: `${Math.max(0, Math.min(100, dashboard.finance.calculation.unitGrossMarginPercent))}%` }} /><b>{percent(dashboard.finance.calculation.unitGrossMarginPercent)} margin</b></div>
+                    <p className={styles.unitSource}>{ghs(dashboard.finance.calculation.referencePlanPriceGhs, 0)} plan price ÷ {number(dashboard.finance.calculation.referencePlanCredits)} credits. Gross profit excludes payment fees, taxes, support, payroll, and other fixed costs.</p>
+                  </aside>
+                </section>
+
+                <section className={styles.calculationGrid}>
+                  <article className={styles.formulaPanel}>
+                    <header><span className={styles.eyebrow}>Charging calculation</span><h2>How the engine gets to credits.</h2></header>
+                    <ol>
+                      <li><span>01</span><div><b>Start with the measured provider charge</b><p>The provider reports the actual USD cost after the work finishes.</p></div></li>
+                      <li><span>02</span><div><b>Land the cost in Ghana cedis</b><p>USD cost × {(1 + dashboard.finance.calculation.providerFeePercent / 100).toFixed(3)} platform factor × {dashboard.finance.calculation.usdToGhs.toFixed(2)} FX rate × {(1 + dashboard.finance.calculation.fxBufferPercent / 100).toFixed(2)} FX buffer.</p></div></li>
+                      <li><span>03</span><div><b>Convert cost to credits</b><p>Round up landed cost ÷ {ghs(dashboard.finance.calculation.costBudgetPerCreditGhs)} cost budget per credit.</p></div></li>
+                      <li><span>04</span><div><b>Apply the safety rails</b><p>Successful images charge at least {dashboard.finance.calculation.imageFloorCredits} credits; video at least {dashboard.finance.calculation.videoFloorCredits}. A task never exceeds the amount the customer approved and failures charge zero.</p></div></li>
+                    </ol>
+                  </article>
+
+                  <article className={styles.priceBook}>
+                    <header><div><span className={styles.eyebrow}>Credit price book</span><h2>What one credit sells for.</h2></div><p>Plans and top-ups have different rates. The dashboard uses {dashboard.finance.calculation.referencePlanName} as its consistent comparison rate.</p></header>
+                    <div>
+                      {dashboard.finance.creditRates.map((rate) => (
+                        <article key={rate.id}>
+                          <span data-kind={rate.kind}>{rate.kind === 'top_up' ? 'Top-up' : rate.kind === 'free' ? 'Free' : 'Plan'}</span>
+                          <div><b>{rate.name}</b><small>{ghs(rate.priceGhs, 0)} for {number(rate.credits)} credits</small></div>
+                          <div><b>{rate.pricePerCreditGhs === null ? 'Free allowance' : `${ghs(rate.pricePerCreditGhs, 4)} / credit`}</b><small>{ghs(rate.fullUseCostGhs)} full-use AI cost</small></div>
+                          <div><b>{percent(rate.grossMarginPercent)}</b><small>{rate.grossProfitGhs === null ? 'Cost centre' : `${ghs(rate.grossProfitGhs)} gross profit`}</small></div>
+                        </article>
+                      ))}
+                    </div>
+                  </article>
+                </section>
+
+                <section className={`${styles.tablePanel} ${styles.financeLedger}`}>
+                  <header className={styles.panelHeader}><div><span className={styles.eyebrow}>Recent media economics</span><h2>Every settled image and video.</h2></div><span>{dashboard.finance.recentMedia.length} line items</span></header>
+                  <table>
+                    <thead><tr><th>Work</th><th>User</th><th>Charged</th><th>Provider cost</th><th>Landed cost</th><th>Reference billed</th><th>Gross profit</th><th>When</th></tr></thead>
+                    <tbody>{dashboard.finance.recentMedia.map((item) => (
+                      <tr key={item.id}>
+                        <td><b>{item.mediaType === 'image' ? 'Image' : 'Video'} · {label(item.status)}</b><small>{item.model || 'Model unavailable'} · {item.id}</small></td>
+                        <td><b>{item.displayName || item.email || 'Unknown account'}</b><small>{item.email || item.userId || '—'}</small></td>
+                        <td><b>{number(item.chargedCredits)} credits</b><small>{item.chargedCredits > 0 ? 'Settled charge' : 'No customer charge'}</small></td>
+                        <td><b>{usd(item.providerCostUsd)}</b><small>Measured</small></td>
+                        <td><b>{ghs(item.landedCostGhs)}</b><small>Fee + FX included</small></td>
+                        <td><b>{ghs(item.referenceBilledGhs)}</b><small>{ghs(dashboard.finance.calculation.referenceCreditPriceGhs, 4)} / credit</small></td>
+                        <td><b className={item.grossProfitGhs >= 0 ? styles.positive : styles.danger}>{ghs(item.grossProfitGhs)}</b><small>{percent(item.grossMarginPercent)} margin</small></td>
+                        <td><b>{date(item.occurredAt, true)}</b></td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                  {!dashboard.finance.recentMedia.length ? <Empty title="No settled media in this window" detail="Try a wider date range to see image and video unit economics." /> : null}
                 </section>
               </>
             ) : null}
