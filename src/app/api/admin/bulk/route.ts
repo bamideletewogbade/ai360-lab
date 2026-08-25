@@ -45,6 +45,13 @@ const BulkAction = z.discriminatedUnion('action', [
   }),
   z.object({ action: z.literal('program_remove'), userIds, programKey, idempotencyKey, reason }),
   z.object({
+    action: z.literal('pilot_onboard'), userIds: userIds.refine((ids) => ids.length <= 100),
+    programKey, idempotencyKey, reason,
+    cohortKey: z.string().trim().min(2).max(120),
+    participationStatus: z.enum(['invited', 'enrolled']).default('enrolled'),
+    credits: z.number().int().min(0).max(10_000).default(0),
+  }),
+  z.object({
     action: z.literal('credit_grant'), userIds: userIds.refine((ids) => ids.length <= 100),
     credits: z.number().int().min(1).max(10_000), idempotencyKey, reason,
   }),
@@ -100,6 +107,35 @@ export async function POST(request: Request) {
     const parsed = BulkAction.safeParse(await request.json().catch(() => null))
     if (!parsed.success) return Response.json({ error: 'Review the selected users and action details.' }, { status: 400, headers: log.headers() })
     const body = { ...parsed.data, userIds: unique(parsed.data.userIds) }
+
+    if (body.action === 'pilot_onboard') {
+      if (!canManageAdminPrograms(operator)) return Response.json({ error: 'Program-manager access is required.' }, { status: 403, headers: log.headers() })
+      if (body.credits > 0 && !canManageAdminCredits(operator)) return Response.json({ error: 'Credit-manager access is required to include starting credits.' }, { status: 403, headers: log.headers() })
+      const targets = await existingUsers(body.userIds)
+      if (targets.length !== body.userIds.length) return Response.json({ error: 'One or more selected users no longer exist.' }, { status: 409, headers: log.headers() })
+      const enrolled = await upsertAdminProgramMemberships({
+        userIds: body.userIds, programKey: body.programKey, cohortKey: body.cohortKey,
+        participationStatus: body.participationStatus, feedbackStatus: 'not_requested',
+        actorId: operator.userId, reason: body.reason, idempotencyKey: body.idempotencyKey,
+      })
+      const creditResults: Array<{ userId: string; applied: boolean; reason: string | null }> = []
+      if (body.credits > 0) {
+        for (const target of targets) {
+          const result = await grantCredits({
+            context: createWorkspaceAuthContext({ userId: target.clerk_user_id, email: target.email, displayName: target.display_name }),
+            credits: body.credits, sourceType: 'sponsored_seat', sourceId: body.cohortKey,
+            idempotencyKey: `admin:${operator.userId}:${body.idempotencyKey}:pilot:${target.clerk_user_id}`,
+            operatorAudit: { actorId: operator.userId, action: 'credit_grant', reason: body.reason, requestId: log.requestId },
+          })
+          creditResults.push({ userId: target.clerk_user_id, applied: result.granted, reason: result.granted ? null : (result.reason || 'not_granted') })
+        }
+      }
+      const creditsApplied = creditResults.filter((item) => item.applied).length
+      log.finish(200, { outcome: 'success', action: body.action, enrolled: enrolled.length, creditsApplied })
+      return Response.json({
+        enrolled: enrolled.length, creditsApplied, creditResults,
+      }, { headers: log.headers({ 'Cache-Control': 'private, no-store' }) })
+    }
 
     if (body.action === 'program_update' || body.action === 'program_remove') {
       if (!canManageAdminPrograms(operator)) return Response.json({ error: 'Program-manager access is required.' }, { status: 403, headers: log.headers() })

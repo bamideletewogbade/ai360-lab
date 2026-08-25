@@ -152,6 +152,7 @@
 .eyebrow { display: block; color: var(--orange); font-size: 11px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
 .pageTitle h1 { max-width: 800px; margin: 8px 0 8px; font: 600 clamp(34px, 4.7vw, 65px)/.96 var(--font-heading), "Segoe UI", sans-serif; letter-spacing: -.055em; }
 .pageTitle p { max-width: 650px; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
+.pageTitleActions { display: flex; flex: 0 0 auto; align-items: center; gap: 16px; }
 .healthScore { width: 190px; flex: 0 0 190px; padding: 17px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
 .healthScore > span, .healthScore b { display: block; }
 .healthScore > span { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }
@@ -482,6 +483,27 @@
 .creditModal footer button:last-child { border-color: #191b1a; background: #191b1a; color: #fff; }
 .creditModal footer button:disabled { cursor: not-allowed; opacity: .5; }
 .bulkModal { width: min(560px, 100%); }
+.addPilotModal { width: min(680px, 100%); }
+.addPilotModal > header p { max-width: 520px; margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.accountPicker { overflow: hidden; margin-top: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
+.accountPicker > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: #eceae3; }
+.accountPicker > header span, .accountPicker > header b, .accountPicker > header small { display: block; }
+.accountPicker > header b { font-size: 12px; }
+.accountPicker > header small { margin-top: 2px; color: var(--muted); font-size: 10px; }
+.accountPicker > header button { min-height: 31px; padding: 0 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); cursor: pointer; font-size: 10px; font-weight: 800; }
+.accountPicker > div { max-height: 260px; overflow-y: auto; }
+.accountPicker > div > label { display: grid; grid-template-columns: 20px minmax(190px, 1fr) auto; align-items: center; gap: 9px; padding: 9px 12px; border-bottom: 1px solid #ebe8e0; cursor: pointer; }
+.accountPicker > div > label:last-child { border-bottom: 0; }
+.accountPicker > div > label:hover, .accountPicker > div > label[data-selected] { background: #f3eadf; }
+.accountPicker input { width: 16px; height: 16px; accent-color: #1b1e1c; }
+.accountPicker label > span:last-child { text-align: right; }
+.accountPicker label > span:last-child b, .accountPicker label > span:last-child small { display: block; }
+.accountPicker label > span:last-child b { font-size: 11px; }
+.accountPicker label > span:last-child small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.accountPicker > p { margin: 0; padding: 13px; color: var(--muted); font-size: 11px; }
+.formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 13px; }
+.formGrid label { display: grid; gap: 6px; }
+.formGrid label > span { color: var(--muted); font-size: 10px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
 .selectionPreview { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; background: #f2f0e9; }
 .selectionPreview span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .selectionPreview b { flex: 0 0 auto; font-size: 11px; }
@@ -532,6 +554,7 @@
   .topbar > div:first-child > span, .range > span, .refresh span { display: none; }
   .content { padding: 26px 14px 45px; }
   .pageTitle { align-items: flex-start; flex-direction: column; gap: 17px; }
+  .pageTitleActions { width: 100%; justify-content: space-between; }
   .pageTitle h1 { font-size: 42px; }
   .healthScore { width: 100%; }
   .metrics { grid-template-columns: repeat(2, 1fr); }
@@ -576,6 +599,9 @@
   .creditModal { max-height: calc(100vh - 16px); padding: 18px; border-radius: 14px; }
   .selectionPreview, .recipientList > div { align-items: flex-start; flex-direction: column; gap: 4px; }
   .recipientCounts { grid-template-columns: 1fr 1fr; }
+  .formGrid { grid-template-columns: 1fr; }
+  .accountPicker > div > label { grid-template-columns: 20px minmax(0, 1fr); }
+  .accountPicker label > span:last-child { display: none; }
   .mediaFinanceRows dl { grid-template-columns: 1fr 1fr; }
   .priceBook > div > article { grid-template-columns: 62px 1fr; }
   .priceBook article div:last-child { text-align: left; }

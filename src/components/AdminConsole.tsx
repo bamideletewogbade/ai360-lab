@@ -174,6 +174,14 @@ export function AdminConsole() {
     excluded: Array<{ userId: string; email: string | null; reason: string }>
     sample: { subject: string; text: string } | null
   }>(null)
+  const [pilotAddOpen, setPilotAddOpen] = useState(false)
+  const [pilotAddSearch, setPilotAddSearch] = useState('')
+  const [pilotAddIds, setPilotAddIds] = useState<Set<string>>(new Set())
+  const [pilotAddCohort, setPilotAddCohort] = useState('pilot-main')
+  const [pilotAddStatus, setPilotAddStatus] = useState<'invited' | 'enrolled'>('enrolled')
+  const [pilotAddCredits, setPilotAddCredits] = useState('25')
+  const [pilotAddReason, setPilotAddReason] = useState('')
+  const [pilotAddWorking, setPilotAddWorking] = useState(false)
 
   const fetchDashboard = useCallback(async (nextRange: AdminRange) => {
     const response = await fetch(`/api/admin/overview?range=${nextRange}`, { cache: 'no-store' })
@@ -229,6 +237,13 @@ export function AdminConsole() {
 
   const selectedUsers = useMemo(() => (dashboard?.users || []).filter((user) => selectedIds.has(user.id)), [dashboard, selectedIds])
   const allVisibleSelected = visibleUsers.length > 0 && visibleUsers.every((user) => selectedIds.has(user.id))
+  const pilotCandidates = useMemo(() => {
+    const search = pilotAddSearch.trim().toLowerCase()
+    return (dashboard?.users || []).filter((user) => !user.participation || user.participation.participationStatus === 'withdrawn')
+      .filter((user) => !search || user.email.toLowerCase().includes(search)
+        || user.displayName?.toLowerCase().includes(search) || user.id.toLowerCase().includes(search))
+  }, [dashboard, pilotAddSearch])
+  const allPilotCandidatesSelected = pilotCandidates.length > 0 && pilotCandidates.every((user) => pilotAddIds.has(user.id))
 
   const visibleErrors = useMemo(() => (dashboard?.errors || []).filter((item) => {
     const queryMatches = !needle || item.email?.toLowerCase().includes(needle)
@@ -334,6 +349,37 @@ export function AdminConsole() {
       setError(cause instanceof Error ? cause.message : 'The Excel report could not be created.')
     } finally {
       setExportWorking(false)
+    }
+  }
+
+  async function addPilotUsers(event: React.FormEvent) {
+    event.preventDefault()
+    const credits = Number(pilotAddCredits)
+    if (!pilotAddIds.size || !pilotAddCohort.trim() || !pilotAddReason.trim()
+      || !Number.isInteger(credits) || credits < 0) return
+    setPilotAddWorking(true)
+    setError('')
+    try {
+      const response = await fetch('/api/admin/bulk', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'pilot_onboard', userIds: [...pilotAddIds], programKey: 'pilot',
+          cohortKey: pilotAddCohort.trim(), participationStatus: pilotAddStatus,
+          credits: dashboard?.capabilities.manageCredits ? credits : 0,
+          reason: pilotAddReason.trim(), idempotencyKey: crypto.randomUUID(),
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'The selected users could not be added to the pilot.')
+      setPilotAddOpen(false)
+      setPilotAddIds(new Set())
+      setPilotAddSearch('')
+      setPilotAddReason('')
+      await loadDashboard(range)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The selected users could not be added to the pilot.')
+    } finally {
+      setPilotAddWorking(false)
     }
   }
 
@@ -538,8 +584,7 @@ export function AdminConsole() {
 
             {tab === 'users' ? (
               <>
-                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Participant operations</span><h1>Move the pilot forward.</h1><p>Find the people who need access, support, credits, follow-up, or a feedback request.</p></div><div className={styles.resultCount}><b>{visibleUsers.length}</b><span>of {dashboard.users.length} users</span></div></section>
-                {!dashboard.infrastructure.programOperationsReady ? <section className={styles.systemNotice}><span>Program tools need migration 0025</span><p>Account activity remains available, but participation states and bulk outreach are read-only until the program-operations migration is applied.</p></section> : null}
+                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Participant operations</span><h1>Move the pilot forward.</h1><p>Find the people who need access, support, credits, follow-up, or a feedback request.</p></div><div className={styles.pageTitleActions}>{dashboard.capabilities.managePrograms ? <button className={styles.heroAction} onClick={() => { setPilotAddIds(new Set()); setPilotAddOpen(true) }}>+ Add pilot users</button> : null}<div className={styles.resultCount}><b>{visibleUsers.length}</b><span>of {dashboard.users.length} users</span></div></div></section>
                 <section className={styles.savedViews} aria-label="Saved participant views">
                   <span>Saved views</span>
                   <button onClick={() => applySavedView('invited')}>Invited · not activated</button>
@@ -776,6 +821,26 @@ export function AdminConsole() {
         ...selectedUser.auditEvents.map((item) => ({ id: `audit-${item.id}`, at: item.createdAt, tone: 'admin', title: label(item.action), detail: item.reason })),
         ...selectedUser.contactEvents.map((item) => ({ id: `contact-${item.id}`, at: item.createdAt, tone: 'contact', title: `${label(item.templateKey)} · ${label(item.deliveryStatus)}`, detail: item.subject })),
       ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 30).map((event) => <article key={event.id} data-tone={event.tone}><i /><div><b>{event.title}</b><p>{event.detail}</p><small>{date(event.at, true)}</small></div></article>)}</section></aside></div> : null}
+
+      {pilotAddOpen ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !pilotAddWorking) setPilotAddOpen(false) }}><form className={`${styles.creditModal} ${styles.addPilotModal}`} onSubmit={addPilotUsers}>
+        <header><div><span className={styles.eyebrow}>Pilot access</span><h2>Add pilot users</h2><p>Choose existing AI360 accounts, assign their starting cohort, and optionally grant credits in the same action.</p></div><button type="button" onClick={() => setPilotAddOpen(false)}>×</button></header>
+        <label><span>Find accounts</span><input autoFocus value={pilotAddSearch} onChange={(event) => setPilotAddSearch(event.target.value)} placeholder="Search name, email, or user ID" /></label>
+        <div className={styles.accountPicker}>
+          <header><span><b>{pilotAddIds.size} selected</b><small>{pilotCandidates.length} eligible accounts</small></span>{pilotCandidates.length ? <button type="button" onClick={() => setPilotAddIds((current) => { const next = new Set(current); if (allPilotCandidatesSelected) pilotCandidates.forEach((user) => next.delete(user.id)); else pilotCandidates.forEach((user) => next.add(user.id)); return next })}>{allPilotCandidatesSelected ? 'Clear matches' : 'Select matches'}</button> : null}</header>
+          <div>{pilotCandidates.slice(0, 50).map((user) => <label key={user.id} data-selected={pilotAddIds.has(user.id) || undefined}><input type="checkbox" checked={pilotAddIds.has(user.id)} onChange={() => setPilotAddIds((current) => { const next = new Set(current); if (next.has(user.id)) next.delete(user.id); else next.add(user.id); return next })} /><UserIdentity user={user} compact /><span><b>{user.availableCredits} credits</b><small>{user.participation?.participationStatus === 'withdrawn' ? 'Previously withdrawn' : 'Not in pilot'}</small></span></label>)}</div>
+          {!pilotCandidates.length ? <p>No eligible accounts match this search.</p> : null}
+          {pilotCandidates.length > 50 ? <p>Showing the first 50 matches. Narrow the search to find a specific account.</p> : null}
+        </div>
+        <div className={styles.formGrid}>
+          <label><span>Starting stage</span><select value={pilotAddStatus} onChange={(event) => setPilotAddStatus(event.target.value as 'invited' | 'enrolled')}><option value="enrolled">Enrolled</option><option value="invited">Invited</option></select></label>
+          <label><span>Cohort</span><input maxLength={120} value={pilotAddCohort} onChange={(event) => setPilotAddCohort(event.target.value)} placeholder="pilot-main" /></label>
+        </div>
+        {dashboard?.capabilities.manageCredits ? <label><span>Starting credits per user <em>Enter 0 for none</em></span><input type="number" min="0" max="10000" step="1" value={pilotAddCredits} onChange={(event) => setPilotAddCredits(event.target.value)} /></label> : null}
+        {dashboard?.capabilities.manageCredits && pilotAddIds.size ? <div className={styles.bulkImpact}><b>{number(Math.max(0, Number(pilotAddCredits) || 0) * pilotAddIds.size)} credits total</b><span>{Math.max(0, Number(pilotAddCredits) || 0)} × {pilotAddIds.size} selected accounts</span></div> : null}
+        <label><span>Reason <em>Required for audit</em></span><textarea rows={3} maxLength={240} value={pilotAddReason} onChange={(event) => setPilotAddReason(event.target.value)} placeholder="Example: August creator pilot intake" /></label>
+        <p className={styles.auditNote}>Each participant receives an individual program history entry. Any starting credits also receive an immutable credit-ledger and operator audit entry.</p>
+        <footer><button type="button" onClick={() => setPilotAddOpen(false)}>Cancel</button><button type="submit" disabled={pilotAddWorking || !pilotAddIds.size || !pilotAddCohort.trim() || !pilotAddReason.trim()}>{pilotAddWorking ? 'Adding users…' : `Add ${pilotAddIds.size || ''} to pilot`}</button></footer>
+      </form></div> : null}
 
       {bulkKind && bulkKind !== 'email' ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !bulkWorking) closeBulk() }}><form className={`${styles.creditModal} ${styles.bulkModal}`} onSubmit={(event) => { event.preventDefault(); void runBulkAction() }}>
         <header><div><span className={styles.eyebrow}>Bulk action · {selectedUsers.length} people</span><h2>{bulkKind === 'credits' ? 'Grant pilot credits' : 'Update pilot participation'}</h2></div><button type="button" onClick={closeBulk}>×</button></header>

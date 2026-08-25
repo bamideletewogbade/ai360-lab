@@ -193,3 +193,16 @@ test('participant exports offer authenticated Excel workbooks as well as CSV', a
   assert.match(route, /freezeHeader: true/)
   assert.match(route, /autoFilter: true/)
 })
+
+test('admins can onboard existing accounts into the pilot with optional starting credits', async () => {
+  const consoleUi = await readFile(new URL('../src/components/AdminConsole.tsx', import.meta.url), 'utf8')
+  const bulkRoute = await readFile(new URL('../src/app/api/admin/bulk/route.ts', import.meta.url), 'utf8')
+  assert.match(consoleUi, /\+ Add pilot users/)
+  assert.match(consoleUi, /Choose existing AI360 accounts/)
+  assert.match(consoleUi, /Starting credits per user/)
+  assert.doesNotMatch(consoleUi, /Program tools need migration 0025/)
+  assert.match(bulkRoute, /action: z\.literal\('pilot_onboard'\)/)
+  assert.match(bulkRoute, /sourceType: 'sponsored_seat'/)
+  assert.match(bulkRoute, /canManageAdminPrograms\(operator\)/)
+  assert.match(bulkRoute, /body\.credits > 0 && !canManageAdminCredits\(operator\)/)
+})
