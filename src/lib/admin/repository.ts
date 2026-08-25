@@ -19,6 +19,7 @@ import {
 import { listAdminCohorts } from '@/lib/admin/cohorts'
 import { isMissingAdminAuditTable } from '@/lib/admin/audit'
 import { buildAdminFinance } from '@/lib/admin/finance'
+import { readAdminContactEvents, readAdminProgramMemberships } from '@/lib/admin/programs'
 
 export const SUCCESSFUL_ADMIN_OUTCOMES = [
   'success', 'success_without_done_event', 'submitted', 'completed', 'quote', 'status',
@@ -177,6 +178,11 @@ export function buildAdminInsights(input: {
     .filter((user) => user.failedRequests >= 3)
     .sort((a, b) => b.failedRequests - a.failedRequests)
   const topError = [...errors].sort((a, b) => b.occurrences - a.occurrences)[0]
+  const pilotUsers = users.filter((user) => user.participation?.programKey === 'pilot'
+    && user.participation.participationStatus !== 'withdrawn')
+  const waitingPilotUsers = pilotUsers.filter((user) => user.successfulRequests === 0)
+  const feedbackCandidates = pilotUsers.filter((user) => user.activeDays >= 2
+    && user.participation?.feedbackStatus === 'not_requested')
 
   if (summary.staleReservations > 0) {
     insights.push({
@@ -201,6 +207,22 @@ export function buildAdminInsights(input: {
       summary: `${repeatedUserErrors.length} user${repeatedUserErrors.length === 1 ? ' has' : 's have'} three or more failed requests in this period.`,
       evidence: `${repeatedUserErrors[0].displayName || repeatedUserErrors[0].email} has ${repeatedUserErrors[0].failedRequests} failures.`,
       suggestedAction: 'Open the user timeline, confirm whether work was delivered, then consider a support follow-up or credit refund.',
+    })
+  }
+  if (waitingPilotUsers.length > 0) {
+    insights.push({
+      id: 'pilot-waiting', tone: 'opportunity', title: 'Pilot participants are waiting to activate',
+      summary: `${waitingPilotUsers.length} of ${pilotUsers.length} active pilot participants have not received a successful result yet.`,
+      evidence: `${waitingPilotUsers.filter((user) => user.failedRequests > 0).length} encountered at least one failure; the rest have not completed a measured request.`,
+      suggestedAction: 'Open Users → Invited · not activated, exclude suppressed contacts, and send the onboarding or error-help template.',
+    })
+  }
+  if (feedbackCandidates.length > 0) {
+    insights.push({
+      id: 'pilot-feedback-ready', tone: 'opportunity', title: 'Experienced participants are ready for feedback',
+      summary: `${feedbackCandidates.length} pilot participant${feedbackCandidates.length === 1 ? ' has' : 's have'} returned on multiple days without a feedback request.`,
+      evidence: `${feedbackCandidates.reduce((sum, user) => sum + user.successfulRequests, 0)} successful requests have been delivered across this group.`,
+      suggestedAction: 'Use the High engagement saved view, mark feedback as requested, and send the feedback template after reviewing recipients.',
     })
   }
   if (summary.lowBalanceUsers > 0) {
@@ -305,6 +327,7 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
      where users.deleted_at is null
      order by activity.last_active_at desc nulls last, lower(users.email) asc
      limit 1000`
+  const programMembershipsPromise = readAdminProgramMemberships()
 
   const featuresPromise = sql<FeatureRow[]>`
     with requests as (
@@ -455,10 +478,11 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
   const [
     userRows, featureRows, technicalRows, qualityRows, ledgerRows, auditResult,
     reservationRows, mediaFinanceRows, financePaymentRows, recentMediaFinanceRows, cohorts,
+    programMemberships,
   ] = await Promise.all([
     usersPromise, featuresPromise, technicalErrorsPromise, qualityErrorsPromise,
     ledgerPromise, auditPromise, reservationPromise, mediaFinancePromise,
-    financePaymentPromise, recentMediaFinancePromise, listAdminCohorts(),
+    financePaymentPromise, recentMediaFinancePromise, listAdminCohorts(), programMembershipsPromise,
   ])
 
   const users: AdminUser[] = userRows.map((row) => {
@@ -488,6 +512,7 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
       projects: n(row.projects),
       cohorts: row.cohorts || [],
       features: row.features || [],
+      participation: programMemberships.memberships.get(row.user_id) || null,
     }
   })
 
@@ -587,7 +612,10 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
 
   return {
     generatedAt: new Date().toISOString(), range,
-    infrastructure: { auditTrailReady: auditResult.ready },
+    infrastructure: {
+      auditTrailReady: auditResult.ready,
+      programOperationsReady: programMemberships.ready,
+    },
     summary, users, features, finance, errors,
     creditLedger, auditEvents, cohorts,
     insights: buildAdminInsights({ summary, users, features, errors }),
@@ -603,5 +631,6 @@ export async function readAdminUserDetail(userId: string): Promise<AdminUserDeta
     creditLedger: dashboard.creditLedger.filter((entry) => entry.userId === userId).slice(0, 100),
     errors: dashboard.errors.filter((entry) => entry.userId === userId).slice(0, 100),
     auditEvents: dashboard.auditEvents.filter((entry) => entry.targetUserId === userId).slice(0, 100),
+    contactEvents: await readAdminContactEvents(userId),
   }
 }

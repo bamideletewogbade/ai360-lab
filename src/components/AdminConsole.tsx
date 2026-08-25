@@ -13,6 +13,16 @@ import type {
 import styles from './AdminConsole.module.css'
 
 type AdminTab = 'overview' | 'users' | 'credits' | 'finance' | 'errors' | 'cohorts' | 'insights'
+type BulkKind = 'program' | 'credits' | 'email'
+
+const PARTICIPATION_STATUSES = ['invited', 'enrolled', 'activated', 'returning', 'completed', 'withdrawn'] as const
+const FEEDBACK_STATUSES = ['not_requested', 'requested', 'received', 'reviewed'] as const
+const EMAIL_TEMPLATES = [
+  ['pilot_invite', 'Pilot invitation'], ['onboarding_reminder', 'Onboarding reminder'],
+  ['error_help', 'Error follow-up'], ['low_credits', 'Low-credit check-in'],
+  ['credits_granted', 'Credits granted'], ['feedback_request', 'Feedback request'],
+  ['completion', 'Pilot completion'],
+] as const
 
 const NAV: Array<{ id: AdminTab; label: string; detail: string }> = [
   { id: 'overview', label: 'Overview', detail: 'Health and attention' },
@@ -63,7 +73,7 @@ function label(value: string) {
   return value.replaceAll('_', ' ').replaceAll('.', ' · ')
 }
 
-function csvCell(value: string | number | null) {
+function csvCell(value: string | number | null | undefined) {
   const text = String(value ?? '')
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
@@ -80,6 +90,22 @@ function exportCohort(report: AdminCohortReport) {
   const link = document.createElement('a')
   link.href = href
   link.download = `${report.cohort}-admin-report.csv`
+  link.click()
+  URL.revokeObjectURL(href)
+}
+
+function exportUsers(users: AdminUser[], fileName = 'ai360-participants.csv') {
+  const headers = ['email', 'display_name', 'user_id', 'program', 'cohort', 'participation_status', 'feedback_status', 'email_status', 'product_status', 'balance', 'credits_used', 'active_days', 'last_active', 'successful_requests', 'failed_requests', 'provider_cost_usd']
+  const rows = users.map((user) => [
+    user.email, user.displayName, user.id, user.participation?.programKey, user.participation?.cohortKey,
+    user.participation?.participationStatus, user.participation?.feedbackStatus, user.participation?.emailStatus,
+    user.status, user.availableCredits, user.creditsSpent, user.activeDays, user.lastActiveAt,
+    user.successfulRequests, user.failedRequests, user.providerCostUsd.toFixed(6),
+  ])
+  const href = URL.createObjectURL(new Blob([[headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = href
+  link.download = fileName
   link.click()
   URL.revokeObjectURL(href)
 }
@@ -111,8 +137,12 @@ export function AdminConsole() {
   const [query, setQuery] = useState('')
   const [userStatus, setUserStatus] = useState('all')
   const [balance, setBalance] = useState('all')
-  const [plan, setPlan] = useState('all')
-  const [cohort, setCohort] = useState('all')
+  const [programFilter, setProgramFilter] = useState('all')
+  const [participantCohort, setParticipantCohort] = useState('all')
+  const [participationStatus, setParticipationStatus] = useState('all')
+  const [feedbackStatus, setFeedbackStatus] = useState('all')
+  const [contactStatus, setContactStatus] = useState('all')
+  const [engagement, setEngagement] = useState('all')
   const [feature, setFeature] = useState('all')
   const [errorSource, setErrorSource] = useState('all')
   const [severity, setSeverity] = useState('all')
@@ -128,6 +158,22 @@ export function AdminConsole() {
   const [cohortLoading, setCohortLoading] = useState(false)
   const [aiBriefing, setAiBriefing] = useState<AdminAiBriefing | null>(null)
   const [aiWorking, setAiWorking] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkKind, setBulkKind] = useState<BulkKind | null>(null)
+  const [bulkWorking, setBulkWorking] = useState(false)
+  const [exportWorking, setExportWorking] = useState(false)
+  const [bulkReason, setBulkReason] = useState('')
+  const [bulkCohort, setBulkCohort] = useState('pilot-main')
+  const [bulkParticipation, setBulkParticipation] = useState('enrolled')
+  const [bulkFeedback, setBulkFeedback] = useState('keep')
+  const [bulkCredits, setBulkCredits] = useState('25')
+  const [bulkTemplate, setBulkTemplate] = useState('onboarding_reminder')
+  const [bulkNote, setBulkNote] = useState('')
+  const [emailPreview, setEmailPreview] = useState<null | {
+    eligible: Array<{ userId: string; email: string; displayName: string | null }>
+    excluded: Array<{ userId: string; email: string | null; reason: string }>
+    sample: { subject: string; text: string } | null
+  }>(null)
 
   const fetchDashboard = useCallback(async (nextRange: AdminRange) => {
     const response = await fetch(`/api/admin/overview?range=${nextRange}`, { cache: 'no-store' })
@@ -155,9 +201,9 @@ export function AdminConsole() {
     return () => { active = false }
   }, [fetchDashboard, range])
 
-  const allFeatures = useMemo(() => [...new Set(dashboard?.users.flatMap((user) => user.features) || [])].sort(), [dashboard])
-  const allPlans = useMemo(() => [...new Set(dashboard?.users.map((user) => user.plan) || [])].sort(), [dashboard])
   const allCohorts = useMemo(() => dashboard?.cohorts.map((item) => item.cohort) || [], [dashboard])
+  const allPrograms = useMemo(() => [...new Set(dashboard?.users.map((user) => user.participation?.programKey).filter(Boolean) as string[] || [])].sort(), [dashboard])
+  const allParticipantCohorts = useMemo(() => [...new Set(dashboard?.users.map((user) => user.participation?.cohortKey).filter(Boolean) as string[] || [])].sort(), [dashboard])
   const needle = query.trim().toLowerCase()
 
   const visibleUsers = useMemo(() => (dashboard?.users || []).filter((user) => {
@@ -166,10 +212,23 @@ export function AdminConsole() {
     return queryMatches
       && (userStatus === 'all' || user.status === userStatus)
       && (balance === 'all' || user.balanceHealth === balance)
-      && (plan === 'all' || user.plan === plan)
-      && (cohort === 'all' || user.cohorts.includes(cohort))
       && (feature === 'all' || user.features.includes(feature))
-  }), [balance, cohort, dashboard, feature, needle, plan, userStatus])
+      && (programFilter === 'all' || (programFilter === 'none' ? !user.participation : user.participation?.programKey === programFilter))
+      && (participantCohort === 'all' || user.participation?.cohortKey === participantCohort)
+      && (participationStatus === 'all' || user.participation?.participationStatus === participationStatus)
+      && (feedbackStatus === 'all' || user.participation?.feedbackStatus === feedbackStatus)
+      && (contactStatus === 'all'
+        || (contactStatus === 'never_contacted' ? !user.participation?.lastContactedAt : user.participation?.emailStatus === contactStatus))
+      && (engagement === 'all'
+        || (engagement === 'invited_not_activated' && Boolean(user.participation) && user.successfulRequests === 0)
+        || (engagement === 'activated_not_returned' && user.successfulRequests > 0 && user.activeDays < 2)
+        || (engagement === 'active_low_credits' && user.status === 'active' && user.balanceHealth !== 'healthy')
+        || (engagement === 'blocked_by_errors' && user.failedRequests > 0)
+        || (engagement === 'high_engagement' && (user.activeDays >= 3 || user.projects >= 2)))
+  }), [balance, contactStatus, dashboard, engagement, feature, feedbackStatus, needle, participantCohort, participationStatus, programFilter, userStatus])
+
+  const selectedUsers = useMemo(() => (dashboard?.users || []).filter((user) => selectedIds.has(user.id)), [dashboard, selectedIds])
+  const allVisibleSelected = visibleUsers.length > 0 && visibleUsers.every((user) => selectedIds.has(user.id))
 
   const visibleErrors = useMemo(() => (dashboard?.errors || []).filter((item) => {
     const queryMatches = !needle || item.email?.toLowerCase().includes(needle)
@@ -187,8 +246,135 @@ export function AdminConsole() {
   }), [dashboard, ledgerType, needle])
 
   function resetFilters() {
-    setQuery(''); setUserStatus('all'); setBalance('all'); setPlan('all'); setCohort('all')
+    setQuery(''); setUserStatus('all'); setBalance('all')
     setFeature('all'); setErrorSource('all'); setSeverity('all'); setLedgerType('all')
+    setProgramFilter('all'); setParticipationStatus('all'); setFeedbackStatus('all')
+    setContactStatus('all'); setEngagement('all'); setParticipantCohort('all')
+  }
+
+  function applySavedView(view: string) {
+    resetFilters()
+    setProgramFilter('pilot')
+    if (view === 'invited') setEngagement('invited_not_activated')
+    if (view === 'no_return') setEngagement('activated_not_returned')
+    if (view === 'low_credits') setEngagement('active_low_credits')
+    if (view === 'blocked') setEngagement('blocked_by_errors')
+    if (view === 'feedback') setFeedbackStatus('requested')
+    if (view === 'high_engagement') setEngagement('high_engagement')
+  }
+
+  function toggleUser(userId: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(userId)) next.delete(userId)
+      else next.add(userId)
+      return next
+    })
+  }
+
+  function toggleVisibleUsers() {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (allVisibleSelected) visibleUsers.forEach((user) => next.delete(user.id))
+      else visibleUsers.forEach((user) => next.add(user.id))
+      return next
+    })
+  }
+
+  function closeBulk() {
+    setBulkKind(null)
+    setBulkReason('')
+    setEmailPreview(null)
+  }
+
+  async function runBulkAction() {
+    if (!bulkKind || bulkKind === 'email' || !selectedUsers.length || !bulkReason.trim()) return
+    setBulkWorking(true)
+    setError('')
+    try {
+      const payload = bulkKind === 'credits'
+        ? { action: 'credit_grant', userIds: selectedUsers.map((user) => user.id), credits: Number(bulkCredits), reason: bulkReason.trim(), idempotencyKey: crypto.randomUUID() }
+        : bulkParticipation === 'withdrawn'
+          ? { action: 'program_remove', userIds: selectedUsers.map((user) => user.id), programKey: 'pilot', reason: bulkReason.trim(), idempotencyKey: crypto.randomUUID() }
+          : { action: 'program_update', userIds: selectedUsers.map((user) => user.id), programKey: 'pilot', cohortKey: bulkCohort.trim() || null, participationStatus: bulkParticipation, feedbackStatus: bulkFeedback === 'keep' ? undefined : bulkFeedback, reason: bulkReason.trim(), idempotencyKey: crypto.randomUUID() }
+      const response = await fetch('/api/admin/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'The bulk action could not be completed.')
+      closeBulk()
+      setSelectedIds(new Set())
+      await loadDashboard(range)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The bulk action could not be completed.')
+    } finally {
+      setBulkWorking(false)
+    }
+  }
+
+  async function exportUsersExcel(users: Array<Pick<AdminUser, 'id'>>, fileName = 'ai360-participants') {
+    if (!users.length) return
+    setExportWorking(true)
+    setError('')
+    try {
+      const safeFileName = fileName.replace(/[^A-Za-z0-9._-]/g, '-').replace(/-+/g, '-').slice(0, 80) || 'ai360-participants'
+      const response = await fetch('/api/admin/export', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userIds: users.map((user) => user.id), fileName: safeFileName }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'The Excel report could not be created.')
+      }
+      const href = URL.createObjectURL(await response.blob())
+      const link = document.createElement('a')
+      link.href = href
+      link.download = `${safeFileName}.xlsx`
+      link.click()
+      URL.revokeObjectURL(href)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The Excel report could not be created.')
+    } finally {
+      setExportWorking(false)
+    }
+  }
+
+  async function previewBulkEmail() {
+    if (!selectedUsers.length) return
+    setBulkWorking(true)
+    setError('')
+    try {
+      const response = await fetch('/api/admin/bulk', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'email_preview', userIds: selectedUsers.map((user) => user.id), programKey: 'pilot', templateKey: bulkTemplate, operatorNote: bulkNote.trim() || undefined }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'The recipient preview could not be prepared.')
+      setEmailPreview(data)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The recipient preview could not be prepared.')
+    } finally {
+      setBulkWorking(false)
+    }
+  }
+
+  async function sendBulkEmail() {
+    if (!emailPreview?.eligible.length) return
+    setBulkWorking(true)
+    setError('')
+    try {
+      const response = await fetch('/api/admin/bulk', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'email_send', userIds: selectedUsers.map((user) => user.id), programKey: 'pilot', templateKey: bulkTemplate, operatorNote: bulkNote.trim() || undefined, idempotencyKey: crypto.randomUUID() }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'The participant emails could not be sent.')
+      closeBulk()
+      setSelectedIds(new Set())
+      await loadDashboard(range)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The participant emails could not be sent.')
+    } finally {
+      setBulkWorking(false)
+    }
   }
 
   async function inspectUser(user: AdminUser) {
@@ -267,8 +453,10 @@ export function AdminConsole() {
     }
   }
 
-  const filtersActive = Boolean(query || userStatus !== 'all' || balance !== 'all' || plan !== 'all'
-    || cohort !== 'all' || feature !== 'all' || errorSource !== 'all' || severity !== 'all' || ledgerType !== 'all')
+  const filtersActive = Boolean(query || userStatus !== 'all' || balance !== 'all'
+    || feature !== 'all' || errorSource !== 'all' || severity !== 'all' || ledgerType !== 'all'
+    || programFilter !== 'all' || participationStatus !== 'all' || feedbackStatus !== 'all'
+    || contactStatus !== 'all' || engagement !== 'all' || participantCohort !== 'all')
 
   return (
     <main className={styles.shell}>
@@ -350,25 +538,50 @@ export function AdminConsole() {
 
             {tab === 'users' ? (
               <>
-                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Customer operations</span><h1>Know every account.</h1><p>Find who is active, blocked, low on credits, or quietly drifting away.</p></div><div className={styles.resultCount}><b>{visibleUsers.length}</b><span>of {dashboard.users.length} users</span></div></section>
+                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Participant operations</span><h1>Move the pilot forward.</h1><p>Find the people who need access, support, credits, follow-up, or a feedback request.</p></div><div className={styles.resultCount}><b>{visibleUsers.length}</b><span>of {dashboard.users.length} users</span></div></section>
+                {!dashboard.infrastructure.programOperationsReady ? <section className={styles.systemNotice}><span>Program tools need migration 0025</span><p>Account activity remains available, but participation states and bulk outreach are read-only until the program-operations migration is applied.</p></section> : null}
+                <section className={styles.savedViews} aria-label="Saved participant views">
+                  <span>Saved views</span>
+                  <button onClick={() => applySavedView('invited')}>Invited · not activated</button>
+                  <button onClick={() => applySavedView('no_return')}>Activated · no return</button>
+                  <button onClick={() => applySavedView('low_credits')}>Active · low credits</button>
+                  <button onClick={() => applySavedView('blocked')}>Blocked by errors</button>
+                  <button onClick={() => applySavedView('feedback')}>Feedback pending</button>
+                  <button onClick={() => applySavedView('high_engagement')}>High engagement</button>
+                </section>
                 <section className={styles.filterBar}>
                   <label className={styles.search}><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, email, or user ID" /></label>
-                  <label><span>Status</span><select value={userStatus} onChange={(event) => setUserStatus(event.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="at_risk">At risk</option><option value="dormant">Dormant</option></select></label>
+                  <label><span>Program</span><select value={programFilter} onChange={(event) => setProgramFilter(event.target.value)}><option value="all">All users</option>{allPrograms.map((item) => <option value={item} key={item}>{label(item)}</option>)}<option value="none">Not in a program</option></select></label>
+                  <label><span>Cohort</span><select value={participantCohort} onChange={(event) => setParticipantCohort(event.target.value)}><option value="all">All cohorts</option>{allParticipantCohorts.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
+                  <label><span>Participation</span><select value={participationStatus} onChange={(event) => setParticipationStatus(event.target.value)}><option value="all">Any stage</option>{PARTICIPATION_STATUSES.map((item) => <option value={item} key={item}>{label(item)}</option>)}</select></label>
+                  <label><span>Signal</span><select value={engagement} onChange={(event) => setEngagement(event.target.value)}><option value="all">Any signal</option><option value="invited_not_activated">Invited, not activated</option><option value="activated_not_returned">Activated, no return</option><option value="active_low_credits">Active, low credits</option><option value="blocked_by_errors">Blocked by errors</option><option value="high_engagement">High engagement</option></select></label>
+                  <label><span>Feedback</span><select value={feedbackStatus} onChange={(event) => setFeedbackStatus(event.target.value)}><option value="all">Any feedback</option>{FEEDBACK_STATUSES.map((item) => <option value={item} key={item}>{label(item)}</option>)}</select></label>
+                  <label><span>Contact</span><select value={contactStatus} onChange={(event) => setContactStatus(event.target.value)}><option value="all">Any contact state</option><option value="contactable">Contactable</option><option value="never_contacted">Never contacted</option><option value="unsubscribed">Unsubscribed</option><option value="suppressed">Suppressed</option></select></label>
+                  <label><span>Activity</span><select value={userStatus} onChange={(event) => setUserStatus(event.target.value)}><option value="all">Any activity</option><option value="active">Active</option><option value="at_risk">At risk</option><option value="dormant">Dormant</option></select></label>
                   <label><span>Balance</span><select value={balance} onChange={(event) => setBalance(event.target.value)}><option value="all">Any balance</option><option value="healthy">Healthy</option><option value="low">Low</option><option value="empty">Empty</option></select></label>
-                  <label><span>Plan</span><select value={plan} onChange={(event) => setPlan(event.target.value)}><option value="all">All plans</option>{allPlans.map((item) => <option value={item} key={item}>{label(item)}</option>)}</select></label>
-                  <label><span>Cohort</span><select value={cohort} onChange={(event) => setCohort(event.target.value)}><option value="all">All cohorts</option>{allCohorts.map((item) => <option key={item}>{item}</option>)}</select></label>
-                  <label><span>Feature</span><select value={feature} onChange={(event) => setFeature(event.target.value)}><option value="all">All features</option>{allFeatures.map((item) => <option value={item} key={item}>{label(item)}</option>)}</select></label>
                   {filtersActive ? <button className={styles.clear} onClick={resetFilters}>Clear filters</button> : null}
                 </section>
+                {selectedUsers.length ? <section className={styles.bulkBar}>
+                  <div><b>{selectedUsers.length} selected</b><span>{selectedUsers.filter((user) => user.participation?.programKey === 'pilot').length} in pilot · {selectedUsers.filter((user) => user.failedRequests > 0).length} with errors</span></div>
+                  <div>
+                    {dashboard.capabilities.managePrograms ? <button onClick={() => setBulkKind('program')}>Update pilot</button> : null}
+                    {dashboard.capabilities.manageCredits ? <button onClick={() => setBulkKind('credits')}>Grant credits</button> : null}
+                    {dashboard.capabilities.sendParticipantEmail ? <button onClick={() => { setEmailPreview(null); setBulkKind('email') }}>Send email</button> : null}
+                    <button disabled={exportWorking} onClick={() => void exportUsersExcel(selectedUsers)}>{exportWorking ? 'Creating Excel…' : 'Export Excel'}</button>
+                    <button onClick={() => exportUsers(selectedUsers)}>Export CSV</button>
+                    <button className={styles.clearSelection} onClick={() => setSelectedIds(new Set())}>Clear</button>
+                  </div>
+                </section> : null}
                 <section className={styles.tablePanel}>
-                  <table><thead><tr><th>User</th><th>Status</th><th>Credit position</th><th>Activity</th><th>Reliability</th><th>Provider cost</th><th /></tr></thead>
-                    <tbody>{visibleUsers.map((user) => <tr key={user.id} onClick={() => void inspectUser(user)}>
+                  <table><thead><tr><th className={styles.checkCell}><input type="checkbox" aria-label="Select all visible users" checked={allVisibleSelected} onChange={toggleVisibleUsers} /></th><th>Participant</th><th>Pilot stage</th><th>Engagement</th><th>Credits</th><th>Reliability</th><th>Follow-up</th><th /></tr></thead>
+                    <tbody>{visibleUsers.map((user) => <tr key={user.id} onClick={() => void inspectUser(user)} data-selected={selectedIds.has(user.id) || undefined}>
+                      <td className={styles.checkCell} onClick={(event) => event.stopPropagation()}><input type="checkbox" aria-label={`Select ${user.displayName || user.email}`} checked={selectedIds.has(user.id)} onChange={() => toggleUser(user.id)} /></td>
                       <td><UserIdentity user={user} /></td>
-                      <td><span className={styles.badge} data-tone={user.status}>{label(user.status)}</span><small>{user.plan}</small></td>
-                      <td><b>{number(user.availableCredits)} available</b><small>{user.reservedCredits} held · {user.creditsSpent} used</small></td>
-                      <td><b>{user.activeDays} active day{user.activeDays === 1 ? '' : 's'}</b><small>{timeAgo(user.lastActiveAt)}</small></td>
-                      <td><b>{user.successfulRequests} delivered</b><small className={user.failedRequests ? styles.danger : ''}>{user.failedRequests} failed · {user.qualityReports} reports</small></td>
-                      <td><b>{usd(user.providerCostUsd)}</b><small>{user.projects} projects</small></td>
+                      <td>{user.participation ? <><span className={styles.badge} data-tone={user.participation.participationStatus}>{label(user.participation.participationStatus)}</span><small>{user.participation.cohortKey || user.participation.programKey}</small></> : <><b>Not enrolled</b><small>No program state</small></>}</td>
+                      <td><b>{user.activeDays} active day{user.activeDays === 1 ? '' : 's'}</b><small>{user.successfulRequests} delivered · {timeAgo(user.lastActiveAt)}</small></td>
+                      <td><b>{number(user.availableCredits)} available</b><small>{user.creditsSpent} used · {user.balanceHealth}</small></td>
+                      <td><b>{user.failedRequests ? `${user.failedRequests} failures` : 'No failures'}</b><small className={user.failedRequests ? styles.danger : ''}>{user.qualityReports} feedback reports</small></td>
+                      <td><b>{user.participation?.feedbackStatus ? label(user.participation.feedbackStatus) : '—'}</b><small>{user.participation?.lastContactedAt ? `Contacted ${timeAgo(user.participation.lastContactedAt)}` : 'Never contacted'}</small></td>
                       <td><button className={styles.rowAction}>View →</button></td>
                     </tr>)}</tbody></table>
                   {!visibleUsers.length ? <Empty title="No users match these filters" detail="Clear one or more filters to widen the view." /> : null}
@@ -524,7 +737,7 @@ export function AdminConsole() {
 
             {tab === 'cohorts' ? (
               <>
-                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Cohort intelligence</span><h1>From access to real value.</h1><p>Activation and repeat use now live beside the rest of customer operations.</p></div><div className={styles.cohortControls}><select value={cohortReport?.cohort || allCohorts[0] || ''} onChange={(event) => void loadCohort(event.target.value)}>{!allCohorts.length ? <option value="">No cohorts yet</option> : allCohorts.map((item) => <option key={item}>{item}</option>)}</select><button disabled={!cohortReport} onClick={() => cohortReport && exportCohort(cohortReport)}>Export CSV</button></div></section>
+                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Cohort intelligence</span><h1>From access to real value.</h1><p>Activation and repeat use now live beside the rest of customer operations.</p></div><div className={styles.cohortControls}><select value={cohortReport?.cohort || allCohorts[0] || ''} onChange={(event) => void loadCohort(event.target.value)}>{!allCohorts.length ? <option value="">No cohorts yet</option> : allCohorts.map((item) => <option key={item}>{item}</option>)}</select><button disabled={!cohortReport || exportWorking} onClick={() => cohortReport && void exportUsersExcel(cohortReport.users.map((user) => ({ id: user.userId })), `${cohortReport.cohort}-admin-report`)}>{exportWorking ? 'Creating…' : 'Export Excel'}</button><button disabled={!cohortReport} onClick={() => cohortReport && exportCohort(cohortReport)}>Export CSV</button></div></section>
                 {cohortLoading ? <div className={styles.inlineLoading}>Calculating cohort activity…</div> : null}
                 {!cohortLoading && !cohortReport ? <Empty title="No sponsored cohorts yet" detail="Cohort grants will appear here automatically." /> : null}
                 {cohortReport ? <>
@@ -557,11 +770,45 @@ export function AdminConsole() {
       </section>
 
       {selectedUserLoading ? <div className={styles.drawerBackdrop}><aside className={styles.drawer}><div className={styles.drawerLoading}>Opening user timeline…</div></aside></div> : null}
-      {selectedUser && !selectedUserLoading ? <div className={styles.drawerBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedUser(null) }}><aside className={styles.drawer} aria-label="User details"><header className={styles.drawerTop}><span>User operations</span><button onClick={() => setSelectedUser(null)}>×</button></header><div className={styles.userHero}><UserIdentity user={selectedUser.user} /><span className={styles.badge} data-tone={selectedUser.user.status}>{label(selectedUser.user.status)}</span><p>{selectedUser.user.id}</p><div>{dashboard?.capabilities.manageCredits ? <><button onClick={() => { setCreditAction('grant'); setCreditTarget(selectedUser.user) }}>+ Grant credits</button><button onClick={() => { setCreditAction('refund'); setCreditTarget(selectedUser.user) }}>↩ Refund</button></> : null}<a href={`mailto:${selectedUser.user.email}`}>Contact</a></div></div><section className={styles.drawerMetrics}><div><span>Available</span><b>{selectedUser.user.availableCredits}</b><small>{selectedUser.user.reservedCredits} held</small></div><div><span>Reliability</span><b>{selectedUser.user.successfulRequests}</b><small>{selectedUser.user.failedRequests} failed</small></div><div><span>Cost</span><b>{usd(selectedUser.user.providerCostUsd)}</b><small>{range}</small></div></section><section className={styles.timeline}><header><span className={styles.eyebrow}>Account timeline</span><h2>Recent operational history</h2></header>{[
+      {selectedUser && !selectedUserLoading ? <div className={styles.drawerBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedUser(null) }}><aside className={styles.drawer} aria-label="User details"><header className={styles.drawerTop}><span>Participant operations</span><button onClick={() => setSelectedUser(null)}>×</button></header><div className={styles.userHero}><UserIdentity user={selectedUser.user} /><span className={styles.badge} data-tone={selectedUser.user.participation?.participationStatus || selectedUser.user.status}>{label(selectedUser.user.participation?.participationStatus || selectedUser.user.status)}</span><p>{selectedUser.user.participation ? `${selectedUser.user.participation.programKey} · ${selectedUser.user.participation.cohortKey || 'unassigned cohort'} · ${label(selectedUser.user.participation.feedbackStatus)} feedback` : 'Not enrolled in a program'}</p><div>{dashboard?.capabilities.manageCredits ? <><button onClick={() => { setCreditAction('grant'); setCreditTarget(selectedUser.user) }}>+ Grant credits</button><button onClick={() => { setCreditAction('refund'); setCreditTarget(selectedUser.user) }}>↩ Refund</button></> : null}<a href={`mailto:${selectedUser.user.email}`}>Contact</a></div></div><section className={styles.drawerMetrics}><div><span>Available</span><b>{selectedUser.user.availableCredits}</b><small>{selectedUser.user.reservedCredits} held</small></div><div><span>Reliability</span><b>{selectedUser.user.successfulRequests}</b><small>{selectedUser.user.failedRequests} failed</small></div><div><span>Contacts</span><b>{selectedUser.user.participation?.contactCount || 0}</b><small>{selectedUser.user.participation?.lastContactedAt ? timeAgo(selectedUser.user.participation.lastContactedAt) : 'Never contacted'}</small></div></section><section className={styles.timeline}><header><span className={styles.eyebrow}>Participant timeline</span><h2>Usage, credits, errors, and contact</h2></header>{[
         ...selectedUser.errors.map((item) => ({ id: item.id, at: item.lastSeenAt, tone: 'error', title: `${item.occurrences}× ${label(item.code)}`, detail: `${label(item.feature)} · ${item.route || item.source}` })),
         ...selectedUser.creditLedger.map((item) => ({ id: `credit-${item.id}`, at: item.createdAt, tone: 'credit', title: `${item.creditsDelta >= 0 ? '+' : ''}${item.creditsDelta} credits`, detail: `${label(item.entryType)} · balance ${item.balanceAfter}` })),
         ...selectedUser.auditEvents.map((item) => ({ id: `audit-${item.id}`, at: item.createdAt, tone: 'admin', title: label(item.action), detail: item.reason })),
+        ...selectedUser.contactEvents.map((item) => ({ id: `contact-${item.id}`, at: item.createdAt, tone: 'contact', title: `${label(item.templateKey)} · ${label(item.deliveryStatus)}`, detail: item.subject })),
       ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 30).map((event) => <article key={event.id} data-tone={event.tone}><i /><div><b>{event.title}</b><p>{event.detail}</p><small>{date(event.at, true)}</small></div></article>)}</section></aside></div> : null}
+
+      {bulkKind && bulkKind !== 'email' ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !bulkWorking) closeBulk() }}><form className={`${styles.creditModal} ${styles.bulkModal}`} onSubmit={(event) => { event.preventDefault(); void runBulkAction() }}>
+        <header><div><span className={styles.eyebrow}>Bulk action · {selectedUsers.length} people</span><h2>{bulkKind === 'credits' ? 'Grant pilot credits' : 'Update pilot participation'}</h2></div><button type="button" onClick={closeBulk}>×</button></header>
+        <div className={styles.selectionPreview}><span>{selectedUsers.slice(0, 4).map((user) => user.displayName || user.email).join(', ')}{selectedUsers.length > 4 ? ` + ${selectedUsers.length - 4} more` : ''}</span><b>Exact selection: {selectedUsers.length}</b></div>
+        {bulkKind === 'credits' ? <>
+          <label><span>Credits per participant</span><input type="number" min="1" max="10000" step="1" value={bulkCredits} onChange={(event) => setBulkCredits(event.target.value)} /></label>
+          <div className={styles.bulkImpact}><b>{number(Math.max(0, Number(bulkCredits) || 0) * selectedUsers.length)} credits total</b><span>{bulkCredits || 0} × {selectedUsers.length} selected accounts</span></div>
+        </> : <>
+          <label><span>Participation stage</span><select value={bulkParticipation} onChange={(event) => setBulkParticipation(event.target.value)}>{PARTICIPATION_STATUSES.map((item) => <option value={item} key={item}>{label(item)}</option>)}</select></label>
+          {bulkParticipation !== 'withdrawn' ? <label><span>Cohort</span><input maxLength={120} value={bulkCohort} onChange={(event) => setBulkCohort(event.target.value)} placeholder="pilot-main" /></label> : <p className={styles.warningNote}>This marks each selected participant as withdrawn and removes their active cohort, while preserving their history.</p>}
+          {bulkParticipation !== 'withdrawn' ? <label><span>Feedback stage</span><select value={bulkFeedback} onChange={(event) => setBulkFeedback(event.target.value)}><option value="keep">Keep current stage</option>{FEEDBACK_STATUSES.map((item) => <option value={item} key={item}>{label(item)}</option>)}</select></label> : null}
+        </>}
+        <label><span>Reason <em>Required for audit</em></span><textarea rows={3} maxLength={240} value={bulkReason} onChange={(event) => setBulkReason(event.target.value)} placeholder="Why is this action appropriate for this selection?" /></label>
+        <p className={styles.auditNote}>{bulkKind === 'credits' ? 'Every participant gets an individual ledger entry and operator audit record.' : 'Every participant update gets an immutable program event with this reason.'}</p>
+        <footer><button type="button" onClick={closeBulk}>Cancel</button><button type="submit" disabled={bulkWorking || !bulkReason.trim() || (bulkKind === 'credits' && !Number(bulkCredits))}>{bulkWorking ? 'Applying…' : `Confirm for ${selectedUsers.length}`}</button></footer>
+      </form></div> : null}
+
+      {bulkKind === 'email' ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !bulkWorking) closeBulk() }}><section className={`${styles.creditModal} ${styles.bulkModal} ${styles.emailModal}`}>
+        <header><div><span className={styles.eyebrow}>Participant outreach · {selectedUsers.length} selected</span><h2>{emailPreview ? 'Confirm the recipients' : 'Prepare an email'}</h2></div><button type="button" onClick={closeBulk}>×</button></header>
+        {!emailPreview ? <>
+          <label><span>Template</span><select value={bulkTemplate} onChange={(event) => setBulkTemplate(event.target.value)}>{EMAIL_TEMPLATES.map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label>
+          <label><span>Optional personal note <em>Same note for everyone</em></span><textarea rows={4} maxLength={500} value={bulkNote} onChange={(event) => setBulkNote(event.target.value)} placeholder="Add context from the pilot team. Names are personalized automatically." /></label>
+          <div className={styles.emailSafety}><b>Before anything sends</b><p>AI360 will remove unsubscribed, suppressed, missing-email, and non-pilot accounts, then show you the exact recipients and final message.</p></div>
+          <footer><button type="button" onClick={closeBulk}>Cancel</button><button type="button" disabled={bulkWorking} onClick={() => void previewBulkEmail()}>{bulkWorking ? 'Preparing…' : 'Review recipients'}</button></footer>
+        </> : <>
+          <div className={styles.recipientCounts}><div><b>{emailPreview.eligible.length}</b><span>will receive</span></div><div><b>{emailPreview.excluded.length}</b><span>excluded safely</span></div></div>
+          <div className={styles.recipientList}><header><b>Exact recipients</b><span>{emailPreview.eligible.length} individual emails</span></header>{emailPreview.eligible.slice(0, 12).map((item) => <div key={item.userId}><span>{item.displayName || item.email.split('@')[0]}</span><small>{item.email}</small></div>)}{emailPreview.eligible.length > 12 ? <p>+ {emailPreview.eligible.length - 12} more recipients</p> : null}</div>
+          {emailPreview.excluded.length ? <div className={styles.excludedList}><b>Excluded</b><span>{emailPreview.excluded.map((item) => `${item.email || item.userId} · ${label(item.reason)}`).slice(0, 6).join('  |  ')}</span></div> : null}
+          {emailPreview.sample ? <div className={styles.messagePreview}><span>Message preview</span><b>{emailPreview.sample.subject}</b><pre>{emailPreview.sample.text}</pre></div> : null}
+          <p className={styles.auditNote}>Each delivery is private, idempotent, and recorded in that participant’s contact history.</p>
+          <footer><button type="button" disabled={bulkWorking} onClick={() => setEmailPreview(null)}>Back</button><button type="button" disabled={bulkWorking || !emailPreview.eligible.length} onClick={() => void sendBulkEmail()}>{bulkWorking ? 'Sending…' : `Send ${emailPreview.eligible.length} emails`}</button></footer>
+        </>}
+      </section></div> : null}
 
       {creditTarget ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !creditWorking) setCreditTarget(null) }}><form className={styles.creditModal} onSubmit={applyCredits}><header><div><span className={styles.eyebrow}>Privileged action</span><h2>{creditAction === 'refund' ? 'Refund credits' : 'Grant credits'}</h2></div><button type="button" onClick={() => setCreditTarget(null)}>×</button></header><label><span>User</span><select value={creditTarget.id} onChange={(event) => { const user = dashboard?.users.find((item) => item.id === event.target.value); if (user) setCreditTarget(user) }}>{dashboard?.users.map((user) => <option value={user.id} key={user.id}>{user.displayName || user.email} · {user.availableCredits} credits</option>)}</select></label><div className={styles.actionSwitch}><button type="button" data-active={creditAction === 'grant' || undefined} onClick={() => setCreditAction('grant')}>Grant</button><button type="button" data-active={creditAction === 'refund' || undefined} onClick={() => setCreditAction('refund')}>Refund failed work</button></div><label><span>Credits</span><input type="number" min="1" max="10000" step="1" value={creditAmount} onChange={(event) => setCreditAmount(event.target.value)} /></label><label><span>Reason <em>Required for audit</em></span><textarea rows={3} maxLength={240} value={creditReason} onChange={(event) => setCreditReason(event.target.value)} placeholder={creditAction === 'refund' ? 'Example: Refund for three failed video renders' : 'Example: Workshop participation credit'} /></label><div className={styles.balancePreview}><span><small>Current balance</small><b>{creditTarget.availableCredits}</b></span><i>→</i><span><small>Balance after</small><b>{creditTarget.availableCredits + Math.max(0, Number(creditAmount) || 0)}</b></span></div><p className={styles.auditNote}>This creates an immutable ledger entry and records you as the operator. It cannot silently overwrite an existing balance.</p><footer><button type="button" onClick={() => setCreditTarget(null)}>Cancel</button><button type="submit" disabled={creditWorking || !creditReason.trim() || !Number(creditAmount)}>{creditWorking ? 'Applying…' : `Confirm ${creditAction}`}</button></footer></form></div> : null}
     </main>

@@ -19,6 +19,9 @@ import { hexToOoxml, readableTextHex, tint, type DocumentBrand } from '@/lib/exp
 export type Sheet = {
   name: string
   rows: string[][]
+  freezeHeader?: boolean
+  autoFilter?: boolean
+  columnWidths?: number[]
 }
 
 /** Excel forbids : \ / ? * [ ] in sheet names, caps them at 31 characters, and rejects empties. */
@@ -89,7 +92,8 @@ export function numericCell(value: string) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function sheetXml(rows: string[][]) {
+function sheetXml(sheet: Sheet) {
+  const { rows } = sheet
   const body = rows
     .map((row, rowIndex) => {
       const rowNumber = rowIndex + 1
@@ -109,8 +113,19 @@ function sheetXml(rows: string[][]) {
     })
     .join('')
 
+  const sheetViews = sheet.freezeHeader
+    ? '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+    : ''
+  const columns = sheet.columnWidths?.length
+    ? `<cols>${sheet.columnWidths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${Math.max(8, Math.min(48, width))}" customWidth="1"/>`).join('')}</cols>`
+    : ''
+  const maximumColumns = rows.reduce((maximum, row) => Math.max(maximum, row.length), 0)
+  const autoFilter = sheet.autoFilter && rows.length && maximumColumns
+    ? `<autoFilter ref="A1:${cellRef(maximumColumns - 1, rows.length)}"/>`
+    : ''
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${body}</sheetData></worksheet>`
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${sheetViews}${columns}<sheetData>${body}</sheetData>${autoFilter}</worksheet>`
 }
 
 /** The shape this module needs from the exporter's parsed markdown. */
@@ -196,7 +211,7 @@ export async function buildXlsx(sheets: Sheet[], brand?: DocumentBrand): Promise
   )
 
   sheets.forEach((sheet, index) => {
-    zip.file(`xl/worksheets/sheet${index + 1}.xml`, sheetXml(sheet.rows))
+    zip.file(`xl/worksheets/sheet${index + 1}.xml`, sheetXml(sheet))
   })
 
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })

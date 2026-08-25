@@ -38,3 +38,23 @@ export function canManageAdminCredits(context: WorkspaceAuthContext | null) {
     ['AI360_CREDIT_OPERATOR_EMAILS', 'AI360_ADMIN_OPERATOR_EMAILS', 'AI360_PILOT_OPERATOR_EMAILS'],
   )
 }
+
+/** Cohort and participation changes are separate from financial authority. */
+export function canManageAdminPrograms(context: WorkspaceAuthContext | null) {
+  if (!context) return false
+  return isOrganizationAdmin(context) || matchesIdentity(
+    context,
+    ['AI360_PROGRAM_OPERATOR_IDS', 'AI360_ADMIN_OPERATOR_IDS', 'AI360_PILOT_OPERATOR_IDS'],
+    ['AI360_PROGRAM_OPERATOR_EMAILS', 'AI360_ADMIN_OPERATOR_EMAILS', 'AI360_PILOT_OPERATOR_EMAILS'],
+  )
+}
+
+/** External communication is deliberately narrower than read access. */
+export function canSendAdminEmail(context: WorkspaceAuthContext | null) {
+  if (!context) return false
+  return isOrganizationAdmin(context) || matchesIdentity(
+    context,
+    ['AI360_EMAIL_OPERATOR_IDS', 'AI360_ADMIN_OPERATOR_IDS'],
+    ['AI360_EMAIL_OPERATOR_EMAILS', 'AI360_ADMIN_OPERATOR_EMAILS'],
+  )
+}

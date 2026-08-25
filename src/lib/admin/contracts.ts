@@ -4,14 +4,50 @@ export type AdminRange = (typeof ADMIN_RANGES)[number]
 export type AdminUserStatus = 'active' | 'at_risk' | 'dormant'
 export type AdminBalanceHealth = 'healthy' | 'low' | 'empty'
 export type AdminSeverity = 's0' | 's1' | 's2' | 's3' | 's4'
+export type AdminParticipationStatus = 'invited' | 'enrolled' | 'activated' | 'returning' | 'completed' | 'withdrawn'
+export type AdminFeedbackStatus = 'not_requested' | 'requested' | 'received' | 'reviewed'
+export type AdminEmailStatus = 'contactable' | 'unsubscribed' | 'suppressed'
 
 export type AdminCapabilities = {
   manageCredits: boolean
+  managePrograms: boolean
+  sendParticipantEmail: boolean
   runAiInsights: boolean
 }
 
 export type AdminInfrastructure = {
   auditTrailReady: boolean
+  programOperationsReady: boolean
+}
+
+export type AdminProgramMembership = {
+  programKey: string
+  cohortKey: string | null
+  participationStatus: AdminParticipationStatus
+  feedbackStatus: AdminFeedbackStatus
+  emailStatus: AdminEmailStatus
+  assignedTo: string | null
+  nextFollowUpAt: string | null
+  internalNote: string | null
+  invitedAt: string | null
+  enrolledAt: string | null
+  lastContactedAt: string | null
+  contactCount: number
+  updatedAt: string
+}
+
+export type AdminContactEvent = {
+  id: string
+  programKey: string
+  userId: string
+  actorId: string | null
+  channel: 'email' | 'manual'
+  templateKey: string
+  subject: string
+  deliveryStatus: 'prepared' | 'sent' | 'failed' | 'skipped'
+  providerMessageId: string | null
+  failureReason: string | null
+  createdAt: string
 }
 
 export type AdminUser = {
@@ -38,6 +74,7 @@ export type AdminUser = {
   projects: number
   cohorts: string[]
   features: string[]
+  participation: AdminProgramMembership | null
 }
 
 export type AdminSummary = {
@@ -285,6 +322,7 @@ export type AdminUserDetail = {
   creditLedger: AdminCreditLedgerEntry[]
   errors: AdminErrorGroup[]
   auditEvents: AdminAuditEvent[]
+  contactEvents: AdminContactEvent[]
 }
 
 export type AdminAiBriefing = {

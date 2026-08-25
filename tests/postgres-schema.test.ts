@@ -7,6 +7,7 @@ const onboardingMigrationUrl = new URL('../database/postgres/0013_workspace_onbo
 const onboardingMemberMigrationUrl = new URL('../database/postgres/0014_onboarding_per_member.sql', import.meta.url)
 const adminMigrationUrl = new URL('../database/postgres/0023_admin_console.sql', import.meta.url)
 const adminFinanceMigrationUrl = new URL('../database/postgres/0024_admin_finance_indexes.sql', import.meta.url)
+const adminProgramMigrationUrl = new URL('../database/postgres/0025_admin_program_operations.sql', import.meta.url)
 
 test('the Supabase runtime foundation persists every durable agent boundary', async () => {
   const migration = await readFile(runtimeMigrationUrl, 'utf8')
@@ -82,4 +83,19 @@ test('admin finance time-window queries have partial cost indexes', async () => 
   assert.match(migration, /where status = 'settled' and feature in \('image', 'video'\)/)
   assert.match(migration, /lab_usage_events\(feature, created_at desc\)/)
   assert.match(migration, /where actual_cost_usd > 0/)
+})
+
+test('pilot operations use private indexed membership, audit, and per-recipient contact tables', async () => {
+  const migration = await readFile(adminProgramMigrationUrl, 'utf8')
+  assert.match(migration, /create table if not exists public\.lab_admin_program_memberships/)
+  assert.match(migration, /primary key \(program_key, user_id\)/)
+  assert.match(migration, /participation_status in \('invited', 'enrolled', 'activated', 'returning', 'completed', 'withdrawn'\)/)
+  assert.match(migration, /create table if not exists public\.lab_admin_program_events/)
+  assert.match(migration, /idempotency_key text not null unique/)
+  assert.match(migration, /create table if not exists public\.lab_admin_contact_events/)
+  assert.match(migration, /idx_lab_admin_program_memberships_segment/)
+  assert.match(migration, /idx_lab_admin_contact_events_member_created/)
+  assert.match(migration, /revoke all on public\.lab_admin_program_memberships from public, anon, authenticated/)
+  assert.match(migration, /revoke all on public\.lab_admin_contact_events from public, anon, authenticated/)
+  assert.doesNotMatch(migration, /policy[\s\S]+for insert/i)
 })

@@ -1,9 +1,10 @@
 import { getOptionalAuthContext } from '@/lib/auth'
-import { isAdminOperator, canManageAdminCredits } from '@/lib/admin/access'
+import { isAdminOperator, canManageAdminCredits, canManageAdminPrograms, canSendAdminEmail } from '@/lib/admin/access'
 import { parseAdminRange } from '@/lib/admin/contracts'
 import { readAdminDashboardData } from '@/lib/admin/repository'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { isPostgresConfigured } from '@/lib/postgres'
+import { isEmailConfigured } from '@/lib/email/config'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,6 +26,9 @@ export async function GET(request: Request) {
       ...dashboard,
       capabilities: {
         manageCredits: dashboard.infrastructure.auditTrailReady && canManageAdminCredits(context),
+        managePrograms: dashboard.infrastructure.programOperationsReady && canManageAdminPrograms(context),
+        sendParticipantEmail: dashboard.infrastructure.programOperationsReady
+          && isEmailConfigured() && canSendAdminEmail(context),
         runAiInsights: Boolean(process.env.OPENROUTER_API_KEY),
       },
     }, { headers: log.headers({ 'Cache-Control': 'private, no-store' }) })

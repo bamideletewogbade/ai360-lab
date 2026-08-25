@@ -82,3 +82,18 @@ test('ragged rows do not misalign columns', async () => {
   // The third row's last value must still land in column C, not slide into B.
   assert.match(sheet, /<c r="C3" t="inlineStr"><is><t xml:space="preserve">z<\/t><\/is><\/c>/)
 })
+
+test('report sheets can freeze headers, size columns and expose Excel filters', async () => {
+  const file = await buildXlsx([{
+    name: 'Participants',
+    rows: [['Email', 'Credits'], ['person@example.com', '25']],
+    freezeHeader: true,
+    autoFilter: true,
+    columnWidths: [30, 14],
+  }])
+  const zip = await JSZip.loadAsync(file)
+  const sheet = await zip.file('xl/worksheets/sheet1.xml')!.async('string')
+  assert.match(sheet, /<pane ySplit="1" topLeftCell="A2"/)
+  assert.match(sheet, /<col min="1" max="1" width="30" customWidth="1"\/\>/)
+  assert.match(sheet, /<autoFilter ref="A1:B2"\/\>/)
+})

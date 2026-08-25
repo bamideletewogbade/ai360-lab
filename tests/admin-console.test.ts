@@ -8,7 +8,12 @@ import {
   summarizeAdminCohort,
   type AdminCohortUserMetrics,
 } from '../src/lib/admin/contracts.ts'
-import { canManageAdminCredits, isAdminOperator } from '../src/lib/admin/access.ts'
+import {
+  canManageAdminCredits,
+  canManageAdminPrograms,
+  canSendAdminEmail,
+  isAdminOperator,
+} from '../src/lib/admin/access.ts'
 import { isMissingAdminAuditTable } from '../src/lib/admin/audit.ts'
 import { buildAdminFinance } from '../src/lib/admin/finance.ts'
 import { createWorkspaceAuthContext } from '../src/lib/workspace.ts'
@@ -103,16 +108,24 @@ test('read access and credit mutations use separate operator capabilities', () =
     admin: process.env.AI360_ADMIN_OPERATOR_IDS,
     quality: process.env.AI360_QUALITY_REVIEWER_IDS,
     credit: process.env.AI360_CREDIT_OPERATOR_IDS,
+    program: process.env.AI360_PROGRAM_OPERATOR_IDS,
+    email: process.env.AI360_EMAIL_OPERATOR_IDS,
   }
   try {
     process.env.AI360_ADMIN_OPERATOR_IDS = 'admin_id'
     process.env.AI360_QUALITY_REVIEWER_IDS = 'reviewer_id'
     process.env.AI360_CREDIT_OPERATOR_IDS = 'credit_id'
+    process.env.AI360_PROGRAM_OPERATOR_IDS = 'program_id'
+    process.env.AI360_EMAIL_OPERATOR_IDS = 'email_id'
     assert.equal(isAdminOperator(createWorkspaceAuthContext({ userId: 'reviewer_id' })), true)
     assert.equal(canManageAdminCredits(createWorkspaceAuthContext({ userId: 'reviewer_id' })), false)
     assert.equal(isAdminOperator(createWorkspaceAuthContext({ userId: 'admin_id' })), true)
     assert.equal(canManageAdminCredits(createWorkspaceAuthContext({ userId: 'admin_id' })), true)
     assert.equal(canManageAdminCredits(createWorkspaceAuthContext({ userId: 'credit_id' })), true)
+    assert.equal(canManageAdminPrograms(createWorkspaceAuthContext({ userId: 'program_id' })), true)
+    assert.equal(canManageAdminCredits(createWorkspaceAuthContext({ userId: 'program_id' })), false)
+    assert.equal(canSendAdminEmail(createWorkspaceAuthContext({ userId: 'email_id' })), true)
+    assert.equal(canManageAdminPrograms(createWorkspaceAuthContext({ userId: 'email_id' })), false)
   } finally {
     if (previous.admin === undefined) delete process.env.AI360_ADMIN_OPERATOR_IDS
     else process.env.AI360_ADMIN_OPERATOR_IDS = previous.admin
@@ -120,6 +133,10 @@ test('read access and credit mutations use separate operator capabilities', () =
     else process.env.AI360_QUALITY_REVIEWER_IDS = previous.quality
     if (previous.credit === undefined) delete process.env.AI360_CREDIT_OPERATOR_IDS
     else process.env.AI360_CREDIT_OPERATOR_IDS = previous.credit
+    if (previous.program === undefined) delete process.env.AI360_PROGRAM_OPERATOR_IDS
+    else process.env.AI360_PROGRAM_OPERATOR_IDS = previous.program
+    if (previous.email === undefined) delete process.env.AI360_EMAIL_OPERATOR_IDS
+    else process.env.AI360_EMAIL_OPERATOR_IDS = previous.email
   }
 })
 
@@ -146,4 +163,33 @@ test('credit actions write a financial ledger entry and immutable operator audit
   assert.match(migration, /idempotency_key text not null unique/)
   assert.match(migration, /revoke all on public\.lab_admin_audit_events from public, anon, authenticated/)
   assert.doesNotMatch(migration, /policy[\s\S]+for insert/i)
+})
+
+test('participant operations keep pilot inside admin with safe bulk outreach', async () => {
+  const consoleUi = await readFile(new URL('../src/components/AdminConsole.tsx', import.meta.url), 'utf8')
+  const bulkRoute = await readFile(new URL('../src/app/api/admin/bulk/route.ts', import.meta.url), 'utf8')
+  const programRepository = await readFile(new URL('../src/lib/admin/programs.ts', import.meta.url), 'utf8')
+  const emailTemplate = await readFile(new URL('../src/lib/admin/participant-email.ts', import.meta.url), 'utf8')
+
+  assert.match(consoleUi, /Invited · not activated/)
+  assert.match(consoleUi, /Blocked by errors/)
+  assert.match(consoleUi, /Exact recipients/)
+  assert.match(consoleUi, /Send \$\{emailPreview\.eligible\.length\} emails/)
+  assert.match(bulkRoute, /email_status === 'contactable'/)
+  assert.match(bulkRoute, /claimAdminContactEvent/)
+  assert.match(programRepository, /on conflict \(idempotency_key\) do nothing/)
+  assert.match(emailTemplate, /escapeHtml\(note\)/)
+  assert.doesNotMatch(emailTemplate, /recipient_email|provider_message_id/)
+})
+
+test('participant exports offer authenticated Excel workbooks as well as CSV', async () => {
+  const consoleUi = await readFile(new URL('../src/components/AdminConsole.tsx', import.meta.url), 'utf8')
+  const route = await readFile(new URL('../src/app/api/admin/export/route.ts', import.meta.url), 'utf8')
+  assert.match(consoleUi, /Export Excel/)
+  assert.match(consoleUi, /Export CSV/)
+  assert.match(route, /isAdminOperator\(operator\)/)
+  assert.match(route, /readAdminDashboardData\('all'\)/)
+  assert.match(route, /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/)
+  assert.match(route, /freezeHeader: true/)
+  assert.match(route, /autoFilter: true/)
 })
