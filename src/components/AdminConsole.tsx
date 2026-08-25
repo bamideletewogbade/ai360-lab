@@ -212,6 +212,22 @@ export function AdminConsole() {
   const allCohorts = useMemo(() => dashboard?.cohorts.map((item) => item.cohort) || [], [dashboard])
   const allPrograms = useMemo(() => [...new Set(dashboard?.users.map((user) => user.participation?.programKey).filter(Boolean) as string[] || [])].sort(), [dashboard])
   const allParticipantCohorts = useMemo(() => [...new Set(dashboard?.users.map((user) => user.participation?.cohortKey).filter(Boolean) as string[] || [])].sort(), [dashboard])
+  const managementSignals = useMemo(() => {
+    if (!dashboard) return []
+    const pilotUsers = dashboard.users.filter((user) => user.participation?.programKey === 'pilot'
+      && user.participation.participationStatus !== 'withdrawn')
+    const returning = pilotUsers.filter((user) => user.activeDays >= 2).length
+    const delivered = pilotUsers.reduce((sum, user) => sum + user.successfulRequests, 0)
+    const projects = pilotUsers.reduce((sum, user) => sum + user.projects, 0)
+    const creditsUsed = pilotUsers.reduce((sum, user) => sum + user.creditsSpent, 0)
+    const cohorts = new Set(pilotUsers.map((user) => user.participation?.cohortKey).filter(Boolean)).size
+    return [
+      { id: 'participation', title: 'Pilot participation', summary: `${pilotUsers.length} participants across ${cohorts || 1} cohort${cohorts === 1 ? '' : 's'}.`, tone: 'healthy', tab: 'users' as AdminTab },
+      { id: 'delivery', title: 'Successful work delivered', summary: `${number(delivered)} successful AI requests completed for pilot participants.`, tone: 'healthy', tab: 'cohorts' as AdminTab },
+      { id: 'returning', title: 'Repeat engagement', summary: `${returning} participant${returning === 1 ? '' : 's'} returned and used AI360 on multiple days.`, tone: 'opportunity', tab: 'cohorts' as AdminTab },
+      { id: 'creation', title: 'Projects taking shape', summary: `${number(projects)} projects created and ${number(creditsUsed)} credits used during the pilot.`, tone: 'opportunity', tab: 'users' as AdminTab },
+    ]
+  }, [dashboard])
   const needle = query.trim().toLowerCase()
 
   const visibleUsers = useMemo(() => (dashboard?.users || []).filter((user) => {
@@ -547,28 +563,28 @@ export function AdminConsole() {
             ) : null}
             {tab === 'overview' ? (
               <>
-                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Live operating picture</span><h1>What needs attention.</h1><p>Users, credit exposure, product reliability, and real provider cost in one place.</p></div><div className={styles.healthScore}><span>Request health</span><b>{dashboard.summary.requestSuccessRate}%</b><i><span style={{ width: `${dashboard.summary.requestSuccessRate}%` }} /></i></div></section>
+                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Live pilot picture</span><h1>How the pilot is progressing.</h1><p>Participation, useful work, repeat engagement, credits, and measured cost in one place.</p></div><div className={styles.healthScore}><span>Delivery rate</span><b>{dashboard.summary.requestSuccessRate}%</b><i><span style={{ width: `${dashboard.summary.requestSuccessRate}%` }} /></i></div></section>
                 <section className={styles.metrics}>
                   <Metric label="Active users" value={number(dashboard.summary.activeUsers)} detail={`${dashboard.summary.atRiskUsers} at risk · ${dashboard.summary.users} total`} tone="green" />
                   <Metric label="Credits available" value={number(dashboard.summary.availableCredits)} detail={`${number(dashboard.summary.reservedCredits)} currently held`} />
                   <Metric label="Credits consumed" value={number(dashboard.summary.creditsSpent)} detail={`${number(dashboard.summary.requests)} requests in window`} />
                   <Metric label="Provider cost" value={usd(dashboard.summary.providerCostUsd)} detail="Measured, not estimated" />
-                  <Metric label="Failures" value={number(dashboard.summary.failedRequests)} detail={`${dashboard.errors.length} grouped signals`} tone={dashboard.summary.failedRequests ? 'red' : 'green'} />
+                  <Metric label="Work delivered" value={number(dashboard.summary.successfulRequests)} detail={`${dashboard.summary.requestSuccessRate}% delivery rate`} tone="green" />
                 </section>
                 <section className={styles.overviewGrid}>
                   <article className={styles.attentionCard}>
-                    <header><div><span className={styles.eyebrow}>Decision feed</span><h2>What AI360 sees</h2></div><button onClick={() => setTab('insights')}>Open insights →</button></header>
-                    <div className={styles.insightList}>{dashboard.insights.slice(0, 4).map((insight) => <button key={insight.id} data-tone={insight.tone} onClick={() => setTab('insights')}><i /><span><b>{insight.title}</b><small>{insight.summary}</small></span><em>→</em></button>)}</div>
+                    <header><div><span className={styles.eyebrow}>Management snapshot</span><h2>Pilot progress signals</h2></div><button onClick={() => setTab('cohorts')}>Open cohorts →</button></header>
+                    <div className={styles.insightList}>{managementSignals.map((insight) => <button key={insight.id} data-tone={insight.tone} onClick={() => setTab(insight.tab)}><i /><span><b>{insight.title}</b><small>{insight.summary}</small></span><em>→</em></button>)}</div>
                   </article>
                   <article className={styles.featureHealth}>
-                    <header><span className={styles.eyebrow}>Feature health</span><h2>Reliability by workflow</h2></header>
-                    <div>{dashboard.features.slice(0, 7).map((item) => <button key={item.feature} onClick={() => { setFeature(item.feature); setTab('errors') }}><span><b>{label(item.feature)}</b><small>{item.requests} requests · {usd(item.providerCostUsd)}</small></span><span><b>{item.successRate}%</b><i><span style={{ width: `${item.successRate}%` }} /></i></span></button>)}</div>
+                    <header><span className={styles.eyebrow}>Workflow adoption</span><h2>Most-used AI360 workflows</h2></header>
+                    <div>{dashboard.features.slice(0, 7).map((item) => <button key={item.feature} onClick={() => { setFeature(item.feature); setTab('users') }}><span><b>{label(item.feature)}</b><small>{item.successfulRequests} delivered · {usd(item.providerCostUsd)} measured cost</small></span><span><b>{item.requests}</b><i><span style={{ width: `${dashboard.summary.requests ? (item.requests / dashboard.summary.requests) * 100 : 0}%` }} /></i></span></button>)}</div>
                   </article>
                 </section>
                 <section className={styles.splitSection}>
                   <article className={styles.panel}>
-                    <header><div><span className={styles.eyebrow}>Customer risk</span><h2>Users who may be blocked</h2></div><button onClick={() => setTab('users')}>All users</button></header>
-                    <div className={styles.compactUsers}>{dashboard.users.filter((user) => user.failedRequests > 0 || user.balanceHealth !== 'healthy').slice(0, 6).map((user) => <button key={user.id} onClick={() => void inspectUser(user)}><UserIdentity user={user} compact /><span><b>{user.failedRequests ? `${user.failedRequests} failures` : `${user.availableCredits} credits left`}</b><small>{timeAgo(user.lastActiveAt)}</small></span></button>)}</div>
+                    <header><div><span className={styles.eyebrow}>Pilot momentum</span><h2>Most engaged participants</h2></div><button onClick={() => { setProgramFilter('pilot'); setTab('users') }}>All participants</button></header>
+                    <div className={styles.compactUsers}>{[...dashboard.users].filter((user) => user.participation?.programKey === 'pilot').sort((a, b) => b.activeDays - a.activeDays || b.successfulRequests - a.successfulRequests).slice(0, 6).map((user) => <button key={user.id} onClick={() => void inspectUser(user)}><UserIdentity user={user} compact /><span><b>{user.successfulRequests} delivered</b><small>{user.activeDays} active days · {timeAgo(user.lastActiveAt)}</small></span></button>)}</div>
                   </article>
                   <article className={styles.panel}>
                     <header><div><span className={styles.eyebrow}>Credit exposure</span><h2>Balance distribution</h2></div><button onClick={() => setTab('credits')}>Open ledger</button></header>
