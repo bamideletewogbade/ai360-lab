@@ -197,10 +197,18 @@ export function normalizeEmail(value: string): string | null {
   if (addressed) candidate = addressed[2].trim()
 
   candidate = candidate.replace(/^mailto:/i, '').trim()
-  candidate = candidate.replace(/^[<("']+/, '').replace(/[>)"']+$/, '')
-  // Trailing list punctuation, but never a trailing dot that is part of a TLD
-  // we would then have to guess at — an address ending in `.` is malformed.
-  candidate = candidate.replace(/[,;]+$/, '').trim()
+  // Wrappers and list punctuation interleave — `"ada@example.com";` ends in a
+  // semicolon that hides the quote behind it — so peel until nothing changes.
+  // Note a trailing dot is never peeled: an address ending in one is malformed,
+  // not decorated, and trimming it would invent a TLD the operator did not type.
+  for (let previous = ''; previous !== candidate; ) {
+    previous = candidate
+    candidate = candidate
+      .replace(/^[<("']+/, '')
+      .replace(/[>)"']+$/, '')
+      .replace(/[,;]+$/, '')
+      .trim()
+  }
   if (!candidate) return null
 
   const lowered = candidate.toLowerCase()

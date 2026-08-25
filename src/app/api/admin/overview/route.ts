@@ -5,6 +5,7 @@ import { readAdminDashboardData } from '@/lib/admin/repository'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { isPostgresConfigured } from '@/lib/postgres'
 import { isEmailConfigured } from '@/lib/email/config'
+import { isSupabaseAdminConfigured } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -29,6 +30,12 @@ export async function GET(request: Request) {
         managePrograms: dashboard.infrastructure.programOperationsReady && canManageAdminPrograms(context),
         sendParticipantEmail: dashboard.infrastructure.programOperationsReady
           && isEmailConfigured() && canSendAdminEmail(context),
+        importParticipants: dashboard.infrastructure.invitationsReady && canManageAdminPrograms(context),
+        // An invitation carries a minted sign-up link, so it needs the service
+        // role key as well as a mail provider — either missing and the console
+        // should not offer the action at all.
+        sendInvitations: dashboard.infrastructure.invitationsReady
+          && isEmailConfigured() && isSupabaseAdminConfigured() && canSendAdminEmail(context),
         runAiInsights: Boolean(process.env.OPENROUTER_API_KEY),
       },
     }, { headers: log.headers({ 'Cache-Control': 'private, no-store' }) })

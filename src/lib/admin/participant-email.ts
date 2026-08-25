@@ -69,14 +69,25 @@ export function renderAdminParticipantEmail(input: {
   displayName: string | null
   email: string
   operatorNote?: string | null
+  /**
+   * Overrides the call-to-action destination. An invitation points at a
+   * single-use sign-up link rather than the app's front door, because the
+   * recipient has no account to sign in to yet.
+   */
+  actionUrl?: string | null
+  /** Omitted only when no signing secret is configured to mint one. */
+  unsubscribeUrl?: string | null
 }): RenderedEmail {
   const copy = COPY[input.template]
   const { appUrl, replyTo } = emailSettings()
+  const target = input.actionUrl?.trim() || appUrl
   const name = firstName(input.displayName, input.email)
   const note = input.operatorNote?.trim().slice(0, 500) || ''
   const safeNote = escapeHtml(note)
   const noteHtml = safeNote ? `<div style="margin:20px 0;padding:14px 16px;border-left:3px solid #d8643b;background:#f6f1e8;color:#30322f;line-height:1.55;">${safeNote.replaceAll('\n', '<br>')}</div>` : ''
-  const html = `<!doctype html><html lang="en"><body style="margin:0;background:#f1efe8;padding:28px 12px;font-family:Arial,sans-serif;color:#171918;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:auto;background:#fff;border:1px solid #dedbd1;border-radius:16px;"><tr><td style="padding:28px 32px 8px;font-size:18px;font-weight:800;">AI360</td></tr><tr><td style="padding:12px 32px 32px;"><p style="margin:0 0 14px;">Hi ${name},</p><h1 style="margin:0 0 14px;font-size:25px;line-height:1.2;">${copy.heading}</h1><p style="margin:0;color:#515550;line-height:1.65;">${copy.body}</p>${noteHtml}<a href="${escapeHtml(appUrl)}" style="display:inline-block;margin-top:22px;padding:12px 18px;border-radius:9px;background:#171918;color:#fff;text-decoration:none;font-weight:700;">${copy.cta}</a><p style="margin:26px 0 0;color:#777b75;font-size:12px;line-height:1.5;">Questions? Reply to this email${replyTo ? ` and our team at ${escapeHtml(replyTo)} will help` : ''}.</p></td></tr></table></body></html>`
-  const text = `Hi ${input.displayName?.trim().split(/\s+/)[0] || input.email.split('@')[0]},\n\n${copy.heading}\n\n${copy.body}${note ? `\n\n${note}` : ''}\n\n${copy.cta}: ${appUrl}\n\nQuestions? Reply to this email.`
+  const optOut = input.unsubscribeUrl?.trim() || ''
+  const optOutHtml = optOut ? `<p style="margin:10px 0 0;color:#777b75;font-size:12px;line-height:1.5;">Would you rather not hear about the pilot? <a href="${escapeHtml(optOut)}" style="color:#777b75;">Unsubscribe</a>.</p>` : ''
+  const html = `<!doctype html><html lang="en"><body style="margin:0;background:#f1efe8;padding:28px 12px;font-family:Arial,sans-serif;color:#171918;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:auto;background:#fff;border:1px solid #dedbd1;border-radius:16px;"><tr><td style="padding:28px 32px 8px;font-size:18px;font-weight:800;">AI360</td></tr><tr><td style="padding:12px 32px 32px;"><p style="margin:0 0 14px;">Hi ${name},</p><h1 style="margin:0 0 14px;font-size:25px;line-height:1.2;">${copy.heading}</h1><p style="margin:0;color:#515550;line-height:1.65;">${copy.body}</p>${noteHtml}<a href="${escapeHtml(target)}" style="display:inline-block;margin-top:22px;padding:12px 18px;border-radius:9px;background:#171918;color:#fff;text-decoration:none;font-weight:700;">${copy.cta}</a><p style="margin:26px 0 0;color:#777b75;font-size:12px;line-height:1.5;">Questions? Reply to this email${replyTo ? ` and our team at ${escapeHtml(replyTo)} will help` : ''}.</p>${optOutHtml}</td></tr></table></body></html>`
+  const text = `Hi ${input.displayName?.trim().split(/\s+/)[0] || input.email.split('@')[0]},\n\n${copy.heading}\n\n${copy.body}${note ? `\n\n${note}` : ''}\n\n${copy.cta}: ${target}\n\nQuestions? Reply to this email.${optOut ? `\n\nUnsubscribe: ${optOut}` : ''}`
   return { subject: copy.subject, html, text }
 }

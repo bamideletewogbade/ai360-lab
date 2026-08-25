@@ -8,16 +8,78 @@ export type AdminParticipationStatus = 'invited' | 'enrolled' | 'activated' | 'r
 export type AdminFeedbackStatus = 'not_requested' | 'requested' | 'received' | 'reviewed'
 export type AdminEmailStatus = 'contactable' | 'unsubscribed' | 'suppressed'
 
+export type AdminInviteStatus = 'pending' | 'sent' | 'accepted' | 'bounced' | 'revoked'
+
+/**
+ * Why an imported address will or will not become an invitation. Everything
+ * except `new` is a reason the row is skipped, and the operator sees all of
+ * them before anything is written.
+ */
+export type AdminImportDisposition =
+  | 'new'
+  | 'already_invited'
+  | 'already_a_user'
+  | 'invalid_email'
+  | 'duplicate_in_file'
+  | 'missing_email'
+
 export type AdminCapabilities = {
   manageCredits: boolean
   managePrograms: boolean
   sendParticipantEmail: boolean
+  /** Importing a list needs the invitation tables, not just program rights. */
+  importParticipants: boolean
+  /** Sending one additionally needs a mail provider and a service-role key. */
+  sendInvitations: boolean
   runAiInsights: boolean
 }
 
 export type AdminInfrastructure = {
   auditTrailReady: boolean
   programOperationsReady: boolean
+  invitationsReady: boolean
+}
+
+/**
+ * A pending participant: an intent to enrol somebody who has no account yet.
+ * Once claimed at sign-in this is superseded by an `AdminProgramMembership`.
+ */
+export type AdminInvitation = {
+  id: string
+  programKey: string
+  email: string
+  displayName: string | null
+  cohortKey: string | null
+  participationStatus: 'invited' | 'enrolled'
+  startingCredits: number
+  inviteStatus: AdminInviteStatus
+  claimedUserId: string | null
+  invitedBy: string | null
+  importKey: string | null
+  sentAt: string | null
+  acceptedAt: string | null
+  lastAttemptAt: string | null
+  sendAttempts: number
+  createdAt: string
+  updatedAt: string
+}
+
+export type AdminImportPreviewRow = {
+  email: string
+  displayName: string | null
+  cohortKey: string | null
+  line: number
+  disposition: AdminImportDisposition
+}
+
+export type AdminImportPreview = {
+  format: 'csv' | 'list'
+  truncated: boolean
+  /** Rows that would create an invitation. */
+  ready: AdminImportPreviewRow[]
+  /** Rows that would not, each carrying the reason and its source line. */
+  skipped: AdminImportPreviewRow[]
+  counts: Record<AdminImportDisposition, number>
 }
 
 export type AdminProgramMembership = {
@@ -314,6 +376,7 @@ export type AdminDashboardPayload = {
   creditLedger: AdminCreditLedgerEntry[]
   auditEvents: AdminAuditEvent[]
   cohorts: AdminCohortListItem[]
+  invitations: AdminInvitation[]
   insights: AdminInsight[]
 }
 

@@ -218,6 +218,28 @@ export async function listAdminEmailRecipients(input: { userIds: string[]; progr
      order by lower(users.email), membership.user_id`
 }
 
+/**
+ * Records a recipient's own decision about being contacted.
+ *
+ * Called from the unsubscribe route rather than the console, so it takes no
+ * actor: nobody on the team performed it. Returns whether a membership was
+ * actually matched, so the route can tell an already-handled link from a stale
+ * one without leaking which addresses exist.
+ */
+export async function setAdminEmailStatus(input: {
+  userId: string
+  programKey: string
+  status: AdminEmailStatus
+}) {
+  const sql = getPostgres()
+  const [row] = await sql<{ user_id: string }[]>`
+    update public.lab_admin_program_memberships
+       set email_status = ${input.status}, updated_at = now()
+     where program_key = ${input.programKey} and user_id = ${input.userId}
+     returning user_id`
+  return Boolean(row)
+}
+
 export async function claimAdminContactEvent(input: {
   userId: string
   programKey: string

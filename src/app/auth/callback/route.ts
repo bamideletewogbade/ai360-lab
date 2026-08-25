@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { isSupabaseAuthConfigured } from '@/lib/supabase/config'
 import { resolveCallbackOrigin, safeInternalPath } from '@/lib/auth-callback'
+import { authDisplayName, authImageUrl } from '@/lib/auth-profile'
+import { claimInvitationOnSignIn } from '@/lib/admin/invitation-claim'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,8 +27,21 @@ export async function GET(request: NextRequest) {
   const code = url.searchParams.get('code')
   if (code) {
     const supabase = await createSupabaseServerClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) return NextResponse.redirect(redirectUrl)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      // An invited participant arrives here through their invitation link, so
+      // this is the first and only moment the pending invitation can be turned
+      // into a membership. It never throws and never blocks the redirect.
+      if (data?.user?.id) {
+        await claimInvitationOnSignIn({
+          userId: data.user.id,
+          email: data.user.email ?? null,
+          displayName: authDisplayName(data.user),
+          imageUrl: authImageUrl(data.user),
+        })
+      }
+      return NextResponse.redirect(redirectUrl)
+    }
   }
 
   redirectUrl.searchParams.set('auth_error', 'callback_failed')

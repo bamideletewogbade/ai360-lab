@@ -6,6 +6,8 @@ import type {
   AdminAiBriefing,
   AdminCohortReport,
   AdminDashboardPayload,
+  AdminImportPreview,
+  AdminInvitation,
   AdminRange,
   AdminUser,
   AdminUserDetail,
@@ -14,6 +16,15 @@ import styles from './AdminConsole.module.css'
 
 type AdminTab = 'overview' | 'users' | 'credits' | 'finance' | 'errors' | 'cohorts' | 'insights'
 type BulkKind = 'program' | 'credits' | 'email'
+
+/** Why an imported row was set aside, in words an operator can act on. */
+const IMPORT_REASONS: Record<string, string> = {
+  already_a_user: 'Already has an account — add them from “Add pilot users”',
+  already_invited: 'Already invited',
+  invalid_email: 'Not a usable email address',
+  duplicate_in_file: 'Repeated in this list',
+  missing_email: 'Row has no email address',
+}
 
 const PARTICIPATION_STATUSES = ['invited', 'enrolled', 'activated', 'returning', 'completed', 'withdrawn'] as const
 const FEEDBACK_STATUSES = ['not_requested', 'requested', 'received', 'reviewed'] as const
@@ -182,6 +193,19 @@ export function AdminConsole() {
   const [pilotAddCredits, setPilotAddCredits] = useState('25')
   const [pilotAddReason, setPilotAddReason] = useState('')
   const [pilotAddWorking, setPilotAddWorking] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteContent, setInviteContent] = useState('')
+  const [inviteCohort, setInviteCohort] = useState('pilot-main')
+  const [inviteStage, setInviteStage] = useState<'invited' | 'enrolled'>('enrolled')
+  const [inviteCredits, setInviteCredits] = useState('25')
+  const [inviteReason, setInviteReason] = useState('')
+  const [inviteWorking, setInviteWorking] = useState(false)
+  const [importPreview, setImportPreview] = useState<AdminImportPreview | null>(null)
+  const [invitationRefresh, setInvitationRefresh] = useState<AdminInvitation[] | null>(null)
+  const [invitationIds, setInvitationIds] = useState<Set<string>>(new Set())
+  const [invitationFilter, setInvitationFilter] = useState('open')
+  const [inviteSendWorking, setInviteSendWorking] = useState(false)
+  const [inviteNotice, setInviteNotice] = useState('')
 
   const fetchDashboard = useCallback(async (nextRange: AdminRange) => {
     const response = await fetch(`/api/admin/overview?range=${nextRange}`, { cache: 'no-store' })
@@ -208,6 +232,143 @@ export function AdminConsole() {
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [fetchDashboard, range])
+
+  // Invitations arrive with the dashboard for first paint, and an import or a
+  // send replaces them from their own endpoint rather than re-reading the whole
+  // console. Derived rather than mirrored into state, so the two sources cannot
+  // drift and no effect has to copy one into the other.
+  const invitations = useMemo(
+    () => invitationRefresh ?? dashboard?.invitations ?? [],
+    [dashboard, invitationRefresh],
+  )
+
+  const refreshInvitations = useCallback(async () => {
+    const response = await fetch('/api/admin/participants?programKey=pilot', { cache: 'no-store' })
+    const data = await response.json().catch(() => ({}))
+    if (response.ok) setInvitationRefresh((data.invitations || []) as AdminInvitation[])
+  }, [])
+
+  const visibleInvitations = useMemo(() => invitations.filter((item) => (
+    invitationFilter === 'all'
+      || (invitationFilter === 'open' && (item.inviteStatus === 'pending' || item.inviteStatus === 'sent'))
+      || item.inviteStatus === invitationFilter
+  )), [invitationFilter, invitations])
+
+  const selectedInvitations = useMemo(
+    () => invitations.filter((item) => invitationIds.has(item.id)),
+    [invitationIds, invitations],
+  )
+  /** Only an unclaimed invitation can be mailed or withdrawn. */
+  const actionableInvitations = useMemo(
+    () => selectedInvitations.filter((item) => item.inviteStatus === 'pending' || item.inviteStatus === 'sent'),
+    [selectedInvitations],
+  )
+
+  const closeInvite = useCallback(() => {
+    if (inviteWorking) return
+    setInviteOpen(false)
+    setImportPreview(null)
+    setInviteContent('')
+  }, [inviteWorking])
+
+  const importRequest = useCallback(async (mode: 'preview' | 'commit') => {
+    const response = await fetch('/api/admin/participants/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode,
+        content: inviteContent,
+        programKey: 'pilot',
+        cohortKey: inviteCohort.trim() || null,
+        participationStatus: inviteStage,
+        credits: dashboard?.capabilities.manageCredits ? Math.max(0, Number(inviteCredits) || 0) : 0,
+        reason: inviteReason.trim(),
+        importKey: `import_${crypto.randomUUID()}`,
+      }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data.error || 'The participant list could not be imported.')
+    return data
+  }, [dashboard, inviteCohort, inviteContent, inviteCredits, inviteReason, inviteStage])
+
+  const previewImport = useCallback(async () => {
+    setInviteWorking(true)
+    setError('')
+    try {
+      setImportPreview(await importRequest('preview') as AdminImportPreview)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The participant list could not be read.')
+    } finally {
+      setInviteWorking(false)
+    }
+  }, [importRequest])
+
+  const commitImport = useCallback(async () => {
+    setInviteWorking(true)
+    setError('')
+    try {
+      const result = await importRequest('commit') as { created: number; unchanged: number }
+      setInviteNotice(`${result.created} invitation${result.created === 1 ? '' : 's'} created${result.unchanged ? `, ${result.unchanged} already existed` : ''}. Select them below to send.`)
+      setInviteOpen(false)
+      setImportPreview(null)
+      setInviteContent('')
+      await refreshInvitations()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The invitations could not be created.')
+    } finally {
+      setInviteWorking(false)
+    }
+  }, [importRequest, refreshInvitations])
+
+  const sendInvitations = useCallback(async () => {
+    if (!actionableInvitations.length) return
+    setInviteSendWorking(true)
+    setError('')
+    try {
+      const response = await fetch('/api/admin/participants/invite', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'send', programKey: 'pilot',
+          invitationIds: actionableInvitations.map((item) => item.id),
+          idempotencyKey: `invite_${crypto.randomUUID()}`,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'The invitations could not be sent.')
+      setInviteNotice(`${data.sent} sent${data.failed ? `, ${data.failed} failed` : ''}${data.skipped ? `, ${data.skipped} already handled` : ''}.`)
+      setInvitationIds(new Set())
+      await refreshInvitations()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The invitations could not be sent.')
+    } finally {
+      setInviteSendWorking(false)
+    }
+  }, [actionableInvitations, refreshInvitations])
+
+  const revokeInvitations = useCallback(async () => {
+    if (!actionableInvitations.length) return
+    setInviteSendWorking(true)
+    setError('')
+    try {
+      const response = await fetch('/api/admin/participants', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'revoke', programKey: 'pilot',
+          invitationIds: actionableInvitations.map((item) => item.id),
+          reason: 'Withdrawn by operator from the participant console',
+          idempotencyKey: `revoke_${crypto.randomUUID()}`,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'The invitations could not be withdrawn.')
+      setInviteNotice(`${data.revoked} invitation${data.revoked === 1 ? '' : 's'} withdrawn.`)
+      setInvitationIds(new Set())
+      await refreshInvitations()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The invitations could not be withdrawn.')
+    } finally {
+      setInviteSendWorking(false)
+    }
+  }, [actionableInvitations, refreshInvitations])
 
   const allCohorts = useMemo(() => dashboard?.cohorts.map((item) => item.cohort) || [], [dashboard])
   const allPrograms = useMemo(() => [...new Set(dashboard?.users.map((user) => user.participation?.programKey).filter(Boolean) as string[] || [])].sort(), [dashboard])
@@ -600,7 +761,60 @@ export function AdminConsole() {
 
             {tab === 'users' ? (
               <>
-                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Participant operations</span><h1>Move the pilot forward.</h1><p>Find the people who need access, support, credits, follow-up, or a feedback request.</p></div><div className={styles.pageTitleActions}>{dashboard.capabilities.managePrograms ? <button className={styles.heroAction} onClick={() => { setPilotAddIds(new Set()); setPilotAddOpen(true) }}>+ Add pilot users</button> : null}<div className={styles.resultCount}><b>{visibleUsers.length}</b><span>of {dashboard.users.length} users</span></div></div></section>
+                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Participant operations</span><h1>Move the pilot forward.</h1><p>Find the people who need access, support, credits, follow-up, or a feedback request.</p></div><div className={styles.pageTitleActions}>{dashboard.capabilities.importParticipants ? <button className={styles.heroAction} onClick={() => { setImportPreview(null); setInviteOpen(true) }}>+ Invite by email list</button> : null}{dashboard.capabilities.managePrograms ? <button className={styles.heroAction} onClick={() => { setPilotAddIds(new Set()); setPilotAddOpen(true) }}>+ Add pilot users</button> : null}<div className={styles.resultCount}><b>{visibleUsers.length}</b><span>of {dashboard.users.length} users</span></div></div></section>
+
+                {invitations.length || inviteNotice ? (
+                  <section className={styles.filterBar} aria-label="Pending invitations">
+                    <span className={styles.eyebrow}>Invited · no account yet</span>
+                    <label><span>Show</span><select value={invitationFilter} onChange={(event) => setInvitationFilter(event.target.value)}><option value="open">Awaiting sign-up</option><option value="accepted">Joined</option><option value="revoked">Withdrawn</option><option value="bounced">Bounced</option><option value="all">All</option></select></label>
+                    <div className={styles.resultCount}><b>{visibleInvitations.length}</b><span>of {invitations.length} invitations</span></div>
+                    {inviteNotice ? <span className={styles.auditNote}>{inviteNotice}</span> : null}
+                  </section>
+                ) : null}
+
+                {visibleInvitations.length ? (
+                  <section className={styles.accountPicker} aria-label="Invitation list">
+                    <header>
+                      <span>
+                        <b>{invitationIds.size} selected</b>
+                        <small>{actionableInvitations.length} can be mailed or withdrawn</small>
+                      </span>
+                      <span>
+                        <button type="button" onClick={() => setInvitationIds((current) => {
+                          const next = new Set(current)
+                          const all = visibleInvitations.every((item) => next.has(item.id))
+                          visibleInvitations.forEach((item) => { if (all) next.delete(item.id); else next.add(item.id) })
+                          return next
+                        })}>{visibleInvitations.every((item) => invitationIds.has(item.id)) ? 'Clear' : 'Select all'}</button>
+                        {dashboard.capabilities.sendInvitations ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void sendInvitations()}>{inviteSendWorking ? 'Working…' : `Send ${actionableInvitations.length || ''} invitation${actionableInvitations.length === 1 ? '' : 's'}`}</button> : null}
+                        {dashboard.capabilities.importParticipants ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void revokeInvitations()}>Withdraw</button> : null}
+                      </span>
+                    </header>
+                    <div>
+                      {visibleInvitations.slice(0, 100).map((invitation) => (
+                        <label key={invitation.id} data-selected={invitationIds.has(invitation.id) || undefined}>
+                          <input
+                            type="checkbox"
+                            checked={invitationIds.has(invitation.id)}
+                            onChange={() => setInvitationIds((current) => {
+                              const next = new Set(current)
+                              if (next.has(invitation.id)) next.delete(invitation.id)
+                              else next.add(invitation.id)
+                              return next
+                            })}
+                          />
+                          <UserIdentity user={{ displayName: invitation.displayName, email: invitation.email }} compact />
+                          <span>
+                            <b>{label(invitation.inviteStatus)}</b>
+                            <small>{invitation.cohortKey || 'no cohort'} · {invitation.startingCredits} credits · {invitation.sendAttempts ? `${invitation.sendAttempts} send${invitation.sendAttempts === 1 ? '' : 's'}` : 'not sent'}</small>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    {visibleInvitations.length > 100 ? <p>Showing the first 100 invitations.</p> : null}
+                    {!dashboard.capabilities.sendInvitations ? <p>Sending is unavailable until the email provider and the Supabase service role key are both configured.</p> : null}
+                  </section>
+                ) : null}
                 <section className={styles.savedViews} aria-label="Saved participant views">
                   <span>Saved views</span>
                   <button onClick={() => applySavedView('invited')}>Invited · not activated</button>
@@ -857,6 +1071,36 @@ export function AdminConsole() {
         <p className={styles.auditNote}>Each participant receives an individual program history entry. Any starting credits also receive an immutable credit-ledger and operator audit entry.</p>
         <footer><button type="button" onClick={() => setPilotAddOpen(false)}>Cancel</button><button type="submit" disabled={pilotAddWorking || !pilotAddIds.size || !pilotAddCohort.trim() || !pilotAddReason.trim()}>{pilotAddWorking ? 'Adding users…' : `Add ${pilotAddIds.size || ''} to pilot`}</button></footer>
       </form></div> : null}
+
+      {inviteOpen ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) closeInvite() }}><section className={`${styles.creditModal} ${styles.addPilotModal}`}>
+        <header><div><span className={styles.eyebrow}>Pilot recruitment</span><h2>{importPreview ? 'Confirm the list' : 'Invite by email list'}</h2><p>{importPreview ? 'Review who becomes an invitation and why the rest were set aside. Nothing has been written yet.' : 'Paste addresses or upload a CSV. People who have never signed up are invited; nothing is sent until you choose to send it.'}</p></div><button type="button" onClick={closeInvite}>×</button></header>
+
+        {!importPreview ? <>
+          <label><span>Email list <em>One per line, or a CSV with an Email column</em></span><textarea rows={8} value={inviteContent} onChange={(event) => setInviteContent(event.target.value)} placeholder={'ada@example.com\nLin Chen <lin@example.com>'} /></label>
+          <label><span>Or upload a file <em>.csv or .txt</em></span><input type="file" accept=".csv,.txt,text/csv,text/plain" onChange={async (event) => {
+            const file = event.target.files?.[0]
+            if (!file) return
+            setInviteContent(await file.text())
+            // Cleared so choosing the same file twice still fires a change.
+            event.target.value = ''
+          }} /></label>
+          <div className={styles.formGrid}>
+            <label><span>Starting stage</span><select value={inviteStage} onChange={(event) => setInviteStage(event.target.value as 'invited' | 'enrolled')}><option value="enrolled">Enrolled</option><option value="invited">Invited</option></select></label>
+            <label><span>Cohort</span><input maxLength={120} value={inviteCohort} onChange={(event) => setInviteCohort(event.target.value)} placeholder="pilot-main" /></label>
+          </div>
+          {dashboard?.capabilities.manageCredits ? <label><span>Starting credits per participant <em>Granted when they sign up</em></span><input type="number" min="0" max="10000" step="1" value={inviteCredits} onChange={(event) => setInviteCredits(event.target.value)} /></label> : null}
+          <label><span>Reason <em>Required for audit</em></span><textarea rows={2} maxLength={240} value={inviteReason} onChange={(event) => setInviteReason(event.target.value)} placeholder="Example: August creator pilot intake" /></label>
+          <div className={styles.emailSafety}><b>Before anything is written</b><p>AI360 will show you every address it accepted, every one it set aside, and why — invalid addresses, repeats, people already invited, and people who already have an account.</p></div>
+          <footer><button type="button" onClick={closeInvite}>Cancel</button><button type="button" disabled={inviteWorking || !inviteContent.trim() || !inviteReason.trim()} onClick={() => void previewImport()}>{inviteWorking ? 'Reading…' : 'Review the list'}</button></footer>
+        </> : <>
+          <div className={styles.recipientCounts}><div><b>{importPreview.ready.length}</b><span>will be invited</span></div><div><b>{importPreview.skipped.length}</b><span>set aside</span></div></div>
+          {importPreview.truncated ? <p className={styles.warningNote}>This list was longer than the {number(importPreview.ready.length + importPreview.skipped.length)} rows shown. Import these first, then bring the rest in a second batch.</p> : null}
+          <div className={styles.recipientList}><header><b>New invitations</b><span>{importPreview.format === 'csv' ? 'Read as a CSV' : 'Read as an address list'}</span></header>{importPreview.ready.slice(0, 12).map((row) => <div key={row.email}><span>{row.displayName || row.email.split('@')[0]}</span><small>{row.email}{row.cohortKey ? ` · ${row.cohortKey}` : ''}</small></div>)}{importPreview.ready.length > 12 ? <p>+ {importPreview.ready.length - 12} more</p> : null}{!importPreview.ready.length ? <p>Nothing in this list would create a new invitation.</p> : null}</div>
+          {importPreview.skipped.length ? <div className={styles.excludedList}><b>Set aside</b><span>{importPreview.skipped.slice(0, 8).map((row) => `line ${row.line}: ${row.email.slice(0, 40)} · ${IMPORT_REASONS[row.disposition] || label(row.disposition)}`).join('  |  ')}{importPreview.skipped.length > 8 ? `  |  + ${importPreview.skipped.length - 8} more` : ''}</span></div> : null}
+          <p className={styles.auditNote}>Creating invitations sends nothing. You choose who to email, and when, from the invitation list.</p>
+          <footer><button type="button" disabled={inviteWorking} onClick={() => setImportPreview(null)}>Back</button><button type="button" disabled={inviteWorking || !importPreview.ready.length} onClick={() => void commitImport()}>{inviteWorking ? 'Creating…' : `Create ${importPreview.ready.length} invitation${importPreview.ready.length === 1 ? '' : 's'}`}</button></footer>
+        </>}
+      </section></div> : null}
 
       {bulkKind && bulkKind !== 'email' ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !bulkWorking) closeBulk() }}><form className={`${styles.creditModal} ${styles.bulkModal}`} onSubmit={(event) => { event.preventDefault(); void runBulkAction() }}>
         <header><div><span className={styles.eyebrow}>Bulk action · {selectedUsers.length} people</span><h2>{bulkKind === 'credits' ? 'Grant pilot credits' : 'Update pilot participation'}</h2></div><button type="button" onClick={closeBulk}>×</button></header>

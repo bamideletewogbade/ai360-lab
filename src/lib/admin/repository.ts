@@ -20,6 +20,7 @@ import { listAdminCohorts } from '@/lib/admin/cohorts'
 import { isMissingAdminAuditTable } from '@/lib/admin/audit'
 import { buildAdminFinance } from '@/lib/admin/finance'
 import { readAdminContactEvents, readAdminProgramMemberships } from '@/lib/admin/programs'
+import { readAdminInvitations } from '@/lib/admin/invitations'
 
 export const SUCCESSFUL_ADMIN_OUTCOMES = [
   'success', 'success_without_done_event', 'submitted', 'completed', 'quote', 'status',
@@ -328,6 +329,9 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
      order by activity.last_active_at desc nulls last, lower(users.email) asc
      limit 1000`
   const programMembershipsPromise = readAdminProgramMemberships()
+  // Loaded with the dashboard so pending invitations paint alongside the
+  // accounts that already exist, rather than arriving in a second request.
+  const invitationsPromise = readAdminInvitations()
 
   const featuresPromise = sql<FeatureRow[]>`
     with requests as (
@@ -478,11 +482,12 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
   const [
     userRows, featureRows, technicalRows, qualityRows, ledgerRows, auditResult,
     reservationRows, mediaFinanceRows, financePaymentRows, recentMediaFinanceRows, cohorts,
-    programMemberships,
+    programMemberships, invitationResult,
   ] = await Promise.all([
     usersPromise, featuresPromise, technicalErrorsPromise, qualityErrorsPromise,
     ledgerPromise, auditPromise, reservationPromise, mediaFinancePromise,
     financePaymentPromise, recentMediaFinancePromise, listAdminCohorts(), programMembershipsPromise,
+    invitationsPromise,
   ])
 
   const users: AdminUser[] = userRows.map((row) => {
@@ -615,9 +620,11 @@ export async function readAdminDashboardData(range: AdminRange): Promise<Omit<Ad
     infrastructure: {
       auditTrailReady: auditResult.ready,
       programOperationsReady: programMemberships.ready,
+      invitationsReady: invitationResult.ready,
     },
     summary, users, features, finance, errors,
     creditLedger, auditEvents, cohorts,
+    invitations: invitationResult.invitations,
     insights: buildAdminInsights({ summary, users, features, errors }),
   }
 }

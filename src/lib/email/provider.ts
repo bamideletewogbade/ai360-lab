@@ -18,6 +18,11 @@ export type EmailMessage = {
   replyTo?: string | null
   /** Low-cardinality labels for provider-side filtering, e.g. kind + plan. */
   tags?: Record<string, string>
+  /**
+   * Raw RFC headers. Present for `List-Unsubscribe`, which has to reach the
+   * recipient's mail client as a header rather than as body content.
+   */
+  headers?: Record<string, string>
 }
 
 export type EmailSendResult = {
@@ -26,10 +31,10 @@ export type EmailSendResult = {
 }
 
 export class EmailError extends Error {
-  readonly code: 'not_configured' | 'invalid_message' | 'rejected' | 'unavailable' | 'bad_response'
+  readonly code: 'not_configured' | 'invalid_message' | 'rejected' | 'rate_limited' | 'unavailable' | 'bad_response'
 
   constructor(
-    code: 'not_configured' | 'invalid_message' | 'rejected' | 'unavailable' | 'bad_response',
+    code: 'not_configured' | 'invalid_message' | 'rejected' | 'rate_limited' | 'unavailable' | 'bad_response',
     message: string,
   ) {
     super(message)
@@ -54,6 +59,19 @@ function cleanTags(tags: Record<string, string> | undefined) {
     .slice(0, 10)
     .map(([name, value]) => ({ name, value }))
   return entries.length ? entries : undefined
+}
+
+/**
+ * Header injection is the risk here: a newline in a value would let a caller
+ * append headers of its own, so anything carrying one is dropped rather than
+ * trimmed into something that merely looks safe.
+ */
+function cleanHeaders(headers: Record<string, string> | undefined) {
+  if (!headers) return undefined
+  const entries = Object.entries(headers)
+    .filter(([name, value]) => /^[A-Za-z0-9-]{1,64}$/.test(name) && !/[\r\n]/.test(value) && value.length <= 998)
+    .slice(0, 10)
+  return entries.length ? Object.fromEntries(entries) : undefined
 }
 
 function recipients(to: EmailAddress | EmailAddress[]) {
@@ -93,6 +111,7 @@ export function createResendProvider(fetcher: typeof fetch = fetch): EmailProvid
             text: message.text,
             ...(message.replyTo ? { reply_to: message.replyTo } : {}),
             ...(cleanTags(message.tags) ? { tags: cleanTags(message.tags) } : {}),
+            ...(cleanHeaders(message.headers) ? { headers: cleanHeaders(message.headers) } : {}),
           }),
           cache: 'no-store',
           signal: AbortSignal.timeout(10_000),
@@ -106,6 +125,11 @@ export function createResendProvider(fetcher: typeof fetch = fetch): EmailProvid
       }
       if (response.status === 422 || response.status === 400) {
         throw new EmailError('rejected', 'The email provider rejected the message.')
+      }
+      // Distinguished from a general outage because it is worth waiting out:
+      // a bulk run pacing itself can retry this, but not a rejection.
+      if (response.status === 429) {
+        throw new EmailError('rate_limited', 'The email provider is rate limiting this sender.')
       }
       if (!response.ok) {
         throw new EmailError('unavailable', `The email provider returned HTTP ${response.status}.`)
