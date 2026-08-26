@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { BrandMark } from '@/components/BrandMark'
 import type {
   AdminAiBriefing,
   AdminCohortReport,
@@ -720,7 +721,12 @@ export function AdminConsole() {
   return (
     <main className={styles.shell}>
       <aside className={styles.sidebar}>
-        <Link href="/app" className={styles.brand}><span>AI</span><b>AI360</b><small>CONTROL ROOM</small></Link>
+        <Link href="/app" className={styles.brand} aria-label="AI360 control room">
+          {/* `onDark` because this sidebar is #181a19 in both themes, so the
+              theme-scoped inversion in globals.css never applies to it. */}
+          <BrandMark tone="onDark" width={148} height={39} priority alt="" />
+          <small>CONTROL ROOM</small>
+        </Link>
         <nav aria-label="Admin sections">
           {NAV.map((item, index) => (
             <button key={item.id} type="button" data-active={tab === item.id || undefined} onClick={() => {

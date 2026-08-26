@@ -4123,6 +4123,13 @@ button {
   filter: invert(1);
 }
 
+/* For a surface that is dark in every theme, so the rule above never fires.
+   Only reached by the icon mark, which has no white asset of its own; the
+   wordmark loads /logo-white.png instead of being inverted. */
+.brand-mark-on-dark {
+  filter: invert(1);
+}
+
 /* Light / System / Dark segmented control. Drawn from variables so it themes itself. */
 .theme-control {
   display: inline-grid;
