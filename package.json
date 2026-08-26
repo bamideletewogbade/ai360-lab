@@ -16,6 +16,7 @@
     "credits:verify": "node --experimental-strip-types scripts/verify-credits.mjs",
     "spend:verify": "node --experimental-strip-types scripts/verify-spend-caps.mjs",
     "email:verify": "node --experimental-strip-types scripts/verify-email.mjs",
+    "invite:trace": "node --experimental-strip-types scripts/trace-invitation.mjs",
     "credits:pilot": "node scripts/grant-pilot-credits.mjs",
     "payments:contract": "node --import ./scripts/register-alias.mjs --experimental-strip-types --test tests/expresspay.test.ts tests/billing.test.ts",
     "payments:sandbox": "node --experimental-strip-types scripts/test-expresspay-sandbox.mjs",
