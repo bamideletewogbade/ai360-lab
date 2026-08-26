@@ -1,5 +1,214 @@
 # Decision and incident log
 
+## 2026-08-26 · Decision · The funnel records only what nothing else records
+
+**Why.** `lab_usage_events` begins the moment somebody types a prompt, and the
+cohort report begins at their first credit grant. Everything earlier — the
+click on an invitation, the landing, the abandoned sign-up — left no trace.
+
+That gap makes the pilot's central number unreadable. If 41 of 63 never
+activate, there are three explanations demanding opposite responses: the mail
+was never opened (resend it), the sign-up broke (fix a form), or the product did
+not convince them (change the product). Only the third is a reason to change
+direction and it is the most expensive to act on wrongly, yet all three look
+identical — a person simply absent from the cohort report.
+
+**What.** `lab_funnel_events` (migration `0028`) records five steps: invitation
+clicked, landing, sign-up started, sign-up completed, workspace entered.
+
+**It stops there deliberately.** First prompt, first outcome, first export and
+return visits are *derived* in `readFunnelReport` from `lab_usage_events`, which
+has been recording them all along. Duplicating them would create a second
+version of a number that can disagree with the first — the same reasoning that
+produced the `lab_cost_ledger` view in 0019.
+
+**Attribution is the point at this size.** The invitation link carries its id,
+which survives the Supabase round trip through `next=/app?i=…` because
+`safeInternalPath` preserves the query string (pinned by a test — losing it
+would silently un-attribute the entire cohort). At sixty-three people the payoff
+is not statistics: it is that the operator can *phone* the eleven people who
+stalled at sign-up. `attachIdentityToVisit` back-fills the anonymous rows at
+sign-in, and only rows with no identity yet, so a shared browser cannot rewrite
+the first person's history.
+
+**The endpoint is public and treated as forgeable.** It must be — the steps
+worth measuring happen before anyone has an account. So: a caller may only name
+a step from a fixed list; identity is stamped from the server session, never
+read from the body; `signup_completed` and `workspace_entered` are refused
+without a real session, which is what stops the funnel being inflated past the
+point where it describes actual users; and `unique (visitor_key, step)` means
+one visitor writes each step exactly once. It answers 204 to everything,
+including its own failures — a tracker that could see errors is one somebody is
+tempted to retry, and measurement must never become a reason a page misbehaves.
+
+**Privacy is structural, not a policy.** The parser returns exactly five fields
+and drops everything else, so no prompt, name or address can be smuggled in
+(pinned by a test). A referrer is reduced to its host because query strings
+carry other people's data. DNT and Global Privacy Control are checked before the
+body is even read. The visitor key is random and meaningless off this table.
+
+**Verified in a running app**, not only in tests: the invitation id was captured
+and stripped from the address bar, both first steps reached the write path, and
+the forged step and the account-claiming step without a session never did.
+
+**Revisit if.** Volume grows enough that one row per visitor per step is heavy —
+the fix is retention on the table, not sampling, because a sampled funnel cannot
+name the individual who stalled.
+
+## 2026-08-26 · Decision · A cumulative programme budget, separate from the daily caps
+
+**Why.** The `pilot-2026-09` cohort grew from 15 to 63 people against a hard
+provider budget of US$20 (US$25 at the absolute limit). The daily caps shipped
+earlier cannot express that: an application ceiling of $25 a day permits $750 a
+month, and the entire pilot budget could be gone in a single afternoon while
+every daily cap still reported headroom.
+
+**The arithmetic that drove it.** One credit is US$0.0172 of provider budget, so
+the Everyday allowance of 120 credits is $2.07 a head. Sixty-three of those is
+**$130 at full utilisation** — six times the budget. Grant-on-reply and partial
+utilisation bring the expected figure to roughly $10–20, but an expectation is
+not a control. What makes generosity safe is a hard floor under it.
+
+**What.** A fourth scope, `budget`, measured cumulatively from a configured
+start date rather than over a UTC day. It reads the same `lab_cost_ledger` and
+runs through the same `decideSpend`; only the window differs.
+
+**No default, unlike the daily caps.** An absent daily ceiling takes a built-in
+value because every deployment should have a safety rail. A cumulative budget is
+a claim about a specific pot of somebody's money, and inventing one would be
+guessing at their finances. It is off until set.
+
+**The amount and the date are one setting.** An amount with no start date would
+silently sum every dollar ever spent, so a fresh $20 budget would open already
+partly consumed by unrelated history. `readSpendCaps` refuses the pair unless
+both are present, and `prod:check` treats half-configuration as an error — a
+control whose job is to stop spending must never appear set while enforcing
+nothing.
+
+**It warns before it bites.** Past 80% consumed, every gated request logs
+`spend_cap.budget_nearly_spent` with the remaining dollars, and
+`npm run spend:verify` prints a burn bar. A daily cap resets overnight; a
+programme budget hits a wall, so the operator needs to see it coming while they
+can still top up the provider account or narrow who is still being invited.
+
+**Its refusal never suggests retrying.** Nothing the person did caused it and
+nothing they do will clear it, so the message points them at the AI360 team
+rather than at a Retry-After they cannot use.
+
+**Revisit if.** A future programme needs per-cohort budgets rather than one
+platform-wide pot — the scope would key on `source_id` from the sponsored grant
+rather than on a global window.
+
+## 2026-08-26 · Decision · Spend caps are denominated in measured dollars, not credits
+
+**Why.** Gate 3 wanted application, workspace and user spend caps, and the
+sponsored-seat work made the gap concrete. Credits bound what one person may
+consume and they fail closed, but they cannot bound what AI360 actually pays a
+provider. Three ways real spend escapes the credit system: a sponsored cohort
+spends credits nobody bought; credit weights are a *model* of cost, so a
+provider price rise or a mis-set weight leaves every request legitimately
+inside its budget while true spend runs away; and a retrying agent is
+individually cheap and collectively ruinous.
+
+**What.** Daily ceilings in US dollars of measured provider cost, checked in
+`openCreditGate` before the reservation is taken, so refused work never takes a
+hold it must then give back. `projectedUsd` is the request's own ceiling — a
+real provider quote when one exists, otherwise the credit ceiling converted
+back to dollars — so a cap is a ceiling rather than a tripwire.
+
+**Read the truth, do not mirror it.** Totals come from the `lab_cost_ledger`
+view rather than a counter table. A counter would need two correct write paths,
+usage events and media jobs, and 0019 exists precisely because summing either
+alone gives a wrong answer. A counter that silently misses one path reads as
+protection while never firing, which is worse than no cap. The cost is one
+indexed range scan per scope; `0027_spend_caps.sql` adds the missing indexes,
+and the application-wide figure is cached in process for 30 seconds because a
+slightly stale number is entirely adequate for a backstop.
+
+**Unset means capped.** An absent environment variable takes a built-in default
+rather than meaning "no limit", so a deployment that forgot to configure a
+ceiling still has one, and a malformed value falls back to the default too —
+the failure mode of a typo must not be an uncapped bill. A scope is disabled
+only by an explicit `off`, which `npm run prod:check` reports as a warning.
+
+**It fails open, deliberately.** If the spend read errors, work proceeds and the
+failure is logged. The credit gate immediately after reads the same database and
+fails closed, so a Postgres outage still stops authenticated paid work. Letting
+a backstop take the product down as well would trade a bounded cost risk for a
+total one.
+
+**It lags, deliberately.** Cost is recorded when work completes, so a burst of
+simultaneous requests is measured only as each finishes. This is the second
+control, not the first: every authenticated request has already passed an atomic
+credit reservation. Credits bound each request; this bounds the aggregate.
+
+**Revisit if.** Concurrency rises enough that the burst window matters — the fix
+is to add held `lab_credit_reservations` converted through
+`usdBudgetForCredits` as a forward-looking term, not to replace the measured
+read. Also note anonymous free chat does not pass through `openCreditGate` and
+so is not counted; it is bounded instead by the Explorer fair-use cap at roughly
+GH₵0.01 a turn.
+
+## 2026-08-26 · Decision · A sponsored seat grants a plan tier, not just a credit balance
+
+**Why.** Preparing the `pilot-2026-09` cohort exposed a gap that would have
+made the pilot measure the wrong thing. `credit-repository.resolvePlan` reads
+the *subscription* table to decide a workspace's plan. A `sponsored_seat`
+credit grant writes only to `lab_credit_accounts` and `lab_credit_ledger` — it
+creates no subscription — so a pilot participant holding 120 sponsored credits
+was still resolved as **Explorer**, whose fair-use cap is ten chat messages a
+day (`CHAT_FAIR_USE_DAILY.explorer`).
+
+Past that cap a signed-in user overflows at 1 credit per message. A curious
+participant sending 30–40 messages in their first sitting would have burned
+20–30 credits on the cheapest work in the product (~GH₵0.01 landed each),
+draining the allowance long before it reached research, agent runs, images or
+video. The headline pilot metric — *is 120 credits credible for GH₵125?* —
+would have measured chat overflow instead of value delivered.
+
+**What.** `src/lib/billing/sponsored-entitlement.ts` places a workspace on a
+real plan tier with no payment, in one transaction: upsert
+`lab_subscriptions` under provider `sponsored`, withdraw the outgoing
+allowance, grant the plan's included credits, write the ledger row. It
+deliberately mirrors the verified activation in
+`payments/payment-repository.ts` step for step — same allowance replacement,
+same ledger shape — so a sponsored seat and a paid one have the same credit
+history and the cohort report reads both without change.
+
+**The two writes cannot be separated.** `allowanceAction` throws
+`PAID_ALLOWANCE_STATE_MISMATCH` when an entitled paid plan meets an Explorer
+allowance row. Writing the subscription without the allowance in the same
+transaction would strand every later request for that workspace behind that
+error. `tests/sponsored-entitlement.test.ts` pins this.
+
+**Refusals, in `sponsored-entitlement-policy.ts` so they are testable without
+a database.** A sponsored seat is refused when the workspace already has an
+active non-sponsored subscription — `resolvePlan` takes whichever active
+subscription ends latest, so sponsoring over live paid access could silently
+move a paying customer onto a smaller plan. Team is refused because it is an
+organization plan whose membership lifecycle is still feature-gated. Access is
+bounded: 35 days by default, so it outlasts a four-week pilot without lapsing
+during exit interviews, and 120 days maximum.
+
+**Ledger shape is load-bearing.** The grant keeps
+`source_type = 'sponsored_seat'` with the cohort as `source_id`, which is
+exactly what `admin/cohorts.ts` groups on. Changing either would silently drop
+sponsored participants out of the cohort report.
+
+**Revoking does not claw back credits.** `revokeSponsoredEntitlement` cancels
+the subscription so the workspace falls back to Explorer on its next touch.
+Credits already granted stay: they were given, and taking them back at the end
+of a pilot is a hostile way to thank somebody.
+
+**Operator surface.** `npm run credits:pilot -- --entitlement everyday`.
+Without the flag the command behaves exactly as before, and the dry run now
+says plainly that participants will stay on the Explorer cap.
+
+**Revisit if.** Automatic renewal ever ships. A sponsored subscription is
+manually bounded today; a renewal path that does not know the difference
+between `sponsored` and `expresspay` providers would try to renew seats no
+money is attached to.
+
 ## 2026-08-21 · Decision · The document reader also applies to chat, not only project documents
 
 **Why.** A long assistant reply (a report, a structured guide) rendered flat

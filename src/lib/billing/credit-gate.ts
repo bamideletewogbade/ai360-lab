@@ -1,6 +1,12 @@
 import type { Requester } from '@/lib/guardrails'
-import { estimateCredits, type CreditEstimate, type CreditFeature } from '@/lib/billing/credits'
+import {
+  estimateCredits,
+  usdBudgetForCredits,
+  type CreditEstimate,
+  type CreditFeature,
+} from '@/lib/billing/credits'
 import { reserveCredits, settleReservation } from '@/lib/billing/credit-repository'
+import { checkSpendCaps, spendCapResponse } from '@/lib/billing/spend-caps'
 import { errorDetails, logEvent } from '@/lib/observability'
 
 /**
@@ -82,6 +88,21 @@ export async function openCreditGate(input: {
   if (!context) return { gate: OPEN_GATE }
 
   const estimate = estimateCredits(input.feature, { quotedUsd: input.quotedUsd })
+
+  // Checked before the reservation, so refused work never takes a hold it then
+  // has to give back. A real provider quote is the honest projection when one
+  // exists; otherwise the credit ceiling converted back to dollars is the most
+  // this request can cost.
+  const projectedUsd = input.quotedUsd ?? usdBudgetForCredits(estimate.ceiling)
+  const spend = await checkSpendCaps({
+    workspaceKey: context.workspace.key,
+    userId: context.userId,
+    projectedUsd,
+    requestId: input.requestId,
+    feature: input.feature,
+  })
+  if (!spend.allowed) return { denied: spendCapResponse(spend.decision) }
+
   const legacyKey = rawIdempotencyKey(input.request, input.requestId, input.feature)
   const reservation = await reserveCredits({
     context,

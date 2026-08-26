@@ -91,6 +91,42 @@ export function evaluateProductionEnvironment(env = process.env) {
   if (configured('AI360_ERROR_ALERT_WEBHOOK_URL')) requireHttps('AI360_ERROR_ALERT_WEBHOOK_URL', 'use an HTTPS monitoring webhook')
   else warnings.push('No external error webhook is configured. Errors remain available in structured runtime logs.')
 
+  // Spend caps default to a ceiling when unset, so absence is safe and needs no
+  // report. A deliberate `off`, however, removes the only aggregate limit on
+  // real provider spend, and a release check should say so out loud.
+  const spendCaps = {
+    AI360_SPEND_CAP_DAILY_USD: 'application-wide',
+    AI360_SPEND_CAP_WORKSPACE_DAILY_USD: 'per-workspace',
+    AI360_SPEND_CAP_USER_DAILY_USD: 'per-user',
+  }
+  for (const [name, label] of Object.entries(spendCaps)) {
+    const raw = (env[name] || '').trim().toLowerCase()
+    if (['off', 'none', 'disabled'].includes(raw)) {
+      warnings.push(`${name}: the ${label} daily spend cap is disabled. Provider spend has no aggregate ceiling in this scope.`)
+      continue
+    }
+    if (raw && !(Number(raw) > 0)) {
+      errors.push(`${name}: use a positive number of US dollars, or "off" to disable deliberately`)
+    }
+  }
+
+  // The cumulative budget is two settings that only work as a pair. Half of it
+  // silently enforces nothing, which is the worst possible outcome for a
+  // control whose whole job is to stop spending.
+  const budgetAmount = (env.AI360_SPEND_CAP_TOTAL_USD || '').trim()
+  const budgetSince = (env.AI360_SPEND_CAP_SINCE || '').trim()
+  const budgetAmountSet = budgetAmount && !['off', 'none', 'disabled'].includes(budgetAmount.toLowerCase())
+  const budgetSinceValid = /^\d{4}-\d{2}-\d{2}$/.test(budgetSince)
+  if (budgetAmountSet && !budgetSinceValid) {
+    errors.push('AI360_SPEND_CAP_SINCE: set a YYYY-MM-DD start date, or the total budget cap enforces nothing')
+  }
+  if (!budgetAmountSet && budgetSince) {
+    errors.push('AI360_SPEND_CAP_TOTAL_USD: set an amount, or remove AI360_SPEND_CAP_SINCE')
+  }
+  if (budgetAmountSet && budgetSinceValid) {
+    warnings.push(`A cumulative budget of $${budgetAmount} is enforced from ${budgetSince}. Expensive work stops when it is spent; watch it with npm run spend:verify.`)
+  }
+
   for (const name of Object.keys(env)) {
     if (/^NEXT_PUBLIC_.*(?:SECRET|PRIVATE|PASSWORD|ACCESS_TOKEN|API_KEY)/i.test(name) && configured(name)) {
       errors.push(`${name}: a sensitive-looking value must not be exposed to the browser bundle`)

@@ -1,4 +1,4 @@
-import type { TransactionSql } from 'postgres'
+﻿import type { TransactionSql } from 'postgres'
 import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import type { WorkspaceAuthContext } from '@/lib/workspace'
 import {
@@ -58,8 +58,14 @@ function toNumber(value: unknown) {
 /** Values a ledger entry may record. Kept scalar so the row stays queryable. */
 type LedgerMetadata = Record<string, string | number | boolean | null>
 
-/** Identity rows must exist before anything can reference the workspace. */
-async function ensureWorkspace(sql: TransactionSql, context: WorkspaceAuthContext) {
+/**
+ * Identity rows must exist before anything can reference the workspace.
+ *
+ * Exported so `sponsored-entitlement.ts` opens a workspace exactly the way a
+ * credit grant does. Two spellings of "make sure this workspace exists" would
+ * eventually disagree about which rows are required.
+ */
+export async function ensureCreditWorkspace(sql: TransactionSql, context: WorkspaceAuthContext) {
   await ensureWorkspaceRecord(sql, context)
   await sql`
     insert into public.lab_credit_accounts (workspace_key) values (${context.workspace.key})
@@ -238,7 +244,7 @@ export async function readBalance(context: WorkspaceAuthContext): Promise<Credit
   const sql = getPostgres()
 
   return sql.begin(async (tx) => {
-    await ensureWorkspace(tx, context)
+    await ensureCreditWorkspace(tx, context)
     await ensureAllowance(tx, context)
     await expireStaleReservations(tx, context.workspace.key)
     const [account] = await tx<{
@@ -287,7 +293,7 @@ export async function reserveCredits(input: {
   const reservationKey = scopedIdempotencyKey('credit', workspaceKey, rawKey)
 
   return sql.begin(async (tx) => {
-    await ensureWorkspace(tx, input.context)
+    await ensureCreditWorkspace(tx, input.context)
 
     const legacyKey = input.legacyIdempotencyKey?.slice(0, 160) ?? rawKey
     const [existing] = await tx<{ id: string }[]>`
@@ -524,7 +530,7 @@ export async function grantCredits(input: {
   const key = scopedIdempotencyKey('grant', input.context.workspace.key, input.idempotencyKey)
 
   return sql.begin(async (tx) => {
-    await ensureWorkspace(tx, input.context)
+    await ensureCreditWorkspace(tx, input.context)
 
     const [existing] = await tx<{ id: string }[]>`
       select id from public.lab_credit_ledger

@@ -289,13 +289,26 @@ provider checks, so those results stand from the 2026-08-10 snapshot above.
 - [x] Deliver the allowance policy. Explorer refreshes lazily on first touch of
       a new calendar month. Paid pilot credits are granted only by a verified
       payment and never refresh without another payment.
-- [ ] Add application, workspace and user spend caps.
+- [x] Add application, workspace and user spend caps. Daily ceilings on measured
+      provider spend from `lab_cost_ledger`, enforced in `openCreditGate` before
+      a reservation is taken (`src/lib/billing/spend-caps.ts`, migration
+      `0027_spend_caps.sql`). Defaults apply when unset, so an unconfigured
+      deployment still has a ceiling; a scope is disabled only by an explicit
+      `off`, which `npm run prod:check` reports as a warning. The control lags
+      by design — cost is measured on completion — and sits behind the credit
+      gate, which fails closed.
 - [ ] Add provider timeouts, circuit breakers and failover metrics.
 
 ### Gate 4: operations
 
 - [ ] Add Sentry or an equivalent error destination and alert on sustained 5xx. (In progress: Sentry + Axiom are wired and the DSN is provisioned; email alerts to configure once a first event is verified live.)
-- [ ] Add product analytics with consent-aware event collection.
+- [x] Add product analytics with consent-aware event collection. The
+      pre-activation funnel (invitation click → landing → sign-up → workspace)
+      is recorded in `lab_funnel_events` (migration `0028`); everything after
+      the first prompt is read from the usage ledger rather than duplicated.
+      Honours DNT and Global Privacy Control, stores no content or personal
+      data, and attributes a visit to an invited person when the invitation
+      link carried its id. Report at `GET /api/admin/funnel`.
 - [ ] Create a durable queue for long-running work and cancellation.
 - [ ] Store private uploads and generated assets in Supabase Storage with signed URLs.
 - [ ] Run a production-like load test and inspect slow queries.

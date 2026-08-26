@@ -19,6 +19,13 @@ const {
   pilotGrantIdempotencyKey,
 } = await import('../src/lib/billing/pilot-credits.ts')
 const { grantCredits } = await import('../src/lib/billing/credit-repository.ts')
+const { grantSponsoredEntitlement } = await import('../src/lib/billing/sponsored-entitlement.ts')
+const {
+  DEFAULT_SPONSORED_DAYS,
+  MAX_SPONSORED_DAYS,
+  explainSponsoredRefusal,
+} = await import('../src/lib/billing/sponsored-entitlement-policy.ts')
+const { findBillingPlan } = await import('../src/lib/billing/catalog.ts')
 const { getPostgres } = await import('../src/lib/postgres.ts')
 const { createWorkspaceAuthContext } = await import('../src/lib/workspace.ts')
 
@@ -31,12 +38,22 @@ Dry run (default; writes nothing):
 Apply after reviewing the dry run:
   npm run credits:pilot -- --file <users.csv> --cohort <cohort> --apply
 
+Sponsor a plan tier instead of a bare credit balance:
+  npm run credits:pilot -- --file <users.csv> --cohort <cohort> --entitlement everyday --apply
+
 Options:
-  --file <path>       CSV with an email column and optional credits column
-  --cohort <name>     Stable label, for example pilot-2026-09
-  --credits <number>  Default per user when the CSV cell is empty (default: ${DEFAULT_PILOT_CREDITS})
-  --apply             Grant credits; without this flag the command is read-only
-  --help              Show this help
+  --file <path>          CSV with an email column and optional credits column
+  --cohort <name>        Stable label, for example pilot-2026-09
+  --credits <number>     Default per user when the CSV cell is empty (default: ${DEFAULT_PILOT_CREDITS}).
+                         Ignored with --entitlement, which grants the plan allowance.
+  --entitlement <plan>   Place each user on a plan without a payment: explorer,
+                         everyday or builder. Grants that plan's included credits
+                         AND its daily chat cap. Without this, a user keeps the
+                         Explorer cap of 10 chat messages a day and the granted
+                         credits meter away on chat overflow.
+  --days <number>        How long sponsored access runs (default: ${DEFAULT_SPONSORED_DAYS}, max: ${MAX_SPONSORED_DAYS})
+  --apply                Grant credits; without this flag the command is read-only
+  --help                 Show this help
 `.trim()
 
 function readOptions(argv) {
@@ -44,6 +61,8 @@ function readOptions(argv) {
     file: '',
     cohort: '',
     credits: DEFAULT_PILOT_CREDITS,
+    entitlement: '',
+    days: DEFAULT_SPONSORED_DAYS,
     apply: false,
     help: false,
   }
@@ -58,7 +77,7 @@ function readOptions(argv) {
       options.help = true
       continue
     }
-    if (!['--file', '--cohort', '--credits'].includes(argument)) {
+    if (!['--file', '--cohort', '--credits', '--entitlement', '--days'].includes(argument)) {
       throw new Error(`Unknown option: ${argument}`)
     }
     const value = argv[index + 1]
@@ -67,6 +86,14 @@ function readOptions(argv) {
     if (argument === '--file') options.file = value
     if (argument === '--cohort') options.cohort = value
     if (argument === '--credits') options.credits = value
+    if (argument === '--entitlement') options.entitlement = value.trim().toLowerCase()
+    if (argument === '--days') {
+      const days = Number(value)
+      if (!Number.isSafeInteger(days) || days < 1 || days > MAX_SPONSORED_DAYS) {
+        throw new Error(`--days must be a whole number between 1 and ${MAX_SPONSORED_DAYS}`)
+      }
+      options.days = days
+    }
   }
   return options
 }
@@ -92,6 +119,13 @@ async function main() {
     }
     if (!options.file) throw new Error('--file is required')
     if (!options.cohort) throw new Error('--cohort is required')
+    if (options.entitlement) {
+      const plan = findBillingPlan(options.entitlement)
+      if (!plan) throw new Error(`--entitlement must name a catalogue plan, not "${options.entitlement}"`)
+      if (plan.workspace !== 'personal') {
+        throw new Error(`${plan.name} is an organization plan and cannot be sponsored onto a personal workspace`)
+      }
+    }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     console.error(`\n${USAGE}`)
@@ -133,16 +167,33 @@ async function main() {
       return 1
     }
 
-    const totalCredits = pilotRows.reduce((sum, row) => sum + row.credits, 0)
+    const sponsoredPlan = options.entitlement ? findBillingPlan(options.entitlement) : null
+    const perUserCredits = (row) => (sponsoredPlan ? sponsoredPlan.includedCredits : row.credits)
+    const totalCredits = pilotRows.reduce((sum, row) => sum + perUserCredits(row), 0)
+
     console.log(`\nPilot cohort: ${cohort}`)
     console.log(`Mode: ${options.apply ? 'APPLY' : 'DRY RUN'}`)
     console.log(`Users: ${pilotRows.length}`)
+    if (sponsoredPlan) {
+      console.log(`Entitlement: ${sponsoredPlan.name} for ${options.days} days (no payment taken)`)
+      console.log(`Allowance:   ${sponsoredPlan.includedCredits} credits each, replacing any current allowance`)
+      console.log('Note:        --credits is ignored; the plan allowance is the grant.')
+    } else {
+      console.log('Entitlement: none — users stay on Explorer (10 chat messages a day).')
+      console.log('             Pass --entitlement everyday so granted credits are')
+      console.log('             spent on real work instead of chat overflow.')
+    }
     console.log(`Credits scheduled: ${totalCredits}\n`)
 
     for (const row of pilotRows) {
       const [user] = usersByEmail.get(row.email)
       const available = Number(user.available_credits ?? 0)
-      console.log(`  ${row.email}  ${available} -> ${available + row.credits} (+${row.credits})`)
+      const credits = perUserCredits(row)
+      console.log(`  ${row.email}  ${available} -> ${available + credits} (+${credits})`)
+    }
+    if (sponsoredPlan) {
+      console.log('\n  Balances above ignore allowance replacement: any unspent Explorer')
+      console.log('  allowance is withdrawn first, exactly as a paid activation does.')
     }
 
     if (!options.apply) {
@@ -162,25 +213,37 @@ async function main() {
         displayName: user.display_name,
       })
       try {
-        const result = await grantCredits({
-          context,
-          credits: row.credits,
-          sourceType: 'sponsored_seat',
-          sourceId: cohort,
-          idempotencyKey: pilotGrantIdempotencyKey(cohort),
-        })
+        const result = sponsoredPlan
+          ? await grantSponsoredEntitlement({
+            context,
+            cohort,
+            planSlug: sponsoredPlan.slug,
+            periodDays: options.days,
+          })
+          : await grantCredits({
+            context,
+            credits: row.credits,
+            sourceType: 'sponsored_seat',
+            sourceId: cohort,
+            idempotencyKey: pilotGrantIdempotencyKey(cohort),
+          })
         const [account] = await sql`
           select available_credits from public.lab_credit_accounts
            where workspace_key = ${context.workspace.key}`
         if (result.granted) {
           granted += 1
-          console.log(`GRANTED  ${row.email}  balance ${Number(account?.available_credits ?? 0)}`)
+          const suffix = sponsoredPlan ? `  ${sponsoredPlan.name} until ${result.periodEnd.slice(0, 10)}` : ''
+          console.log(`GRANTED  ${row.email}  balance ${Number(account?.available_credits ?? 0)}${suffix}`)
         } else if (result.reason === 'already_granted') {
           alreadyGranted += 1
           console.log(`SKIPPED  ${row.email}  cohort already granted`)
         } else {
-          failures.push({ email: row.email, reason: result.reason || 'unknown_error' })
-          console.error(`FAILED   ${row.email}  ${result.reason || 'unknown_error'}`)
+          const reason = result.reason || 'unknown_error'
+          // A policy refusal is an operator decision, not a crash: say what it
+          // means rather than printing the enum and leaving them to guess.
+          const detail = sponsoredPlan ? explainSponsoredRefusal(reason) : ''
+          failures.push({ email: row.email, reason })
+          console.error(`FAILED   ${row.email}  ${reason}${detail ? `  — ${detail}` : ''}`)
         }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error)

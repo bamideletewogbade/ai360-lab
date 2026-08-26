@@ -478,10 +478,20 @@ npm run prod:check
 npm run db:postgres:verify
 npm run data:verify
 npm run credits:verify
+npm run spend:verify
 npm run runs:verify
 npm run media:verify
 npm run domains:verify
 ```
+
+`spend:verify` is read-only. It confirms the spend circuit breaker can read
+`lab_cost_ledger`, that its day window resolves to a real UTC midnight on that
+connection, that migration `0027_spend_caps.sql` has been applied, and that
+today's spend sits inside the configured ceilings. It also prints the top
+spending workspaces for the day, so an operator can see who a cap would bite
+first. Caps themselves are configured through `AI360_SPEND_CAP_DAILY_USD`,
+`AI360_SPEND_CAP_WORKSPACE_DAILY_USD` and `AI360_SPEND_CAP_USER_DAILY_USD`;
+leaving them unset takes a built-in default rather than removing the ceiling.
 
 Run against the deployed staging or production candidate:
 

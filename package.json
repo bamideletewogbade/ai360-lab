@@ -14,6 +14,8 @@
     "db:postgres:migrate": "node scripts/migrate-postgres.mjs",
     "db:postgres:verify": "node scripts/verify-postgres.mjs",
     "credits:verify": "node --experimental-strip-types scripts/verify-credits.mjs",
+    "spend:verify": "node --experimental-strip-types scripts/verify-spend-caps.mjs",
+    "email:verify": "node --experimental-strip-types scripts/verify-email.mjs",
     "credits:pilot": "node scripts/grant-pilot-credits.mjs",
     "payments:contract": "node --import ./scripts/register-alias.mjs --experimental-strip-types --test tests/expresspay.test.ts tests/billing.test.ts",
     "payments:sandbox": "node --experimental-strip-types scripts/test-expresspay-sandbox.mjs",
@@ -26,7 +28,12 @@
     "smoke:deploy": "node scripts/smoke-deployment.mjs",
     "smoke:pilot": "node scripts/smoke-pilot-production.mjs",
     "smoke:documents": "node scripts/smoke-chat-documents.mjs",
-    "release:check": "npm audit --omit=dev && npm run lint && npm test && npm run build && npm run prod:check"
+    "release:check": "npm audit --omit=dev && npm run lint && npm test && npm run build && npm run prod:check",
+    "video:dev": "remotion studio src/remotion/index.ts",
+    "video:render": "remotion render src/remotion/index.ts AI360Explainer out/ai360-explainer.mp4",
+    "video:render:short": "remotion render src/remotion/index.ts AI360SocialShort out/ai360-social-short.mp4",
+    "video:render:fast": "remotion render src/remotion/index.ts AI360FastDemo out/ai360-fast-demo.mp4",
+    "video:render:all": "npm run video:render && npm run video:render:short && npm run video:render:fast"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
@@ -49,12 +56,18 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@remotion/cli": "^4.0.517",
+    "@remotion/paths": "^4.0.517",
+    "@remotion/player": "^4.0.517",
+    "@remotion/shapes": "^4.0.517",
+    "@remotion/transitions": "^4.0.517",
     "@types/node": "22.19.9",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "^9.16.0",
     "eslint-config-next": "^16.3.0",
     "prettier": "^3.4.2",
+    "remotion": "^4.0.517",
     "typescript": "5.7.3"
   },
   "engines": {

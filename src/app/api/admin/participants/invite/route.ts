@@ -15,6 +15,7 @@ import {
   unsubscribeHeaders,
   unsubscribeUrl,
 } from '@/lib/email/unsubscribe'
+import { FUNNEL_INVITATION_PARAM } from '@/lib/funnel/contract'
 import { generateInviteLink, isSupabaseAdminConfigured } from '@/lib/supabase/admin'
 import { isPostgresConfigured } from '@/lib/postgres'
 import { errorDetails, requestLogger } from '@/lib/observability'
@@ -116,9 +117,16 @@ export async function POST(request: Request) {
         continue
       }
 
+      // The invitation id rides along to the workspace so the funnel can say
+      // which invited person a visit belonged to. `safeInternalPath` keeps the
+      // query string, and the tracker strips it from the address bar on
+      // arrival so it is never carried into a shared link or a screenshot. It
+      // is an analytics tag only: claiming an invitation is done by verified
+      // email address, so the id grants nothing to whoever holds it.
+      const landing = `/app?${FUNNEL_INVITATION_PARAM}=${encodeURIComponent(invitation.id)}`
       const invite = await generateInviteLink({
         email: invitation.email,
-        redirectTo: `${settings.appUrl}/auth/callback?next=/app`,
+        redirectTo: `${settings.appUrl}/auth/callback?next=${encodeURIComponent(landing)}`,
       })
       if (!invite) {
         // Supabase declines an address that already has an account. That is a

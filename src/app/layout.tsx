@@ -4,6 +4,7 @@ import type { Viewport } from 'next'
 import './globals.css'
 import './landing.css'
 import { AuthProvider } from '@/components/AuthProvider'
+import { FunnelTracker } from '@/components/FunnelTracker'
 import { SiteStructuredData } from '@/components/SiteStructuredData'
 import { BRAND } from '@/lib/brand'
 import { THEME_INIT_SCRIPT } from '@/lib/theme'
@@ -89,7 +90,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           the application tree itself. */}
       <body suppressHydrationWarning>
         <SiteStructuredData />
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {/* Inside AuthProvider because workspace entry is only counted once
+              the session has resolved. Renders nothing. */}
+          <FunnelTracker />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   )
