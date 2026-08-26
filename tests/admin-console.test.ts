@@ -171,8 +171,14 @@ test('participant operations keep pilot inside admin with safe bulk outreach', a
   const programRepository = await readFile(new URL('../src/lib/admin/programs.ts', import.meta.url), 'utf8')
   const emailTemplate = await readFile(new URL('../src/lib/admin/participant-email.ts', import.meta.url), 'utf8')
 
-  assert.match(consoleUi, /Invited · not activated/)
-  assert.match(consoleUi, /Blocked by errors/)
+  // Pinned by the handler each button calls rather than by its wording, so the
+  // copy can be rewritten for an operator without breaking the test. The
+  // labels themselves were database vocabulary until 2026-08-26 ("Invited ·
+  // not activated"); what must not change is that every view still resolves to
+  // an `applySavedView` case.
+  for (const view of ['invited', 'no_return', 'low_credits', 'blocked', 'feedback', 'high_engagement']) {
+    assert.match(consoleUi, new RegExp(`applySavedView\\('${view}'\\)`), `saved view ${view} must stay reachable`)
+  }
   assert.match(consoleUi, /Exact recipients/)
   assert.match(consoleUi, /Send \$\{emailPreview\.eligible\.length\} emails/)
   assert.match(bulkRoute, /email_status === 'contactable'/)
@@ -180,6 +186,52 @@ test('participant operations keep pilot inside admin with safe bulk outreach', a
   assert.match(programRepository, /on conflict \(idempotency_key\) do nothing/)
   assert.match(emailTemplate, /escapeHtml\(note\)/)
   assert.doesNotMatch(emailTemplate, /recipient_email|provider_message_id/)
+})
+
+test('the participant screen speaks the operator’s language, not the column’s', async () => {
+  const consoleUi = await readFile(new URL('../src/components/AdminConsole.tsx', import.meta.url), 'utf8')
+
+  // Rows used to print the raw enum while the filter above them called the
+  // same state something else, so filtering to "Withdrawn" produced a list
+  // where every row read `revoked`.
+  assert.match(consoleUi, /const INVITE_STATUS_LABELS/)
+  for (const [value, shown] of [
+    ['pending', 'Not sent'], ['sent', 'Sent, no reply'], ['accepted', 'Signed up'],
+    ['bounced', 'Email bounced'], ['revoked', 'Cancelled'],
+  ]) {
+    assert.match(consoleUi, new RegExp(`${value}: '${shown}'`), `${value} needs a plain-language label`)
+  }
+  assert.match(consoleUi, /INVITE_STATUS_LABELS\[invitation\.inviteStatus\] \?\? label\(/,
+    'an unknown status must fall back rather than render blank')
+
+  // The old counter's denominator spanned every status and never fell, because
+  // nothing deletes an invitation row.
+  assert.doesNotMatch(consoleUi, /of \{invitations\.length\} invitations/)
+  assert.match(consoleUi, /invitationCounts/)
+
+  // Acting on rows the current filter hides is how a send reaches someone the
+  // operator did not mean to contact.
+  assert.match(consoleUi, /visibleInvitations\.filter\(\(item\) => invitationIds\.has\(item\.id\)\)/)
+
+  // Nothing cleared this before, so a stale "3 sent" survived the session.
+  assert.match(consoleUi, /setInviteNotice\(''\)/)
+
+  // Eight of the nine dropdowns went; the list fits on a screen at pilot size.
+  for (const gone of ['Any contact state', 'Any activity', 'Any balance', 'Any signal', 'Any stage']) {
+    assert.doesNotMatch(consoleUi, new RegExp(gone), `${gone} filter should be gone`)
+  }
+  assert.match(consoleUi, /Include people who left/)
+})
+
+test('every CSS class the admin console references actually exists', async () => {
+  // `styles.missing` is `undefined` at runtime, which silently drops the class
+  // and puts a literal "undefined" in the DOM. TypeScript does not catch it.
+  const consoleUi = await readFile(new URL('../src/components/AdminConsole.tsx', import.meta.url), 'utf8')
+  const sheet = await readFile(new URL('../src/components/AdminConsole.module.css', import.meta.url), 'utf8')
+  const referenced = [...new Set([...consoleUi.matchAll(/styles\.([A-Za-z0-9_]+)/g)].map((match) => match[1]))]
+  assert.ok(referenced.length > 50, 'expected the console to reference many classes')
+  const missing = referenced.filter((name) => !new RegExp(`\\.${name}[\\s,{:>]`).test(sheet))
+  assert.deepEqual(missing, [], `these classes are referenced but never defined: ${missing.join(', ')}`)
 })
 
 test('participant exports offer authenticated Excel workbooks as well as CSV', async () => {

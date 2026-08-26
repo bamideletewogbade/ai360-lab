@@ -26,6 +26,24 @@ const IMPORT_REASONS: Record<string, string> = {
   missing_email: 'Row has no email address',
 }
 
+/**
+ * Invitation states in the operator's words rather than the column's.
+ *
+ * Rows previously printed the raw database enum — `pending`, `revoked` — while
+ * the filter above them called the same states something else entirely, so
+ * filtering to "Withdrawn" produced a list where every row said `revoked`. One
+ * vocabulary now, used by both. `invite_status` is written without runtime
+ * validation, so an unknown value falls back to the generic formatter rather
+ * than rendering blank.
+ */
+const INVITE_STATUS_LABELS: Record<string, string> = {
+  pending: 'Not sent',
+  sent: 'Sent, no reply',
+  accepted: 'Signed up',
+  bounced: 'Email bounced',
+  revoked: 'Cancelled',
+}
+
 const PARTICIPATION_STATUSES = ['invited', 'enrolled', 'activated', 'returning', 'completed', 'withdrawn'] as const
 const FEEDBACK_STATUSES = ['not_requested', 'requested', 'received', 'reviewed'] as const
 const EMAIL_TEMPLATES = [
@@ -146,14 +164,16 @@ export function AdminConsole() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
-  const [userStatus, setUserStatus] = useState('all')
-  const [balance, setBalance] = useState('all')
+  // Program, cohort, participation, feedback and engagement remain as state
+  // because the "who needs attention" buttons set them. They no longer have
+  // dropdowns of their own: at pilot size the list fits on a screen, so
+  // filtering was never the operator's problem and eight selects over sixty-odd
+  // rows cost more attention than they returned.
   const [programFilter, setProgramFilter] = useState('all')
-  const [participantCohort, setParticipantCohort] = useState('all')
-  const [participationStatus, setParticipationStatus] = useState('all')
   const [feedbackStatus, setFeedbackStatus] = useState('all')
-  const [contactStatus, setContactStatus] = useState('all')
   const [engagement, setEngagement] = useState('all')
+  /** The one thing the participation dropdown was genuinely for. */
+  const [includeWithdrawn, setIncludeWithdrawn] = useState(false)
   const [feature, setFeature] = useState('all')
   const [errorSource, setErrorSource] = useState('all')
   const [severity, setSeverity] = useState('all')
@@ -254,9 +274,30 @@ export function AdminConsole() {
       || item.inviteStatus === invitationFilter
   )), [invitationFilter, invitations])
 
+  /**
+   * How many invitations sit in each state, so the counts live inside the
+   * filter options. This is what replaces the old "N of M invitations" reading:
+   * its denominator spanned every status and never fell, because nothing
+   * deletes an invitation row — accept, revoke and bounce are all status
+   * updates. It therefore looked worse the better the pilot went.
+   */
+  const invitationCounts = useMemo(() => {
+    const counts = { open: 0, accepted: 0, bounced: 0, revoked: 0, all: invitations.length }
+    for (const item of invitations) {
+      if (item.inviteStatus === 'pending' || item.inviteStatus === 'sent') counts.open += 1
+      else if (item.inviteStatus === 'accepted') counts.accepted += 1
+      else if (item.inviteStatus === 'bounced') counts.bounced += 1
+      else if (item.inviteStatus === 'revoked') counts.revoked += 1
+    }
+    return counts
+  }, [invitations])
+
+  // Scoped to what is on screen. Selecting rows, filtering to a different
+  // state and pressing Send used to act on invitations the operator could no
+  // longer see.
   const selectedInvitations = useMemo(
-    () => invitations.filter((item) => invitationIds.has(item.id)),
-    [invitationIds, invitations],
+    () => visibleInvitations.filter((item) => invitationIds.has(item.id)),
+    [invitationIds, visibleInvitations],
   )
   /** Only an unclaimed invitation can be mailed or withdrawn. */
   const actionableInvitations = useMemo(
@@ -371,8 +412,6 @@ export function AdminConsole() {
   }, [actionableInvitations, refreshInvitations])
 
   const allCohorts = useMemo(() => dashboard?.cohorts.map((item) => item.cohort) || [], [dashboard])
-  const allPrograms = useMemo(() => [...new Set(dashboard?.users.map((user) => user.participation?.programKey).filter(Boolean) as string[] || [])].sort(), [dashboard])
-  const allParticipantCohorts = useMemo(() => [...new Set(dashboard?.users.map((user) => user.participation?.cohortKey).filter(Boolean) as string[] || [])].sort(), [dashboard])
   const managementSignals = useMemo(() => {
     if (!dashboard) return []
     const pilotUsers = dashboard.users.filter((user) => user.participation?.programKey === 'pilot'
@@ -395,22 +434,19 @@ export function AdminConsole() {
     const queryMatches = !needle || user.email.toLowerCase().includes(needle)
       || user.displayName?.toLowerCase().includes(needle) || user.id.toLowerCase().includes(needle)
     return queryMatches
-      && (userStatus === 'all' || user.status === userStatus)
-      && (balance === 'all' || user.balanceHealth === balance)
+      // Somebody who left the pilot is hidden unless asked for, which is the
+      // only filtering a sixty-person list genuinely needs.
+      && (includeWithdrawn || user.participation?.participationStatus !== 'withdrawn')
       && (feature === 'all' || user.features.includes(feature))
       && (programFilter === 'all' || (programFilter === 'none' ? !user.participation : user.participation?.programKey === programFilter))
-      && (participantCohort === 'all' || user.participation?.cohortKey === participantCohort)
-      && (participationStatus === 'all' || user.participation?.participationStatus === participationStatus)
       && (feedbackStatus === 'all' || user.participation?.feedbackStatus === feedbackStatus)
-      && (contactStatus === 'all'
-        || (contactStatus === 'never_contacted' ? !user.participation?.lastContactedAt : user.participation?.emailStatus === contactStatus))
       && (engagement === 'all'
         || (engagement === 'invited_not_activated' && Boolean(user.participation) && user.successfulRequests === 0)
         || (engagement === 'activated_not_returned' && user.successfulRequests > 0 && user.activeDays < 2)
         || (engagement === 'active_low_credits' && user.status === 'active' && user.balanceHealth !== 'healthy')
         || (engagement === 'blocked_by_errors' && user.failedRequests > 0)
         || (engagement === 'high_engagement' && (user.activeDays >= 3 || user.projects >= 2)))
-  }), [balance, contactStatus, dashboard, engagement, feature, feedbackStatus, needle, participantCohort, participationStatus, programFilter, userStatus])
+  }), [dashboard, engagement, feature, feedbackStatus, includeWithdrawn, needle, programFilter])
 
   const selectedUsers = useMemo(() => (dashboard?.users || []).filter((user) => selectedIds.has(user.id)), [dashboard, selectedIds])
   const allVisibleSelected = visibleUsers.length > 0 && visibleUsers.every((user) => selectedIds.has(user.id))
@@ -438,10 +474,10 @@ export function AdminConsole() {
   }), [dashboard, ledgerType, needle])
 
   function resetFilters() {
-    setQuery(''); setUserStatus('all'); setBalance('all')
+    setQuery('')
     setFeature('all'); setErrorSource('all'); setSeverity('all'); setLedgerType('all')
-    setProgramFilter('all'); setParticipationStatus('all'); setFeedbackStatus('all')
-    setContactStatus('all'); setEngagement('all'); setParticipantCohort('all')
+    setProgramFilter('all'); setFeedbackStatus('all'); setEngagement('all')
+    setIncludeWithdrawn(false)
   }
 
   function applySavedView(view: string) {
@@ -676,10 +712,10 @@ export function AdminConsole() {
     }
   }
 
-  const filtersActive = Boolean(query || userStatus !== 'all' || balance !== 'all'
+  const filtersActive = Boolean(query
     || feature !== 'all' || errorSource !== 'all' || severity !== 'all' || ledgerType !== 'all'
-    || programFilter !== 'all' || participationStatus !== 'all' || feedbackStatus !== 'all'
-    || contactStatus !== 'all' || engagement !== 'all' || participantCohort !== 'all')
+    || programFilter !== 'all' || feedbackStatus !== 'all' || engagement !== 'all'
+    || includeWithdrawn)
 
   return (
     <main className={styles.shell}>
@@ -707,7 +743,11 @@ export function AdminConsole() {
               <option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="all">All time</option>
             </select></label>
             <button type="button" className={styles.refresh} onClick={() => { setLoading(true); setError(''); void loadDashboard(range) }} disabled={loading}>↻ <span>Refresh</span></button>
-            {dashboard?.capabilities.manageCredits ? <button type="button" className={styles.primary} onClick={() => setCreditTarget(dashboard.users[0] || null)}>+ Give credits</button> : null}
+            {/* "+ Give credits" used to sit here too, opening the credit form
+                pre-loaded with `dashboard.users[0]` — an arbitrary person,
+                already selected, in a form that moves money. The same action
+                lives on the Credits tab and in the bulk bar, both of which
+                start from a person the operator chose. */}
           </div>
         </header>
 
@@ -761,23 +801,31 @@ export function AdminConsole() {
 
             {tab === 'users' ? (
               <>
-                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>Participant operations</span><h1>Move the pilot forward.</h1><p>Find the people who need access, support, credits, follow-up, or a feedback request.</p></div><div className={styles.pageTitleActions}>{dashboard.capabilities.importParticipants ? <button className={styles.heroAction} onClick={() => { setImportPreview(null); setInviteOpen(true) }}>+ Invite by email list</button> : null}{dashboard.capabilities.managePrograms ? <button className={styles.heroAction} onClick={() => { setPilotAddIds(new Set()); setPilotAddOpen(true) }}>+ Add pilot users</button> : null}<div className={styles.resultCount}><b>{visibleUsers.length}</b><span>of {dashboard.users.length} users</span></div></div></section>
+                {/* One count, and only while a filter is narrowing the list —
+                    "63 of 63" competing with a second counter six lines below
+                    told the operator nothing either time. */}
+                <section className={styles.pageTitle}><div><span className={styles.eyebrow}>People</span><h1>Move the pilot forward.</h1><p>{filtersActive ? `Showing ${visibleUsers.length} of ${dashboard.users.length}.` : `${dashboard.users.length} ${dashboard.users.length === 1 ? 'person' : 'people'} in the pilot.`}</p></div><div className={styles.pageTitleActions}>{dashboard.capabilities.importParticipants ? <button className={styles.heroAction} onClick={() => { setImportPreview(null); setInviteOpen(true) }}>+ Invite by email list</button> : null}{dashboard.capabilities.managePrograms ? <button className={styles.heroAction} onClick={() => { setPilotAddIds(new Set()); setPilotAddOpen(true) }}>+ Add pilot users</button> : null}</div></section>
 
                 {invitations.length || inviteNotice ? (
-                  <section className={styles.filterBar} aria-label="Pending invitations">
-                    <span className={styles.eyebrow}>Invited · no account yet</span>
-                    <label><span>Show</span><select value={invitationFilter} onChange={(event) => setInvitationFilter(event.target.value)}><option value="open">Awaiting sign-up</option><option value="accepted">Joined</option><option value="revoked">Withdrawn</option><option value="bounced">Bounced</option><option value="all">All</option></select></label>
-                    <div className={styles.resultCount}><b>{visibleInvitations.length}</b><span>of {invitations.length} invitations</span></div>
-                    {inviteNotice ? <span className={styles.auditNote}>{inviteNotice}</span> : null}
-                  </section>
-                ) : null}
-
-                {visibleInvitations.length ? (
-                  <section className={styles.accountPicker} aria-label="Invitation list">
+                  <section className={styles.accountPicker} aria-label="Invitations">
                     <header>
                       <span>
-                        <b>{invitationIds.size} selected</b>
-                        <small>{actionableInvitations.length} can be mailed or withdrawn</small>
+                        <label className={styles.inviteScope}>
+                          <span className={styles.srOnly}>Show invitations</span>
+                          <select value={invitationFilter} onChange={(event) => setInvitationFilter(event.target.value)}>
+                            <option value="open">Awaiting sign-up ({invitationCounts.open})</option>
+                            <option value="accepted">Signed up ({invitationCounts.accepted})</option>
+                            <option value="bounced">Email bounced ({invitationCounts.bounced})</option>
+                            <option value="revoked">Cancelled ({invitationCounts.revoked})</option>
+                            <option value="all">All ({invitationCounts.all})</option>
+                          </select>
+                        </label>
+                        {selectedInvitations.length ? <b>{selectedInvitations.length} selected</b> : null}
+                        {/* Shown only when it differs, rather than restating the
+                            selected count in a second and third place. */}
+                        {selectedInvitations.length > actionableInvitations.length ? (
+                          <small>{selectedInvitations.length - actionableInvitations.length} already handled — they will be skipped</small>
+                        ) : null}
                       </span>
                       <span>
                         <button type="button" onClick={() => setInvitationIds((current) => {
@@ -785,11 +833,20 @@ export function AdminConsole() {
                           const all = visibleInvitations.every((item) => next.has(item.id))
                           visibleInvitations.forEach((item) => { if (all) next.delete(item.id); else next.add(item.id) })
                           return next
-                        })}>{visibleInvitations.every((item) => invitationIds.has(item.id)) ? 'Clear' : 'Select all'}</button>
-                        {dashboard.capabilities.sendInvitations ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void sendInvitations()}>{inviteSendWorking ? 'Working…' : `Send ${actionableInvitations.length || ''} invitation${actionableInvitations.length === 1 ? '' : 's'}`}</button> : null}
-                        {dashboard.capabilities.importParticipants ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void revokeInvitations()}>Withdraw</button> : null}
+                        })}>{visibleInvitations.length && visibleInvitations.every((item) => invitationIds.has(item.id)) ? 'Clear' : 'Select all'}</button>
+                        {dashboard.capabilities.sendInvitations ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void sendInvitations()}>{inviteSendWorking ? 'Working…' : `Send${actionableInvitations.length ? ` ${actionableInvitations.length}` : ''}`}</button> : null}
+                        {dashboard.capabilities.importParticipants ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void revokeInvitations()}>Cancel</button> : null}
                       </span>
                     </header>
+                    {inviteNotice ? (
+                      <p className={styles.inviteNotice}>
+                        <span>{inviteNotice}</span>
+                        {/* Nothing cleared this before, so "3 sent" stayed on
+                            screen for the rest of the session and read as
+                            current an hour later. */}
+                        <button type="button" onClick={() => setInviteNotice('')} aria-label="Dismiss">×</button>
+                      </p>
+                    ) : null}
                     <div>
                       {visibleInvitations.slice(0, 100).map((invitation) => (
                         <label key={invitation.id} data-selected={invitationIds.has(invitation.id) || undefined}>
@@ -805,8 +862,15 @@ export function AdminConsole() {
                           />
                           <UserIdentity user={{ displayName: invitation.displayName, email: invitation.email }} compact />
                           <span>
-                            <b>{label(invitation.inviteStatus)}</b>
-                            <small>{invitation.cohortKey || 'no cohort'} · {invitation.startingCredits} credits · {invitation.sendAttempts ? `${invitation.sendAttempts} send${invitation.sendAttempts === 1 ? '' : 's'}` : 'not sent'}</small>
+                            <b>{INVITE_STATUS_LABELS[invitation.inviteStatus] ?? label(invitation.inviteStatus)}</b>
+                            {/* `sendAttempts` stays because a failed send leaves
+                                the invitation `pending` while still counting the
+                                attempt — so "never tried" and "tried three times
+                                and keeps failing" both read as Not sent, and this
+                                is the only thing telling them apart. The
+                                timestamp comes from `lastAttemptAt`, since
+                                `sentAt` freezes at the first success. */}
+                            <small>{invitation.cohortKey || 'no cohort'} · {invitation.startingCredits} credits · {invitation.sendAttempts ? `${invitation.sendAttempts} send${invitation.sendAttempts === 1 ? '' : 's'} · ${timeAgo(invitation.lastAttemptAt)}` : 'not sent'}</small>
                           </span>
                         </label>
                       ))}
@@ -815,26 +879,26 @@ export function AdminConsole() {
                     {!dashboard.capabilities.sendInvitations ? <p>Sending is unavailable until the email provider and the Supabase service role key are both configured.</p> : null}
                   </section>
                 ) : null}
-                <section className={styles.savedViews} aria-label="Saved participant views">
-                  <span>Saved views</span>
-                  <button onClick={() => applySavedView('invited')}>Invited · not activated</button>
-                  <button onClick={() => applySavedView('no_return')}>Activated · no return</button>
-                  <button onClick={() => applySavedView('low_credits')}>Active · low credits</button>
-                  <button onClick={() => applySavedView('blocked')}>Blocked by errors</button>
-                  <button onClick={() => applySavedView('feedback')}>Feedback pending</button>
-                  <button onClick={() => applySavedView('high_engagement')}>High engagement</button>
+                {/* These were the "Signal" dropdown as well, which offered the
+                    same five values one extra click away. Buttons win: they
+                    reset the other filters first, so a contradictory stack
+                    cannot be built by accident. */}
+                <section className={styles.savedViews} aria-label="Who needs attention">
+                  <span>Who needs attention</span>
+                  <button onClick={() => applySavedView('invited')}>Signed up, never used it</button>
+                  <button onClick={() => applySavedView('no_return')}>Tried it once, never came back</button>
+                  <button onClick={() => applySavedView('low_credits')}>Running out of credits</button>
+                  <button onClick={() => applySavedView('blocked')}>Hit errors</button>
+                  <button onClick={() => applySavedView('feedback')}>Owe us feedback</button>
+                  <button onClick={() => applySavedView('high_engagement')}>Most active</button>
                 </section>
                 <section className={styles.filterBar}>
-                  <label className={styles.search}><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, email, or user ID" /></label>
-                  <label><span>Program</span><select value={programFilter} onChange={(event) => setProgramFilter(event.target.value)}><option value="all">All users</option>{allPrograms.map((item) => <option value={item} key={item}>{label(item)}</option>)}<option value="none">Not in a program</option></select></label>
-                  <label><span>Cohort</span><select value={participantCohort} onChange={(event) => setParticipantCohort(event.target.value)}><option value="all">All cohorts</option>{allParticipantCohorts.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
-                  <label><span>Participation</span><select value={participationStatus} onChange={(event) => setParticipationStatus(event.target.value)}><option value="all">Any stage</option>{PARTICIPATION_STATUSES.map((item) => <option value={item} key={item}>{label(item)}</option>)}</select></label>
-                  <label><span>Signal</span><select value={engagement} onChange={(event) => setEngagement(event.target.value)}><option value="all">Any signal</option><option value="invited_not_activated">Invited, not activated</option><option value="activated_not_returned">Activated, no return</option><option value="active_low_credits">Active, low credits</option><option value="blocked_by_errors">Blocked by errors</option><option value="high_engagement">High engagement</option></select></label>
-                  <label><span>Feedback</span><select value={feedbackStatus} onChange={(event) => setFeedbackStatus(event.target.value)}><option value="all">Any feedback</option>{FEEDBACK_STATUSES.map((item) => <option value={item} key={item}>{label(item)}</option>)}</select></label>
-                  <label><span>Contact</span><select value={contactStatus} onChange={(event) => setContactStatus(event.target.value)}><option value="all">Any contact state</option><option value="contactable">Contactable</option><option value="never_contacted">Never contacted</option><option value="unsubscribed">Unsubscribed</option><option value="suppressed">Suppressed</option></select></label>
-                  <label><span>Activity</span><select value={userStatus} onChange={(event) => setUserStatus(event.target.value)}><option value="all">Any activity</option><option value="active">Active</option><option value="at_risk">At risk</option><option value="dormant">Dormant</option></select></label>
-                  <label><span>Balance</span><select value={balance} onChange={(event) => setBalance(event.target.value)}><option value="all">Any balance</option><option value="healthy">Healthy</option><option value="low">Low</option><option value="empty">Empty</option></select></label>
-                  {filtersActive ? <button className={styles.clear} onClick={resetFilters}>Clear filters</button> : null}
+                  <label className={styles.search}><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or email" /></label>
+                  <label className={styles.inlineCheck}>
+                    <input type="checkbox" checked={includeWithdrawn} onChange={(event) => setIncludeWithdrawn(event.target.checked)} />
+                    <span>Include people who left</span>
+                  </label>
+                  {filtersActive ? <button className={styles.clear} onClick={resetFilters}>Clear</button> : null}
                 </section>
                 {selectedUsers.length ? <section className={styles.bulkBar}>
                   <div><b>{selectedUsers.length} selected</b><span>{selectedUsers.filter((user) => user.participation?.programKey === 'pilot').length} in pilot · {selectedUsers.filter((user) => user.failedRequests > 0).length} with errors</span></div>
@@ -842,22 +906,31 @@ export function AdminConsole() {
                     {dashboard.capabilities.managePrograms ? <button onClick={() => setBulkKind('program')}>Update pilot</button> : null}
                     {dashboard.capabilities.manageCredits ? <button onClick={() => setBulkKind('credits')}>Grant credits</button> : null}
                     {dashboard.capabilities.sendParticipantEmail ? <button onClick={() => { setEmailPreview(null); setBulkKind('email') }}>Send email</button> : null}
-                    <button disabled={exportWorking} onClick={() => void exportUsersExcel(selectedUsers)}>{exportWorking ? 'Creating Excel…' : 'Export Excel'}</button>
-                    <button onClick={() => exportUsers(selectedUsers)}>Export CSV</button>
+                    {/* One export, not two. CSV is instant and client-side, and
+                        opens in Excel anyway; the server round-trip bought a
+                        second button and a loading state for a 63-row table. */}
+                    <button onClick={() => exportUsers(selectedUsers)}>Download</button>
                     <button className={styles.clearSelection} onClick={() => setSelectedIds(new Set())}>Clear</button>
                   </div>
                 </section> : null}
                 <section className={styles.tablePanel}>
-                  <table><thead><tr><th className={styles.checkCell}><input type="checkbox" aria-label="Select all visible users" checked={allVisibleSelected} onChange={toggleVisibleUsers} /></th><th>Participant</th><th>Pilot stage</th><th>Engagement</th><th>Credits</th><th>Reliability</th><th>Follow-up</th><th /></tr></thead>
+                  {/* Errors are part of the activity story, not a separate
+                      discipline, so Reliability folds into Activity. The row is
+                      already the click target, so the trailing View button was
+                      a column that duplicated it. */}
+                  <table><thead><tr><th className={styles.checkCell}><input type="checkbox" aria-label="Select all visible users" checked={allVisibleSelected} onChange={toggleVisibleUsers} /></th><th>Person</th><th>Status</th><th>Activity</th><th>Credits</th><th>Last contact</th></tr></thead>
                     <tbody>{visibleUsers.map((user) => <tr key={user.id} onClick={() => void inspectUser(user)} data-selected={selectedIds.has(user.id) || undefined}>
                       <td className={styles.checkCell} onClick={(event) => event.stopPropagation()}><input type="checkbox" aria-label={`Select ${user.displayName || user.email}`} checked={selectedIds.has(user.id)} onChange={() => toggleUser(user.id)} /></td>
                       <td><UserIdentity user={user} /></td>
                       <td>{user.participation ? <><span className={styles.badge} data-tone={user.participation.participationStatus}>{label(user.participation.participationStatus)}</span><small>{user.participation.cohortKey || user.participation.programKey}</small></> : <><b>Not enrolled</b><small>No program state</small></>}</td>
-                      <td><b>{user.activeDays} active day{user.activeDays === 1 ? '' : 's'}</b><small>{user.successfulRequests} delivered · {timeAgo(user.lastActiveAt)}</small></td>
-                      <td><b>{number(user.availableCredits)} available</b><small>{user.creditsSpent} used · {user.balanceHealth}</small></td>
-                      <td><b>{user.failedRequests ? `${user.failedRequests} failures` : 'No failures'}</b><small className={user.failedRequests ? styles.danger : ''}>{user.qualityReports} feedback reports</small></td>
-                      <td><b>{user.participation?.feedbackStatus ? label(user.participation.feedbackStatus) : '—'}</b><small>{user.participation?.lastContactedAt ? `Contacted ${timeAgo(user.participation.lastContactedAt)}` : 'Never contacted'}</small></td>
-                      <td><button className={styles.rowAction}>View →</button></td>
+                      <td>
+                        <b>{user.activeDays} active day{user.activeDays === 1 ? '' : 's'} · {timeAgo(user.lastActiveAt)}</b>
+                        <small className={user.failedRequests ? styles.danger : ''}>
+                          {user.successfulRequests} delivered{user.failedRequests ? ` · ${user.failedRequests} failed` : ''}{user.qualityReports ? ` · ${user.qualityReports} reports` : ''}
+                        </small>
+                      </td>
+                      <td><b>{number(user.availableCredits)} left</b><small>{user.creditsSpent} used · {user.balanceHealth}</small></td>
+                      <td><b>{user.participation?.lastContactedAt ? timeAgo(user.participation.lastContactedAt) : 'Never'}</b><small>{user.participation?.feedbackStatus ? label(user.participation.feedbackStatus) : '—'}</small></td>
                     </tr>)}</tbody></table>
                   {!visibleUsers.length ? <Empty title="No users match these filters" detail="Clear one or more filters to widen the view." /> : null}
                 </section>
@@ -1118,7 +1191,7 @@ export function AdminConsole() {
         <footer><button type="button" onClick={closeBulk}>Cancel</button><button type="submit" disabled={bulkWorking || !bulkReason.trim() || (bulkKind === 'credits' && !Number(bulkCredits))}>{bulkWorking ? 'Applying…' : `Confirm for ${selectedUsers.length}`}</button></footer>
       </form></div> : null}
 
-      {bulkKind === 'email' ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !bulkWorking) closeBulk() }}><section className={`${styles.creditModal} ${styles.bulkModal} ${styles.emailModal}`}>
+      {bulkKind === 'email' ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !bulkWorking) closeBulk() }}><section className={`${styles.creditModal} ${styles.bulkModal}`}>
         <header><div><span className={styles.eyebrow}>Participant outreach · {selectedUsers.length} selected</span><h2>{emailPreview ? 'Confirm the recipients' : 'Prepare an email'}</h2></div><button type="button" onClick={closeBulk}>×</button></header>
         {!emailPreview ? <>
           <label><span>Template</span><select value={bulkTemplate} onChange={(event) => setBulkTemplate(event.target.value)}>{EMAIL_TEMPLATES.map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label>

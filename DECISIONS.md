@@ -1,5 +1,59 @@
 # Decision and incident log
 
+## 2026-08-26 · Decision · At sixty-three people, filtering was never the problem
+
+**Why.** The participant screen carried nine dropdowns, twenty buttons, two
+competing 38px counters and eight table columns, over a population that fits on
+two screens without any filtering at all. Almost every control existed to narrow
+a list that was never too long, while the operator's actual questions were
+answered in database vocabulary or not at all.
+
+**What went, and why each one earned it.**
+
+*Eight of the nine filter dropdowns.* Program and Cohort are derived from the
+data and hold one value each in this deployment. Contact's protective job — do
+not mail someone who unsubscribed — is already done, better, by the email
+preview that strips them and shows the exclusions. Activity offered
+`active`/`at_risk`/`dormant`, thresholds invisible on screen, when the row
+already prints how long ago the person was last active. Signal duplicated the
+saved-view buttons one extra click away. What survives is the search box and one
+checkbox, **Include people who left**, which was the only thing the Participation
+dropdown was genuinely for.
+
+*The "N of M invitations" counter.* Its denominator spanned every status and
+never fell, because nothing deletes an invitation row — accept, revoke and
+bounce are all status updates. It therefore looked worse the better the pilot
+went. The counts moved inside the filter options instead, so
+`Awaiting sign-up (12)` answers "who has not replied" without selecting
+anything — a question the screen previously could not answer at all.
+
+*Two further restatements of the same number*, and the `View →` column, whose
+row was already the click target.
+
+**Renamed, because rows printed the raw enum.** `label()` only swaps
+underscores, so a row read `revoked` while the filter above it called that state
+"Withdrawn". One vocabulary now — Not sent, Sent no reply, Signed up, Email
+bounced, Cancelled — with a fallback for any value, since `invite_status` is
+written without runtime validation.
+
+**Three defects fixed in passing.** `inviteNotice` was set in three places and
+cleared in none, so a stale "3 sent" read as current an hour later; it is now
+dismissible. `selectedInvitations` filtered all invitations rather than visible
+ones, so a send could reach rows the current filter hid. And `styles.emailModal`
+was referenced but never defined, putting a literal `undefined` in the DOM — a
+class of bug TypeScript cannot catch, now pinned by a test that checks every
+referenced class exists.
+
+**What was deliberately kept.** The two-step preview on both outbound paths,
+every reason field (they are the audit trail the credit ledger renders back),
+every capability gate, and per-row `sendAttempts` — a failed send leaves an
+invitation `pending` while still counting the attempt, so "never tried" and
+"tried three times and keeps failing" both read as Not sent and the count is the
+only thing telling them apart.
+
+**Revisit if.** The population outgrows one screen. Filter algebra was removed
+because sixty-three rows do not need it; six thousand would.
+
 ## 2026-08-26 · Incident · An invitation claimed by exact email left a tester with an empty account
 
 **What happened.** The first real invitation was sent to `bamstewo+t1@gmail.com`.
