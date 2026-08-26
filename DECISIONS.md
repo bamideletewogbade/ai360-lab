@@ -1,5 +1,57 @@
 # Decision and incident log
 
+## 2026-08-26 · Incident · An invitation claimed by exact email left a tester with an empty account
+
+**What happened.** The first real invitation was sent to `bamstewo+t1@gmail.com`.
+The recipient clicked it, chose "Continue with Google", and Google returned the
+canonical `bamstewo@gmail.com`. `claimInvitationForUser` looked up open
+invitations by exact address, found none, and returned null. An account was
+created; **no credits were granted and no membership existed.** The console
+showed the invitation as `sent` indefinitely, and nothing anywhere reported a
+failure.
+
+The funnel is what exposed it. Five rows carried the invitation id and, after
+`attachIdentityToVisit` back-filled them, the signed-in account —
+`invite_clicked`, `signup_started`, `workspace_entered`, `signup_completed` —
+proving this person clicked this invitation and still got nothing. Without that
+evidence the symptom is indistinguishable from someone who never opened the
+email.
+
+**Why it matters beyond the test.** The `+t1` was an artefact of testing, but
+the class is not. Any participant whose invited address differs from the
+identity they sign in with hits the same silent failure — and the cohort holds
+Yahoo and iCloud addresses whose owners may well tap "Continue with Google".
+
+**The fix, in two halves, because the cases are different.**
+
+*Provably the same mailbox* → resolved automatically. `email-identity.ts`
+canonicalises only what a provider documents: Google ignores dots and `+tags`
+and treats googlemail.com as gmail.com; a set of named providers document
+`+` sub-addressing. Dots stay significant everywhere except Google, because
+`john.doe@outlook.com` and `johndoe@outlook.com` are two different people. The
+claim keeps its exact-match fast path and falls back to a domain-scoped
+candidate lookup, so it stays one small indexed read.
+
+*Genuinely different mailboxes* → never guessed at. No string comparison can
+prove `x@yahoo.com` and `y@gmail.com` are one person, and a claim moves credits,
+so a false match spends someone else's allowance — silently, which is worse than
+the bug being fixed. Two open invitations that canonicalise to one inbox are
+likewise refused as ambiguous rather than picked between.
+
+**Detection instead of guessing.** `readInvitationMismatches` joins unclaimed
+invitations to funnel rows carrying a user id, which is evidence rather than
+inference. It marks each as `sameMailbox` — those heal on the next sign-in — or
+not, which needs an operator. `npm run invite:mismatches` reports both.
+
+**Also found and fixed.** `MAX_PER_RUN` was 50 against a 63-person cohort:
+"Select all" then Send produced a bare `400 "Review the selected invitations."`
+naming no limit. Raised to 75, and an oversized batch now says how many it may
+take and how many were selected.
+
+**Revisit if.** An operator needs to re-point an invitation at the address
+someone actually used. Today a cross-provider mismatch is resolved by granting
+credits and membership by hand, which works but is three steps.
+
 ## 2026-08-26 · Decision · The funnel records only what nothing else records
 
 **Why.** `lab_usage_events` begins the moment somebody types a prompt, and the

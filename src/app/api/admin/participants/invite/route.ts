@@ -39,7 +39,17 @@ export const runtime = 'nodejs'
  */
 const SEND_INTERVAL_MS = 450
 const RATE_LIMIT_BACKOFF_MS = 2_000
-const MAX_PER_RUN = 50
+/**
+ * Invitations one request may send.
+ *
+ * Sized above a full pilot cohort on purpose: at 50 an operator with 63
+ * participants pressed "Select all", got a bare 400 that named no limit, and
+ * had no way to tell that the batch size was the problem. Sends are paced at
+ * `SEND_INTERVAL_MS`, so a full run of this size takes roughly 35 seconds plus
+ * provider latency — comfortably inside a request timeout, and the reason this
+ * is not simply unbounded.
+ */
+const MAX_PER_RUN = 75
 
 const InviteRequest = z.object({
   mode: z.enum(['preview', 'send']),
@@ -62,7 +72,25 @@ export async function POST(request: Request) {
     if (!canSendAdminEmail(operator)) return Response.json({ error: 'Email-operator access is required.' }, { status: 403, headers: log.headers() })
     if (!isPostgresConfigured()) return Response.json({ error: 'Admin operations are not connected yet.' }, { status: 503, headers: log.headers() })
 
-    const parsed = InviteRequest.safeParse(await request.json().catch(() => null))
+    const payload = await request.json().catch(() => null)
+
+    // Checked before the schema so an oversized batch says how many it may
+    // take. Zod's failure is indistinguishable from a malformed id, and
+    // "Review the selected invitations" sent an operator hunting through a
+    // valid list for a fault that was not in it.
+    const requested = Array.isArray((payload as { invitationIds?: unknown })?.invitationIds)
+      ? ((payload as { invitationIds: unknown[] }).invitationIds).length
+      : 0
+    if (requested > MAX_PER_RUN) {
+      return Response.json({
+        error: `Send at most ${MAX_PER_RUN} invitations at a time. ${requested} are selected — send them in batches.`,
+        status: 'batch_too_large',
+        limit: MAX_PER_RUN,
+        selected: requested,
+      }, { status: 400, headers: log.headers() })
+    }
+
+    const parsed = InviteRequest.safeParse(payload)
     if (!parsed.success) return Response.json({ error: 'Review the selected invitations.' }, { status: 400, headers: log.headers() })
     const body = parsed.data
 

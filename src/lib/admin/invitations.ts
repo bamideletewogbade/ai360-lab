@@ -1,6 +1,8 @@
 import 'server-only'
 
 import { getPostgres } from '@/lib/postgres'
+import { logEvent } from '@/lib/observability'
+import { candidateDomains, isSameMailbox, resolveInvitationForEmail } from '@/lib/admin/email-identity'
 import type {
   AdminImportDisposition,
   AdminImportPreview,
@@ -347,6 +349,100 @@ export async function unsubscribeInvitation(invitationId: string) {
   })
 }
 
+export type InvitationMismatch = {
+  invitationId: string
+  invitedEmail: string
+  cohortKey: string | null
+  startingCredits: number
+  userId: string
+  signedInEmail: string
+  displayName: string | null
+  firstSeenAt: string
+  lastSeenAt: string
+  /** True when the two addresses provably reach one inbox. */
+  sameMailbox: boolean
+}
+
+/**
+ * People who followed an invitation link, signed in, and were never claimed.
+ *
+ * The evidence is the funnel rather than a guess at the address: a visit is
+ * stamped with the invitation it arrived through, and `attachIdentityToVisit`
+ * back-fills the account once one exists. So an unclaimed invitation with
+ * funnel rows carrying somebody's user id is proof that this specific person
+ * clicked this specific invitation and still got nothing.
+ *
+ * `sameMailbox` separates the two cases, because they need different actions:
+ *
+ *   true  — a spelling difference the claim now resolves by itself. These
+ *           heal on the person's next sign-in and need no operator at all.
+ *   false — genuinely different mailboxes, most often somebody invited at a
+ *           Yahoo or iCloud address who tapped "Continue with Google". No
+ *           string comparison can prove those are one person, so an operator
+ *           grants the credits by hand.
+ */
+export async function readInvitationMismatches(programKey = 'pilot') {
+  const sql = getPostgres()
+  try {
+    const rows = await sql<Array<{
+      id: string
+      invited_email: string
+      cohort_key: string | null
+      starting_credits: number
+      user_id: string
+      signed_in_email: string
+      display_name: string | null
+      first_seen: Date | string
+      last_seen: Date | string
+    }>>`
+      select invitation.id, invitation.email as invited_email, invitation.cohort_key,
+             invitation.starting_credits, users.clerk_user_id as user_id,
+             users.email as signed_in_email, users.display_name,
+             min(event.occurred_at) as first_seen, max(event.occurred_at) as last_seen
+        from public.lab_admin_invitations invitation
+        join public.lab_funnel_events event on event.invitation_id = invitation.id
+        join public.lab_users users on users.clerk_user_id = event.user_id
+       where invitation.program_key = ${programKey}
+         and invitation.invite_status in ('pending', 'sent')
+         and users.deleted_at is null
+       group by invitation.id, invitation.email, invitation.cohort_key,
+                invitation.starting_credits, users.clerk_user_id, users.email, users.display_name
+       order by max(event.occurred_at) desc
+       limit 200`
+
+    return {
+      ready: true,
+      mismatches: rows.map((row): InvitationMismatch => ({
+        invitationId: row.id,
+        invitedEmail: row.invited_email,
+        cohortKey: row.cohort_key,
+        startingCredits: Number(row.starting_credits || 0),
+        userId: row.user_id,
+        signedInEmail: row.signed_in_email,
+        displayName: row.display_name,
+        firstSeenAt: iso(row.first_seen)!,
+        lastSeenAt: iso(row.last_seen)!,
+        sameMailbox: isSameMailbox(row.invited_email, row.signed_in_email),
+      })),
+    }
+  } catch (error) {
+    // A missing funnel table (0028) must degrade to "nothing to report" rather
+    // than break the console, exactly as a missing invitation table does.
+    if (isMissingAdminInvitationTables(error) || isMissingFunnelTable(error)) {
+      return { ready: false, mismatches: [] as InvitationMismatch[] }
+    }
+    throw error
+  }
+}
+
+function isMissingFunnelTable(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as { code?: unknown; message?: unknown; table_name?: unknown }
+  if (candidate.code !== '42P01') return false
+  return `${String(candidate.table_name || '')} ${String(candidate.message || '')}`
+    .includes('lab_funnel_events')
+}
+
 /** Records a hard bounce so the address stops being offered for sending. */
 export async function markInvitationBounced(input: { invitationId: string; failureReason: string }) {
   const sql = getPostgres()
@@ -395,16 +491,50 @@ export async function claimInvitationForUser(input: {
   const sql = getPostgres()
 
   return sql.begin(async (tx) => {
-    const [invitation] = await tx<InvitationRow[]>`
+    // The address is looked up across the domains that could route to the same
+    // inbox rather than by exact string, because an identity provider often
+    // returns a different spelling of it than the operator typed — Google
+    // strips `+tags` and dots. Without this the invitation is never claimed,
+    // the person gets no credits and no membership, and nothing anywhere
+    // reports a failure. `resolveInvitationForEmail` still refuses anything it
+    // cannot prove is one mailbox.
+    const domains = candidateDomains(email)
+    if (!domains.length) return null
+
+    const candidates = await tx<InvitationRow[]>`
       select id, program_key, email, display_name, cohort_key, participation_status,
              starting_credits, invite_status, claimed_user_id, invited_by, import_key,
              sent_at, accepted_at, last_attempt_at, send_attempts, created_at, updated_at
         from public.lab_admin_invitations
-       where email = ${email} and invite_status in ('pending', 'sent')
+       where invite_status in ('pending', 'sent')
+         and split_part(email, '@', 2) = any(${domains})
        order by created_at
-       for update skip locked
-       limit 1`
-    if (!invitation) return null
+       for update skip locked`
+
+    const resolved = resolveInvitationForEmail(email, candidates)
+    if (!resolved.match) {
+      if (resolved.reason === 'ambiguous') {
+        // Two open invitations reach this inbox. Picking one would be arbitrary
+        // and would silently strand the other, so an operator decides.
+        logEvent('warn', 'admin.invitation_claim_ambiguous', {
+          candidates: candidates.length,
+          domain: domains[0],
+        })
+      }
+      return null
+    }
+    const invitation = resolved.match
+
+    // Recorded when the spelling differed, so the operator can see that a
+    // `+tag` or dotted address was matched rather than wonder why the console
+    // shows an address the person never typed.
+    if (invitation.email !== email) {
+      logEvent('info', 'admin.invitation_claim_normalized', {
+        invitationId: invitation.id,
+        invitedAs: invitation.email,
+        signedInAs: email,
+      })
+    }
 
     await tx`
       update public.lab_admin_invitations
