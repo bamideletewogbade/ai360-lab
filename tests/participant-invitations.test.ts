@@ -1,5 +1,6 @@
-import assert from 'node:assert/strict'
+﻿import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFile } from 'node:fs/promises'
 
 import {
   createUnsubscribeToken,
@@ -258,5 +259,100 @@ test('a message with no headers does not send an empty headers field', async () 
     assert.equal('headers' in body, false)
   } finally {
     restore()
+  }
+})
+
+test('an invited participant is placed on a plan, not just handed credits', async () => {
+  const claim = await readFile(new URL('../src/lib/admin/invitation-claim.ts', import.meta.url), 'utf8')
+
+  // Credits alone leave the person on Explorer, capped at ten chat messages a
+  // day, so their allowance drains on the cheapest work in the product and
+  // never reaches what the pilot is measuring.
+  assert.match(claim, /grantSponsoredEntitlement/, 'the claim must grant the plan, not only credits')
+  assert.match(claim, /PILOT_ENTITLEMENT_PLAN = 'everyday'/, 'the pilot plan must be Everyday')
+
+  // The entitlement must never be able to block a sign-in.
+  assert.match(claim, /catch \(cause\)/, 'an entitlement failure must be caught')
+
+  // startingCredits is additive now, so it must not be the thing that decides
+  // whether anything is granted at all.
+  assert.doesNotMatch(claim, /let creditsGranted = 0\s*\n\s*if \(claimed\.startingCredits/,
+    'credits must no longer be gated solely on startingCredits')
+})
+
+test('the invitation email guides rather than gestures', async () => {
+  const { renderAdminParticipantEmail } = await import('../src/lib/admin/participant-email.ts')
+  const rendered = renderAdminParticipantEmail({
+    template: 'pilot_invite',
+    displayName: 'Ada Boateng',
+    email: 'ada@example.com',
+    actionUrl: 'https://ai360.africa/auth/callback?token_hash=abc&type=invite',
+    unsubscribeUrl: 'https://ai360.africa/api/email/unsubscribe?token=x',
+  })
+
+  assert.match(rendered.html, /Ada/, 'it should greet them by name')
+  // The allowance is the headline fact; a participant should not have to ask.
+  assert.match(rendered.html, /120 credits/)
+  assert.match(rendered.text, /120 credits/)
+  // Numbered guidance, present in both halves of the message.
+  assert.match(rendered.html, /<ol/, 'steps render as a list, not a paragraph')
+  assert.match(rendered.text, /1\. /, 'the plain-text half must carry the steps too')
+  assert.match(rendered.text, /5\. /)
+  // A text alternative that is merely a stub scores worse with spam filters.
+  assert.ok(rendered.text.length > 700, 'the plain-text alternative must be real')
+  assert.match(rendered.html, /auth\/callback\?token_hash=abc/, 'the sign-in link must survive escaping')
+  assert.match(rendered.html, /Unsubscribe/)
+})
+
+test('greets people by the name they actually have, not the first word they typed', async () => {
+  const { renderAdminParticipantEmail } = await import('../src/lib/admin/participant-email.ts')
+  const greet = (displayName: string | null, email = 'someone@example.com') =>
+    renderAdminParticipantEmail({ template: 'pilot_invite', displayName, email })
+
+  // Every case below is a real row from the pilot-2026-09 list.
+  const cases = [
+    ['The Fatima Abubakar', 'Fatima'],       // a title, not a name
+    ['ALBERT OBENG', 'Albert'],              // shouting at somebody you are thanking
+    ['NURUDEEN KANANZOE YAKUBU', 'Nurudeen'],
+    ['YAW ADDO', 'Yaw'],
+    ['KORBLAH AKWESHIE', 'Korblah'],
+    ['Raymond yaw afram quaye McCarthy', 'Raymond'],
+    ['Grace Naa Aku Addoquaye', 'Grace'],
+    ['Kobe', 'Kobe'],
+  ]
+  for (const [input, expected] of cases) {
+    const rendered = greet(input)
+    assert.match(rendered.html, new RegExp(`Hi ${expected},`), `"${input}" should greet as "${expected}"`)
+    assert.match(rendered.text, new RegExp(`Hi ${expected},`), `"${input}" plain text should match the HTML`)
+  }
+})
+
+test('a name that is already correct is never re-cased', async () => {
+  const { renderAdminParticipantEmail } = await import('../src/lib/admin/participant-email.ts')
+  // Tidying somebody's own spelling is a worse failure than the one being
+  // fixed, so only all-capitals words — which carry no intended casing — move.
+  for (const name of ['McCarthy Boateng', "O'Brien Mensah", 'deGraft Johnson']) {
+    const rendered = renderAdminParticipantEmail({
+      template: 'pilot_invite', displayName: name, email: 'x@example.com',
+    })
+    const expected = name.split(' ')[0]
+    assert.ok(
+      rendered.text.includes(`Hi ${expected},`) || rendered.text.includes(`Hi ${expected[0].toUpperCase()}${expected.slice(1)},`),
+      `"${name}" should keep its own spelling, got: ${rendered.text.slice(0, 40)}`,
+    )
+  }
+})
+
+test('a missing name falls back to something addressable, never blank', async () => {
+  const { renderAdminParticipantEmail } = await import('../src/lib/admin/participant-email.ts')
+  const cases: Array<[string | null, string]> = [
+    [null, 'hitupstevo@gmail.com'],
+    ['', 'ada.b@example.com'],
+    ['   ', 'x@y.com'],
+  ]
+  for (const [name, email] of cases) {
+    const rendered = renderAdminParticipantEmail({ template: 'pilot_invite', displayName: name, email })
+    assert.doesNotMatch(rendered.html, /Hi ,/, 'an empty greeting must never ship')
+    assert.match(rendered.html, /Hi [A-Z]/, 'the fallback should start with a capital')
   }
 })

@@ -2,6 +2,7 @@ import 'server-only'
 
 import { claimInvitationForUser, isMissingAdminInvitationTables } from '@/lib/admin/invitations'
 import { grantCredits } from '@/lib/billing/credit-repository'
+import { grantSponsoredEntitlement } from '@/lib/billing/sponsored-entitlement'
 import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { createWorkspaceAuthContext } from '@/lib/workspace'
 import { ensureWorkspaceRecord } from '@/lib/workspace-db'
@@ -21,6 +22,16 @@ import { errorDetails, logEvent } from '@/lib/observability'
  * swallowed — an unclaimed invitation can be fixed by an operator, a blocked
  * sign-in cannot be fixed by the person it happened to.
  */
+/**
+ * The plan an invited participant is placed on.
+ *
+ * Everyday deliberately: its 120-credit allowance is the exact figure the pilot
+ * is testing ("is 120 credits credible at GH₵125?"), so granting the same
+ * number makes participants' utilisation directly comparable to the plan being
+ * priced. Any other number produces data that answers nothing.
+ */
+const PILOT_ENTITLEMENT_PLAN = 'everyday'
+
 export async function claimInvitationOnSignIn(input: {
   userId: string
   email: string | null
@@ -51,18 +62,53 @@ export async function claimInvitationOnSignIn(input: {
     })
     if (!claimed) return null
 
-    let creditsGranted = 0
+    const cohort = claimed.cohortKey || claimed.programKey
+
+    /**
+     * The plan comes first, and it is what carries the allowance.
+     *
+     * Granting credits alone leaves the person on Explorer, whose fair-use cap
+     * is ten chat messages a day. Past that, every further message costs one
+     * credit — so a participant's allowance drains on the cheapest thing in the
+     * product and never reaches the research, agent and media work the pilot
+     * exists to measure. The CLI path was fixed for this; the invitation path,
+     * which is the one participants actually arrive through, was not.
+     */
+    let entitlement: Awaited<ReturnType<typeof grantSponsoredEntitlement>> | null = null
+    try {
+      entitlement = await grantSponsoredEntitlement({
+        context,
+        cohort,
+        planSlug: PILOT_ENTITLEMENT_PLAN,
+      })
+    } catch (cause) {
+      // Never block a sign-in over this. An operator can grant the seat by
+      // hand; a person locked out cannot fix it themselves.
+      logEvent('error', 'admin.invitation_entitlement_failed', {
+        invitationId: claimed.invitationId,
+        ...errorDetails(cause),
+      })
+    }
+
+    let creditsGranted = entitlement?.granted ? entitlement.credits : 0
+
+    /**
+     * `startingCredits` is a top-up *on top of* the plan allowance, not a
+     * replacement for it. For the pilot it is set to zero: the Everyday
+     * allowance is exactly the number whose utilisation the pilot is measuring,
+     * and adding to it would make that measurement unreadable.
+     */
     if (claimed.startingCredits > 0) {
       const result = await grantCredits({
         context,
         credits: claimed.startingCredits,
         sourceType: 'sponsored_seat',
-        sourceId: claimed.cohortKey || claimed.programKey,
+        sourceId: cohort,
         // Scoped to the invitation, so a second sign-in cannot double-grant
         // even if the claim itself were somehow replayed.
         idempotencyKey: `invitation:${claimed.invitationId}`,
       })
-      if (result.granted) creditsGranted = claimed.startingCredits
+      if (result.granted) creditsGranted += claimed.startingCredits
     }
 
     logEvent('info', 'admin.invitation_claimed', {
@@ -70,6 +116,8 @@ export async function claimInvitationOnSignIn(input: {
       programKey: claimed.programKey,
       cohortKey: claimed.cohortKey,
       creditsGranted,
+      plan: entitlement?.granted ? entitlement.plan : 'explorer',
+      entitlementRefused: entitlement && !entitlement.granted ? entitlement.reason : null,
     })
     return { ...claimed, creditsGranted }
   } catch (error) {

@@ -15,12 +15,47 @@ export const ADMIN_PARTICIPANT_EMAIL_TEMPLATES = [
 
 export type AdminParticipantEmailTemplate = (typeof ADMIN_PARTICIPANT_EMAIL_TEMPLATES)[number]['key']
 
-const COPY: Record<AdminParticipantEmailTemplate, { subject: string; heading: string; body: string; cta: string }> = {
+type ParticipantCopy = {
+  subject: string
+  heading: string
+  body: string
+  cta: string
+  /** A second paragraph, for the messages that need to set expectations. */
+  detail?: string
+  /** Numbered guidance. Rendered as a list, so it survives being skimmed. */
+  steps?: readonly string[]
+  /** The closing line under the button, when it needs to say more than "reply". */
+  closing?: string
+}
+
+const COPY: Record<AdminParticipantEmailTemplate, ParticipantCopy> = {
+  /**
+   * The invitation carries the whole onboarding, because it is the only message
+   * we can be confident is read. It has one job — get somebody from an inbox to
+   * a finished piece of work — so it thanks them first, says plainly what they
+   * are getting, and then tells them exactly what to do rather than leaving
+   * "explore the product" as the instruction.
+   */
   pilot_invite: {
-    subject: 'You’re invited to the AI360 pilot',
-    heading: 'Your AI360 pilot access is ready',
-    body: 'We’d love you to explore AI360, create something useful, and tell us what works or gets in your way.',
-    cta: 'Start the pilot',
+    subject: 'Your AI360 pilot access is ready',
+    heading: 'Thank you for spending a Saturday with us',
+    body:
+      'You came to an AI360 introduction session in person, and that meant a great deal to us. '
+      + 'We have been building since then, and AI360 is now ready for you to use properly — so you are among the first people invited to the private pilot.',
+    detail:
+      'For the next four weeks you have full access, including 120 credits — the same monthly allowance as our GH₵125 Everyday plan — at no cost to you. '
+      + 'There is nothing to pay and no card to enter.',
+    steps: [
+      'Tap the button below. It signs you in and your credits will already be waiting — there is no password to create.',
+      'Bring one real task, not a test question. A proposal you owe someone, a market you need to understand, posts for your business, a report you have been putting off.',
+      'Write it the way you would say it out loud. There is no special way to phrase things. If the first answer is not right, tell it what is wrong in your own words.',
+      'Download what you make. Word, PDF, Excel and PowerPoint exports are free and do not use credits.',
+      'Tell us when something breaks or annoys you. That is the single most useful thing you can do for us, and honest beats kind every time.',
+    ],
+    closing:
+      'Everyday chat is free and unlimited within your daily allowance. Research, documents, images and video use credits, and AI360 always shows the cost before it starts anything. '
+      + 'We will check in once a week and ask for twenty minutes at the end.',
+    cta: 'Open AI360 and start',
   },
   onboarding_reminder: {
     subject: 'A quick nudge to start with AI360',
@@ -60,8 +95,56 @@ const COPY: Record<AdminParticipantEmailTemplate, { subject: string; heading: st
   },
 }
 
+/**
+ * Words that are not the person's name, however they typed the field.
+ *
+ * A registration form asking for "Name" gets titles, and taking the first word
+ * blindly greeted one real participant as "Hi The," — the fastest possible way
+ * to tell somebody a message was generated rather than written.
+ */
+const NON_NAME_WORDS = new Set([
+  'the', 'mr', 'mrs', 'ms', 'miss', 'mister', 'madam', 'madame',
+  'dr', 'doctor', 'prof', 'professor', 'rev', 'reverend', 'pastor',
+  'hon', 'honourable', 'honorable', 'sir', 'eng', 'engr', 'alhaji', 'hajia',
+])
+
+/**
+ * The name to greet somebody by, from a field they filled in themselves.
+ *
+ * Three things are corrected, all of them observed in the real pilot list:
+ * a leading title, a name typed in capitals ("Hi NURUDEEN," reads as
+ * shouting at somebody you are thanking), and a fallback to the email handle
+ * when no name was captured at all.
+ *
+ * Names are deliberately *not* fully re-cased. "McCarthy" and "Naa Aku" are
+ * correct as written, and a tidy-up that mangles somebody's own spelling is a
+ * worse failure than the one being fixed — so only an all-capitals word, which
+ * carries no intended casing, is touched.
+ */
 function firstName(name: string | null, email: string) {
-  return escapeHtml((name || email.split('@')[0] || 'there').trim().split(/\s+/)[0].slice(0, 50))
+  const words = (name || '').trim().split(/\s+/).filter(Boolean)
+  const meaningful = words.find((word) => !NON_NAME_WORDS.has(word.replace(/[.,]/g, '').toLowerCase()))
+
+  let chosen = meaningful || words[0] || email.split('@')[0] || 'there'
+  chosen = chosen.replace(/[.,]+$/, '').slice(0, 50)
+
+  // Shouting only. A word already carrying mixed case is left exactly alone.
+  if (chosen.length > 1 && chosen === chosen.toUpperCase() && /[A-Za-z]/.test(chosen)) {
+    chosen = chosen[0] + chosen.slice(1).toLowerCase()
+  }
+  // An email handle arrives lowercase; a greeting should not.
+  if (chosen[0] && chosen[0] === chosen[0].toLowerCase()) {
+    chosen = chosen[0].toUpperCase() + chosen.slice(1)
+  }
+
+  return escapeHtml(chosen || 'there')
+}
+
+/** The same name, unescaped, for the plain-text half of the message. */
+function plainFirstName(name: string | null, email: string) {
+  return firstName(name, email)
+    .replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"').replaceAll('&#39;', "'")
 }
 
 export function renderAdminParticipantEmail(input: {
@@ -87,7 +170,49 @@ export function renderAdminParticipantEmail(input: {
   const noteHtml = safeNote ? `<div style="margin:20px 0;padding:14px 16px;border-left:3px solid #d8643b;background:#f6f1e8;color:#30322f;line-height:1.55;">${safeNote.replaceAll('\n', '<br>')}</div>` : ''
   const optOut = input.unsubscribeUrl?.trim() || ''
   const optOutHtml = optOut ? `<p style="margin:10px 0 0;color:#777b75;font-size:12px;line-height:1.5;">Would you rather not hear about the pilot? <a href="${escapeHtml(optOut)}" style="color:#777b75;">Unsubscribe</a>.</p>` : ''
-  const html = `<!doctype html><html lang="en"><body style="margin:0;background:#f1efe8;padding:28px 12px;font-family:Arial,sans-serif;color:#171918;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:auto;background:#fff;border:1px solid #dedbd1;border-radius:16px;"><tr><td style="padding:28px 32px 8px;font-size:18px;font-weight:800;">AI360</td></tr><tr><td style="padding:12px 32px 32px;"><p style="margin:0 0 14px;">Hi ${name},</p><h1 style="margin:0 0 14px;font-size:25px;line-height:1.2;">${copy.heading}</h1><p style="margin:0;color:#515550;line-height:1.65;">${copy.body}</p>${noteHtml}<a href="${escapeHtml(target)}" style="display:inline-block;margin-top:22px;padding:12px 18px;border-radius:9px;background:#171918;color:#fff;text-decoration:none;font-weight:700;">${copy.cta}</a><p style="margin:26px 0 0;color:#777b75;font-size:12px;line-height:1.5;">Questions? Reply to this email${replyTo ? ` and our team at ${escapeHtml(replyTo)} will help` : ''}.</p>${optOutHtml}</td></tr></table></body></html>`
-  const text = `Hi ${input.displayName?.trim().split(/\s+/)[0] || input.email.split('@')[0]},\n\n${copy.heading}\n\n${copy.body}${note ? `\n\n${note}` : ''}\n\n${copy.cta}: ${target}\n\nQuestions? Reply to this email.${optOut ? `\n\nUnsubscribe: ${optOut}` : ''}`
+
+  // Copy is written by us, never by a recipient, but it still goes through the
+  // same escape as the operator's note — one template edit containing an
+  // apostrophe-heavy sentence should never be able to break the markup.
+  const detailHtml = copy.detail
+    ? `<p style="margin:14px 0 0;color:#515550;line-height:1.65;">${escapeHtml(copy.detail)}</p>`
+    : ''
+
+  // A numbered list rather than a paragraph: this is the part somebody scans
+  // rather than reads, and prose hides the fact that there are five steps.
+  const stepsHtml = copy.steps?.length
+    ? `<ol style="margin:20px 0 0;padding-left:20px;color:#30322f;line-height:1.6;">${copy.steps
+        .map((step) => `<li style="margin:0 0 10px;">${escapeHtml(step)}</li>`)
+        .join('')}</ol>`
+    : ''
+
+  const closingHtml = copy.closing
+    ? `<p style="margin:22px 0 0;color:#515550;line-height:1.6;font-size:14px;">${escapeHtml(copy.closing)}</p>`
+    : ''
+
+  const html = `<!doctype html><html lang="en"><body style="margin:0;background:#f1efe8;padding:28px 12px;font-family:Arial,sans-serif;color:#171918;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:auto;background:#fff;border:1px solid #dedbd1;border-radius:16px;"><tr><td style="padding:28px 32px 8px;font-size:18px;font-weight:800;">AI360</td></tr><tr><td style="padding:12px 32px 32px;"><p style="margin:0 0 14px;">Hi ${name},</p><h1 style="margin:0 0 14px;font-size:25px;line-height:1.2;">${escapeHtml(copy.heading)}</h1><p style="margin:0;color:#515550;line-height:1.65;">${escapeHtml(copy.body)}</p>${detailHtml}${noteHtml}${stepsHtml}<a href="${escapeHtml(target)}" style="display:inline-block;margin-top:24px;padding:13px 20px;border-radius:9px;background:#171918;color:#fff;text-decoration:none;font-weight:700;">${escapeHtml(copy.cta)}</a>${closingHtml}<p style="margin:22px 0 0;color:#777b75;font-size:12px;line-height:1.5;">Questions, or something not working? Reply straight to this email${replyTo ? ` and our team at ${escapeHtml(replyTo)} will help` : ''}.</p>${optOutHtml}</td></tr></table></body></html>`
+
+  // The plain-text half is not a courtesy. Some clients render it instead of
+  // the HTML, and a message with no readable text alternative scores worse with
+  // spam filters — which for a first bulk send to sixty-three inboxes matters.
+  const textSteps = copy.steps?.length
+    ? `\n\n${copy.steps.map((step, index) => `${index + 1}. ${step}`).join('\n\n')}`
+    : ''
+  const text = [
+    // The same corrected name as the HTML half. This previously took the raw
+    // first word, so the two halves of one message could greet somebody
+    // differently — "Hi Fatima," in HTML and "Hi The," in plain text.
+    `Hi ${plainFirstName(input.displayName, input.email)},`,
+    copy.heading,
+    copy.body,
+    copy.detail || '',
+    note,
+  ].filter(Boolean).join('\n\n')
+    + textSteps
+    + `\n\n${copy.cta}: ${target}`
+    + (copy.closing ? `\n\n${copy.closing}` : '')
+    + '\n\nQuestions, or something not working? Reply straight to this email.'
+    + (optOut ? `\n\nUnsubscribe: ${optOut}` : '')
+
   return { subject: copy.subject, html, text }
 }

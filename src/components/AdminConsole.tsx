@@ -230,7 +230,10 @@ export function AdminConsole() {
   const [inviteContent, setInviteContent] = useState('')
   const [inviteCohort, setInviteCohort] = useState('pilot-main')
   const [inviteStage, setInviteStage] = useState<'invited' | 'enrolled'>('enrolled')
-  const [inviteCredits, setInviteCredits] = useState('25')
+  // Zero, because an invited participant is now placed on the Everyday plan and
+  // its allowance is the grant. Anything here is added on top of that, so a
+  // number typed out of habit would quietly double what the pilot hands out.
+  const [inviteCredits, setInviteCredits] = useState('0')
   const [inviteReason, setInviteReason] = useState('')
   const [inviteWorking, setInviteWorking] = useState(false)
   const [importPreview, setImportPreview] = useState<AdminImportPreview | null>(null)
@@ -1214,7 +1217,7 @@ export function AdminConsole() {
             <label><span>Starting stage</span><select value={inviteStage} onChange={(event) => setInviteStage(event.target.value as 'invited' | 'enrolled')}><option value="enrolled">Enrolled</option><option value="invited">Invited</option></select></label>
             <label><span>Cohort</span><input maxLength={120} value={inviteCohort} onChange={(event) => setInviteCohort(event.target.value)} placeholder="pilot-main" /></label>
           </div>
-          {dashboard?.capabilities.manageCredits ? <label><span>Starting credits per participant <em>Granted when they sign up</em></span><input type="number" min="0" max="10000" step="1" value={inviteCredits} onChange={(event) => setInviteCredits(event.target.value)} /></label> : null}
+          {dashboard?.capabilities.manageCredits ? <label><span>Extra credits per participant <em>On top of the Everyday plan allowance they already receive. Leave at 0 for the pilot.</em></span><input type="number" min="0" max="10000" step="1" value={inviteCredits} onChange={(event) => setInviteCredits(event.target.value)} /></label> : null}
           <label><span>Reason <em>Required for audit</em></span><textarea rows={2} maxLength={240} value={inviteReason} onChange={(event) => setInviteReason(event.target.value)} placeholder="Example: August creator pilot intake" /></label>
           <div className={styles.emailSafety}><b>Before anything is written</b><p>AI360 will show you every address it accepted, every one it set aside, and why — invalid addresses, repeats, people already invited, and people who already have an account.</p></div>
           <footer><button type="button" onClick={closeInvite}>Cancel</button><button type="button" disabled={inviteWorking || !inviteContent.trim() || !inviteReason.trim()} onClick={() => void previewImport()}>{inviteWorking ? 'Reading…' : 'Review the list'}</button></footer>
