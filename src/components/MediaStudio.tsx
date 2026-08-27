@@ -40,50 +40,107 @@ type MediaItem = {
  * Examples are inspiration, never work. They sit behind the person's own
  * output and are labelled, so nothing here can be mistaken for something the
  * studio produced for them.
+ *
+ * Eight of them, four moving and four still, each one a job somebody in the
+ * pilot cohort actually has — a shop's product photo, a revision diagram, a
+ * newsletter cover, a proposal cover — rather than an abstract showreel. The
+ * `styleName` names the person, not the technique, because the question a new
+ * arrival is asking is "is this for me", not "what renderer is this".
+ *
+ * Every one was rendered by this product's own models via
+ * `scripts/generate-studio-examples.mjs`, which holds the prompts. Nothing here
+ * is stock, and nothing shows a recognisable person.
  */
 const EXAMPLE_GALLERY: MediaItem[] = [
   {
-    id: "example-motion",
+    id: "example-jollof",
     kind: "video",
     prompt:
-      "Warm light ribbons drifting across a dark backdrop — a brand motion loop made from one sentence.",
-    aspectRatio: "16:9",
-    styleName: "Motion loop",
-    url: "/studio-hero-loop.mp4",
-    poster: "/studio-creative.png",
+      "Close-up of jollof rice steaming in a wide pan, hands plating it — a social post for a catering business.",
+    aspectRatio: "9:16",
+    styleName: "For a food business",
+    url: "/examples/jollof-kitchen.mp4",
+    poster: "/examples/jollof-kitchen-poster.jpg",
     createdAt: "Example",
     example: true,
   },
   {
-    id: "example-portrait",
+    id: "example-classroom",
     kind: "image",
     prompt:
-      "Cinematic portrait of a founder at a desk in a high-rise Accra office at golden hour.",
+      "A classroom seen from the back, sunlight through louvred windows — a cover for a school newsletter.",
     aspectRatio: "16:9",
-    styleName: "Cinematic photoreal",
-    url: "/studio-hero.png",
+    styleName: "For a teacher",
+    url: "/examples/classroom.jpg",
     createdAt: "Example",
     example: true,
   },
   {
-    id: "example-product",
+    id: "example-fabric",
+    kind: "video",
+    prompt:
+      "A bolt of wax print fabric unrolling in slow motion as sunlight moves across the pattern.",
+    aspectRatio: "9:16",
+    styleName: "For a shop",
+    url: "/examples/fabric-shop.mp4",
+    poster: "/examples/fabric-shop-poster.jpg",
+    createdAt: "Example",
+    example: true,
+  },
+  {
+    id: "example-shea",
     kind: "image",
     prompt:
-      "Hibiscus and ginger tea packaging on cream marble, soft studio sunlight, gold foil detail.",
+      "Jars of shea butter on woven raffia in warm morning light — a product photo for a small skincare business.",
     aspectRatio: "1:1",
-    styleName: "Product studio",
-    url: "/studio-product.png",
+    styleName: "For a small business",
+    url: "/examples/shea-product.png",
     createdAt: "Example",
     example: true,
   },
   {
-    id: "example-texture",
+    id: "example-coast",
+    kind: "video",
+    prompt:
+      "A slow drift over a coastal town at golden hour — an establishing shot for a community project film.",
+    aspectRatio: "16:9",
+    styleName: "For a community project",
+    url: "/examples/coastal-town.mp4",
+    poster: "/examples/coastal-town-poster.jpg",
+    createdAt: "Example",
+    example: true,
+  },
+  {
+    id: "example-watercycle",
     kind: "image",
     prompt:
-      "Flowing golden light ribbons over matte charcoal — a premium brand texture.",
+      "The water cycle drawn over a savanna landscape — a diagram for a science revision sheet.",
     aspectRatio: "16:9",
-    styleName: "3D render",
-    url: "/studio-creative.png",
+    styleName: "For a student",
+    url: "/examples/water-cycle.jpg",
+    createdAt: "Example",
+    example: true,
+  },
+  {
+    id: "example-desk",
+    kind: "video",
+    prompt:
+      "Morning light moving across a study desk — an opening shot for a portfolio or project video.",
+    aspectRatio: "16:9",
+    styleName: "For a portfolio",
+    url: "/examples/study-desk.mp4",
+    poster: "/examples/study-desk-poster.jpg",
+    createdAt: "Example",
+    example: true,
+  },
+  {
+    id: "example-accra",
+    kind: "image",
+    prompt:
+      "The Accra skyline at dusk from a glass office — a cover image for a business proposal.",
+    aspectRatio: "16:9",
+    styleName: "For a proposal",
+    url: "/examples/accra-proposal.jpg",
     createdAt: "Example",
     example: true,
   },
@@ -362,12 +419,6 @@ type RecentMediaJob = {
   intent?: { purpose?: string; aspectRatio?: string };
 };
 
-/** What each kind of work costs, read from the server so nothing is hardcoded. */
-type CreditFacts = {
-  available: number | null;
-  image: { from: number; to: number } | null;
-  video: { from: number; to: number } | null;
-};
 
 /**
  * The video render is durable on the server, so the browser keeps a copy of
@@ -496,10 +547,7 @@ export function MediaStudio() {
   const [toastNotice, setToastNotice] = useState("");
   const [toastError, setToastError] = useState(false);
   const [videoQuote, setVideoQuote] = useState<VideoQuote | null>(null);
-  /** A cheap Draft quote fetched alongside the picked tier's quote, so the
-   *  quote panel can offer it — never fetched when Draft is already picked. */
-  const [draftAlternative, setDraftAlternative] = useState<VideoQuote | null>(null);
-  /** Shown once a Draft preview finishes: "like this? get it in real quality". */
+  /** Shown once a Quick render finishes: "like this? get it in real quality". */
   const [sharpenOffer, setSharpenOffer] = useState<{
     tier: string;
     prompt: string;
@@ -516,11 +564,6 @@ export function MediaStudio() {
    */
   const [videoJob, setVideoJob] = useState<VideoJob | null>(readStoredVideoJob);
   const [creditPanel, setCreditPanel] = useState<CreditPanelState | null>(null);
-  const [credits, setCredits] = useState<CreditFacts>({
-    available: null,
-    image: null,
-    video: null,
-  });
   const [tierPrices, setTierPrices] = useState<TierPrice[]>([]);
   // Data-saver: people on metered or slow connections do not need looping
   // video previews. This is a real constraint for this audience, not a nicety.
@@ -613,24 +656,20 @@ export function MediaStudio() {
   };
 
   /**
-   * The balance and the real cost of each kind of work, straight from the
-   * server — so the studio never has to hardcode a price that could drift from
-   * what the credit engine actually charges.
+   * Waits for the server to agree the balance has settled, then tells the rest
+   * of the app to re-read it.
+   *
+   * The response is deliberately discarded. The studio itself no longer prints
+   * a balance or a price range anywhere — the only number it shows is the exact
+   * per-option price from the `tiers` call — so this exists purely for its
+   * ordering: read after a render, so the header pill refetches a figure that
+   * has already been debited rather than the stale one.
    */
   const loadCredits = () =>
     fetch("/api/credits", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (!data) return;
-        setCredits({
-          available: typeof data.available === "number" ? data.available : null,
-          image: data.costs?.image ?? null,
-          video: data.costs?.video ?? null,
-        });
-        // The studio knows a render just settled before the header pill does.
-        notifyCreditsChanged();
-      })
-      // The studio works perfectly well without a balance on screen.
+      .then(() => notifyCreditsChanged())
+      // The studio works perfectly well without this; the pill catches up on
+      // its own schedule.
       .catch(() => undefined);
 
   useEffect(() => {
@@ -816,23 +855,38 @@ export function MediaStudio() {
     };
   };
 
-  const requestVideoQuote = async (override?: {
+  /**
+   * Price the shot and render it, in one gesture.
+   *
+   * This used to stop and ask. The Quality chips already carry the exact live
+   * price for the options in front of the person, and the Render button repeats
+   * it, so a confirm panel quoting that same number a third time was collecting
+   * a decision that had already been made — and it was the step people bounced
+   * off. The quote call itself stays, because the server binds `acceptedCostUsd`
+   * and refuses to render without one; it just flows straight into the submit.
+   *
+   * The panel survives for the single case that genuinely needs a human: the
+   * quote coming back at a price the button did not advertise. Nobody gets
+   * charged a number they were not shown.
+   */
+  const startVideoRender = async (override?: {
     prompt?: string;
     tier?: string;
     aspect?: string;
     motion?: string;
     seconds?: number;
+    expectedCredits?: number | null;
   }) => {
     const effectivePrompt = (override?.prompt ?? prompt).trim();
     const effectiveTier = override?.tier ?? videoTier;
     const effectiveAspect = override?.aspect ?? videoAspect;
     const effectiveMotion = override?.motion ?? cameraMotion;
     const effectiveSeconds = override?.seconds ?? videoSeconds;
+    const expected = override?.expectedCredits ?? null;
     if (!effectivePrompt || generating || videoJob) return;
     setGenerating(true);
-    setToastNotice("Checking today's price…");
+    setToastNotice("Starting your render…");
     setToastError(false);
-    setDraftAlternative(null);
     try {
       const main = await fetchVideoQuote(
         videoIntent(effectivePrompt, effectiveAspect, effectiveMotion, effectiveTier, effectiveSeconds),
@@ -854,24 +908,34 @@ export function MediaStudio() {
             "Video pricing is unavailable right now.",
         );
       }
-      setVideoQuote(main.quote);
-      setToastNotice("");
 
-      // Offered, never forced: a cheap Draft sits alongside whatever tier was
-      // actually picked, so the direction can be checked before paying for
-      // the polished version. Its own failure stays silent — the quote that
-      // matters already succeeded, and there is nothing useful to tell the
-      // person about a courtesy price that could not be fetched.
-      if (effectiveTier !== "draft") {
-        try {
-          const draft = await fetchVideoQuote(
-            videoIntent(effectivePrompt, effectiveAspect, effectiveMotion, "draft", effectiveSeconds),
-          );
-          if (draft.ok) setDraftAlternative(draft.quote);
-        } catch {
-          // A courtesy price. See above.
-        }
+      /**
+       * Straight through only when the quote matches the number the button
+       * actually advertised. Two ways it can fail to: the catalogue price moved
+       * while the shot was being set up, or the tier prices had not loaded yet
+       * and the button went out unpriced. Either way nobody has been shown this
+       * figure, so it goes to the panel to be accepted rather than charged.
+       */
+      if (expected === null || main.quote.credits !== expected) {
+        setVideoQuote(main.quote);
+        setToastNotice("");
+        return;
       }
+
+      setGenerating(false);
+      await confirmVideoRender(main.quote, {
+        continuing: true,
+        // Rendering at the cheapest tier is the "try it first" move, so the
+        // offer to re-run it sharper is attached here rather than sold up
+        // front. This is what used to be the Draft button inside the confirm
+        // panel — the same loop, without the extra decision before anything
+        // has been seen.
+        previewForTier:
+          effectiveTier === "draft"
+            ? { tier: "standard", motion: effectiveMotion, seconds: effectiveSeconds }
+            : undefined,
+      });
+      return;
     } catch (cause) {
       showToast(
         cause instanceof Error
@@ -886,19 +950,24 @@ export function MediaStudio() {
 
   const confirmVideoRender = async (
     quote: VideoQuote,
-    previewForTier?: { tier: string; motion: string; seconds: number },
+    options?: {
+      previewForTier?: { tier: string; motion: string; seconds: number };
+      /**
+       * Set when `startVideoRender` hands straight over. Its own
+       * `setGenerating(false)` has not been applied to this closure yet, so the
+       * busy guard below would otherwise read a stale `true` and drop the
+       * render on the floor.
+       */
+      continuing?: boolean;
+    },
   ) => {
-    if (generating) return;
-    // Confirming one option clears both — the choice has been made.
+    const previewForTier = options?.previewForTier;
+    if (generating && !options?.continuing) return;
+    // The choice has been made; nothing pending should still be on screen.
     setVideoQuote(null);
-    setDraftAlternative(null);
     setSharpenOffer(null);
     setGenerating(true);
-    setToastNotice(
-      previewForTier
-        ? "Starting your draft…"
-        : "Starting your render…",
-    );
+    setToastNotice("Starting your render…");
     setToastError(false);
     try {
       const response = await fetch("/api/studio/video", {
@@ -918,10 +987,9 @@ export function MediaStudio() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.token) {
         if (response.status === 402) {
-          // Keep the quote so the person can confirm again once topped up,
-          // in whichever slot it came from.
-          if (previewForTier) setDraftAlternative(quote);
-          else setVideoQuote(quote);
+          // Keep the quote on screen so the render can be confirmed again the
+          // moment the balance is topped up, without re-pricing it.
+          setVideoQuote(quote);
           await openCreditPanel(
             typeof data.required === "number" ? data.required : quote.credits,
             typeof data.available === "number" ? data.available : 0,
@@ -966,9 +1034,16 @@ export function MediaStudio() {
     }
   };
 
-  /** Re-quote the exact shot a Draft preview just proved out, at the tier it
-   *  was standing in for. Syncs the composer to match what is being priced,
-   *  rather than trusting the person has not touched anything since. */
+  /**
+   * Re-run the exact shot a Quick render just proved out, one tier up. Syncs
+   * the composer to match what is being priced, rather than trusting the person
+   * has not touched anything since.
+   */
+  const sharpenCredits = (tier: string) => {
+    const price = tierPrices.find((entry) => entry.tier === tier);
+    return price?.available && typeof price.credits === "number" ? price.credits : null;
+  };
+
   const confirmSharpen = () => {
     if (!sharpenOffer || generating) return;
     const { tier, prompt: offerPrompt, aspectRatio, motion, seconds } = sharpenOffer;
@@ -978,7 +1053,17 @@ export function MediaStudio() {
     setCameraMotion(motion);
     setVideoSeconds(seconds);
     setSharpenOffer(null);
-    void requestVideoQuote({ prompt: offerPrompt, tier, aspect: aspectRatio, motion, seconds });
+    // The sharpen button carries its own price, so that is the number the
+    // render is held to — not the composer's tier, which has only just been
+    // changed and whose state update has not landed in this closure yet.
+    void startVideoRender({
+      prompt: offerPrompt,
+      tier,
+      aspect: aspectRatio,
+      motion,
+      seconds,
+      expectedCredits: sharpenCredits(tier),
+    });
   };
 
   const pollVideo = async (job: VideoJob) => {
@@ -1217,7 +1302,21 @@ export function MediaStudio() {
   const formats = isVideo ? VIDEO_FORMATS : IMAGE_FORMATS;
   const activeAspect = isVideo ? videoAspect : imageAspect;
   const setActiveAspect = isVideo ? setVideoAspect : setImageAspect;
-  const cost = isVideo ? credits.video : credits.image;
+  /**
+   * The exact price of the options currently selected, straight from the
+   * catalogue. This is the number printed on the Render button and the one the
+   * quote is checked against before anything is charged — so what the button
+   * says and what the render costs are the same fact, not two guesses at it.
+   *
+   * Null while the tier prices are still loading, or when the selection cannot
+   * be bought at all; the button falls back to an unpriced label and the drift
+   * check is skipped rather than compared against nothing.
+   */
+  const selectedTierPrice = tierPrices.find((entry) => entry.tier === videoTier);
+  const shownVideoCredits =
+    selectedTierPrice?.available && typeof selectedTierPrice.credits === "number"
+      ? selectedTierPrice.credits
+      : null;
   const mine = gallery.filter((item) => !item.example);
   const visible = gallery.filter(
     (item) => galleryFilter === "all" || item.kind === galleryFilter,
@@ -1368,7 +1467,9 @@ export function MediaStudio() {
     if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
     event.preventDefault();
     if (!canGenerate) return;
-    void (isVideo ? requestVideoQuote() : handleGenerateImage());
+    void (isVideo
+      ? startVideoRender({ expectedCredits: shownVideoCredits })
+      : handleGenerateImage());
   };
 
   /** Complete the tab pattern for people navigating without a pointer. */
@@ -1829,27 +1930,27 @@ export function MediaStudio() {
             </div>
           ) : null}
 
+          {/* Not a routine step any more. A render goes straight through on one
+              press whenever the quote matches the price on the button. This
+              appears only when it does not — the catalogue moved, or the prices
+              had not loaded and the button went out unpriced — or when a render
+              stopped for want of credits and can be resumed once topped up. */}
           {videoQuote ? (
             <div className="ms-quote" role="status">
               <div>
                 <b>
-                  {videoQuote.credits} credits for{" "}
-                  {VIDEO_TIERS.find((tier) => tier.value === videoTier)?.label || "this"}{" "}
-                  quality
+                  This one costs {videoQuote.credits} credits
                 </b>
                 <small>
-                  You are only charged if it works. A failed render returns your
-                  credits.
+                  You are only charged if it works — a failed render returns
+                  your credits.
                 </small>
               </div>
               <div className="ms-quote-actions">
                 <button
                   type="button"
                   className="ms-ghost-btn"
-                  onClick={() => {
-                    setVideoQuote(null);
-                    setDraftAlternative(null);
-                  }}
+                  onClick={() => setVideoQuote(null)}
                   disabled={generating}
                 >
                   Cancel
@@ -1863,23 +1964,6 @@ export function MediaStudio() {
                   Render it
                 </button>
               </div>
-              {/* Offered, never forced: a cheap way to check the direction
-                  before paying for the tier actually picked. */}
-              {draftAlternative ? (
-                <button
-                  type="button"
-                  className="ms-draft-offer"
-                  onClick={() => confirmVideoRender(draftAlternative, {
-                    tier: videoTier,
-                    motion: cameraMotion,
-                    seconds: videoSeconds,
-                  })}
-                  disabled={generating}
-                >
-                  Not sure yet? Try a quick draft first — {draftAlternative.credits}{" "}
-                  credits
-                </button>
-              ) : null}
             </div>
           ) : null}
 
@@ -1902,13 +1986,18 @@ export function MediaStudio() {
                 >
                   Dismiss
                 </button>
+                {/* Priced, because pressing it now renders straight away
+                    rather than opening a quote to disclose the cost in. */}
                 <button
                   type="button"
                   className="ms-confirm-btn"
                   onClick={confirmSharpen}
                   disabled={generating}
                 >
-                  Sharpen it
+                  {(() => {
+                    const price = sharpenCredits(sharpenOffer.tier);
+                    return price !== null ? `Sharpen it · ${price} credits` : "Sharpen it";
+                  })()}
                 </button>
               </div>
             </div>
@@ -2020,41 +2109,57 @@ export function MediaStudio() {
               </button>
             ) : null}
 
-            <p className="ms-cost-note">
-              {cost
-                ? `${cost.from}–${cost.to} credits${isVideo ? " · exact price shown first" : " per image"}`
-                : "Charged only when the work succeeds"}
-            </p>
+            {/* Deliberately not a price range. A span like "6–48 credits"
+                anchors people to its bottom number and then reads as a bait
+                when the thing they actually asked for lands near the top. The
+                only number worth showing is the real one for the options in
+                front of them: on video that is on the Render button, and on
+                image it arrives with the result. */}
+            <p className="ms-cost-note">Charged only when the work succeeds</p>
 
             <button
               type="button"
               className={`ms-generate${generating ? " is-busy" : ""}`}
-              onClick={() => void (isVideo ? requestVideoQuote() : handleGenerateImage())}
+              onClick={() =>
+                void (isVideo
+                  ? startVideoRender({ expectedCredits: shownVideoCredits })
+                  : handleGenerateImage())
+              }
               disabled={!canGenerate}
             >
               <StudioIcon name="spark" />
               {/* Both labels ship; CSS picks the one the width can hold, so a
-                  phone never gets "See price and render" squeezed into a chip. */}
+                  phone never gets the priced label squeezed into a chip.
+
+                  The price rides on the button because this press is now the
+                  whole confirmation — there is no second panel behind it in
+                  which to disclose a number. When the catalogue has not
+                  answered yet, the label goes back to being unpriced rather
+                  than inventing a figure. */}
               <span className="ms-generate-long">
                 {generating
                   ? isVideo
-                    ? "Checking price…"
+                    ? "Starting…"
                     : "Making it…"
                   : isVideo
                     ? videoJob
                       ? "Rendering…"
-                      : "See price and render"
+                      : shownVideoCredits !== null
+                        ? `Render · ${shownVideoCredits} credits`
+                        : "Render this video"
                     : "Make the image"}
               </span>
               <span className="ms-generate-short">
                 {generating
                   ? isVideo
-                    ? "Checking…"
+                    ? "Starting…"
                     : "Making…"
                   : isVideo
                     ? videoJob
                       ? "Rendering…"
-                      : "See price"
+                      : shownVideoCredits !== null
+                        ? `Render · ${shownVideoCredits}`
+                        : "Render"
                     : "Make image"}
               </span>
             </button>
