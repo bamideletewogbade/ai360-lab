@@ -291,9 +291,15 @@ test('the invitation email guides rather than gestures', async () => {
   })
 
   assert.match(rendered.html, /Ada/, 'it should greet them by name')
-  // The allowance is the headline fact; a participant should not have to ask.
-  assert.match(rendered.html, /120 credits/)
-  assert.match(rendered.text, /120 credits/)
+
+  // Internal decisions stay internal. The allowance, the plan price it maps to
+  // and any promise to top somebody up are programme choices, not facts a
+  // thank-you note should commit to — and naming them invites questions the
+  // message cannot answer without disclosing more still.
+  for (const leak of [/\d+ credits/, /GH₵/, /Everyday plan/i, /we will add more/i, /top(-| )?up/i]) {
+    assert.doesNotMatch(rendered.html, leak, `operational detail leaked: ${leak}`)
+    assert.doesNotMatch(rendered.text, leak, `operational detail leaked: ${leak}`)
+  }
   // Numbered guidance, present in both halves of the message.
   assert.match(rendered.html, /<ol/, 'steps render as a list, not a paragraph')
   assert.match(rendered.text, /1\. /, 'the plain-text half must carry the steps too')

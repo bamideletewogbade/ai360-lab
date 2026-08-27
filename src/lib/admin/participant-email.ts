@@ -30,31 +30,47 @@ type ParticipantCopy = {
 
 const COPY: Record<AdminParticipantEmailTemplate, ParticipantCopy> = {
   /**
-   * The invitation carries the whole onboarding, because it is the only message
-   * we can be confident is read. It has one job — get somebody from an inbox to
-   * a finished piece of work — so it thanks them first, says plainly what they
-   * are getting, and then tells them exactly what to do rather than leaving
-   * "explore the product" as the instruction.
+   * Warm, personal, and deliberately free of operating detail.
+   *
+   * Everything a participant needs is here; nothing they do not. Earlier drafts
+   * named the credit allowance and the plan price it maps to, and promised more
+   * credits on request — all of which are internal decisions, none of which
+   * belong in a thank-you note. Stating them commits the programme to promises
+   * it may not want to keep, and invites questions ("what happens when they run
+   * out?") that the message cannot answer without more disclosure still.
+   *
+   * The balance is visible in the product. The message's job is to get somebody
+   * from an inbox to a finished piece of work, and to make them want to say
+   * what they thought.
    */
   pilot_invite: {
-    subject: 'Your AI360 pilot access is ready',
-    heading: 'Thank you for spending a Saturday with us',
+    subject: 'Your seat in the first AI360 pilot',
+    heading: 'We would like you in the first group',
+    /**
+     * "Signed up for", not "came to" or "spent a Saturday with us".
+     *
+     * Attendance at the introduction sessions was never recorded against a
+     * sign-in sheet, so every one of these people is a registrant and some may
+     * never have made it on the day. Thanking somebody for a Saturday they did
+     * not spend is the worst kind of personalisation error: it proves nobody
+     * checked. This wording is warm and true for all of them.
+     */
     body:
-      'You came to an AI360 introduction session in person, and that meant a great deal to us. '
-      + 'We have been building since then, and AI360 is now ready for you to use properly — so you are among the first people invited to the private pilot.',
+      'You put your name down for one of our AI360 introduction sessions earlier this year, back when this was still mostly an idea. '
+      + 'It is not an idea any more — and the people who were interested first are the people we want using it first.',
     detail:
-      'You have full access, including 120 credits — the same monthly allowance as our GH₵125 Everyday plan — at no cost to you. '
-      + 'There is nothing to pay and no card to enter. The pilot itself runs for about two weeks, so the sooner you try something real, the more your experience shapes what we build.',
+      'AI360 is built here in Accra, for the way work actually gets done here, and it is being shaped by a small group rather than designed at a distance. '
+      + 'That group is who we are writing to today. Everything is open to you and there is nothing to pay — what we are asking for instead is your honest reaction.',
     steps: [
-      'Tap the button below. It signs you in and your credits will already be waiting — there is no password to create.',
+      'Tap the button below. It signs you in — there is no password to create.',
       'Bring one real task, not a test question. A proposal you owe someone, a market you need to understand, posts for your business, a report you have been putting off.',
-      'Write it the way you would say it out loud. There is no special way to phrase things. If the first answer is not right, tell it what is wrong in your own words.',
-      'Download what you make. Word, PDF, Excel and PowerPoint exports are free and do not use credits.',
-      'Tell us when something breaks or annoys you. That is the single most useful thing you can do for us, and honest beats kind every time.',
+      'Write it the way you would say it out loud. There is no special way to phrase things, and if the first answer is not right, tell it what is wrong in your own words.',
+      'Download what you make — Word, PDF, Excel or PowerPoint.',
+      'Tell us the moment something breaks or annoys you. That is the single most useful thing you can do for us, and honest beats kind every time.',
     ],
     closing:
-      'Everyday chat is free and unlimited within your daily allowance. Research, documents, images and video use credits, and AI360 always shows the cost before it starts anything. '
-      + 'We will check in midway, and ask for twenty minutes at the end. Your access stays open after the pilot closes.',
+      'You are not testing a finished product. You are helping decide what it becomes, and the things you tell us in these first days are the ones that actually change it. '
+      + 'We will check in shortly and ask for twenty minutes once you have had a proper go. Thank you for being one of the first.',
     cta: 'Open AI360 and start',
   },
   onboarding_reminder: {
