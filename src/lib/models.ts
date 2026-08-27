@@ -83,7 +83,19 @@ export const REASONING_BUDGET = { max_tokens: 256, exclude: true } as const
 
 export function routeFor(
   mode: ChatMode,
-  options: { workload?: ModelWorkload; hasVideo?: boolean; hasAttachments?: boolean } = {},
+  options: {
+    workload?: ModelWorkload
+    hasVideo?: boolean
+    hasAttachments?: boolean
+    /**
+     * Only honored for `mode: 'auto'` text chat. Escalates the automatic
+     * choice from the fast default to Claude, the same model `mode: 'claude'`
+     * already selects explicitly. Callers gate this on their own rollout
+     * flag (see AI360_MODEL_ESCALATION_MODE in the chat route) — this
+     * function does not know about rollout state, only what to do once told.
+     */
+    complexity?: 'simple' | 'demanding'
+  } = {},
 ): { model: string; models: string[] } {
   // Only reach for the multimodal model when there is actually something to
   // look at. It costs roughly a hundred times more per call than the fast text
@@ -91,13 +103,21 @@ export function routeFor(
   // for no gain on text-only tasks.
   const needsVision = Boolean(options.hasVideo || options.hasAttachments)
   const automatic = needsVision ? MULTIMODAL_MODEL : FAST_TEXT_MODEL
-  const selected = mode === 'auto' ? automatic : MODEL_OPTIONS[mode].model
+  const escalate = mode === 'auto'
+    && options.workload === 'chat'
+    && !needsVision
+    && options.complexity === 'demanding'
+  const selected = mode === 'auto'
+    ? (escalate ? MODEL_OPTIONS.claude.model : automatic)
+    : MODEL_OPTIONS[mode].model
   // The chosen model always leads its own fallback chain, and the cheaper text
   // model comes before the multimodal one unless vision is actually required.
   const models = mode === 'auto'
     ? needsVision
       ? [MULTIMODAL_MODEL, FAST_TEXT_MODEL, FALLBACK]
-      : [FAST_TEXT_MODEL, FALLBACK, MULTIMODAL_MODEL]
+      : escalate
+        ? [MODEL_OPTIONS.claude.model, FAST_TEXT_MODEL, FALLBACK]
+        : [FAST_TEXT_MODEL, FALLBACK, MULTIMODAL_MODEL]
     : [selected, automatic, FALLBACK]
   return { model: selected, models: [...new Set(models)] }
 }
