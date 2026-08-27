@@ -256,6 +256,13 @@ function experienceForRoute(route: IntentRoute): Experience {
 }
 
 async function routeExperience(prompt: string): Promise<Experience> {
+  const fallback = routeIntentDeterministically(prompt)
+  // /api/route-intent only ever disagrees with this same deterministic check
+  // when the prompt is ambiguous AND the model-classifier rollout is active
+  // (see route-intent/route.ts) — otherwise it returns this exact result.
+  // Skipping the round trip for the non-ambiguous majority removes it from
+  // every first message's critical path without changing the outcome.
+  if (!fallback.ambiguous) return experienceForRoute(fallback.route)
   try {
     const response = await fetch('/api/route-intent', {
       method: 'POST',
@@ -267,7 +274,7 @@ async function routeExperience(prompt: string): Promise<Experience> {
   } catch {
     // Local fallback keeps the composer useful during a routing outage.
   }
-  return experienceForPrompt(prompt)
+  return experienceForRoute(fallback.route)
 }
 
 function fileToDataUrl(file: Blob) {
