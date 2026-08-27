@@ -43,8 +43,8 @@ const COPY: Record<AdminParticipantEmailTemplate, ParticipantCopy> = {
       'You came to an AI360 introduction session in person, and that meant a great deal to us. '
       + 'We have been building since then, and AI360 is now ready for you to use properly — so you are among the first people invited to the private pilot.',
     detail:
-      'For the next four weeks you have full access, including 120 credits — the same monthly allowance as our GH₵125 Everyday plan — at no cost to you. '
-      + 'There is nothing to pay and no card to enter.',
+      'You have full access, including 120 credits — the same monthly allowance as our GH₵125 Everyday plan — at no cost to you. '
+      + 'There is nothing to pay and no card to enter. The pilot itself runs for about two weeks, so the sooner you try something real, the more your experience shapes what we build.',
     steps: [
       'Tap the button below. It signs you in and your credits will already be waiting — there is no password to create.',
       'Bring one real task, not a test question. A proposal you owe someone, a market you need to understand, posts for your business, a report you have been putting off.',
@@ -54,7 +54,7 @@ const COPY: Record<AdminParticipantEmailTemplate, ParticipantCopy> = {
     ],
     closing:
       'Everyday chat is free and unlimited within your daily allowance. Research, documents, images and video use credits, and AI360 always shows the cost before it starts anything. '
-      + 'We will check in once a week and ask for twenty minutes at the end.',
+      + 'We will check in midway, and ask for twenty minutes at the end. Your access stays open after the pilot closes.',
     cta: 'Open AI360 and start',
   },
   onboarding_reminder: {

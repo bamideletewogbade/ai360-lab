@@ -21,8 +21,13 @@ import { findBillingPlan, type BillingPlan } from '@/lib/billing/catalog'
 export const SPONSORED_PROVIDER = 'sponsored'
 
 /**
- * Four weeks of pilot plus a week of slack, so an entitlement cannot lapse
- * during the exit interviews that close the cohort out.
+ * Comfortably longer than any pilot window, so an entitlement cannot lapse
+ * while somebody is still being interviewed about it.
+ *
+ * Deliberately not trimmed to match the pilot's own length. Access expiring
+ * mid-conversation costs a relationship; access outlasting the study costs
+ * nothing, because the programme budget — not the calendar — is what caps
+ * spending.
  */
 export const DEFAULT_SPONSORED_DAYS = 35
 
