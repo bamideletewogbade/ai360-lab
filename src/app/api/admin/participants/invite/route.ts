@@ -152,9 +152,10 @@ export async function POST(request: Request) {
       // is an analytics tag only: claiming an invitation is done by verified
       // email address, so the id grants nothing to whoever holds it.
       const landing = `/app?${FUNNEL_INVITATION_PARAM}=${encodeURIComponent(invitation.id)}`
+      const callback = `${settings.appUrl}/auth/callback`
       const invite = await generateInviteLink({
         email: invitation.email,
-        redirectTo: `${settings.appUrl}/auth/callback?next=${encodeURIComponent(landing)}`,
+        redirectTo: `${callback}?next=${encodeURIComponent(landing)}`,
       })
       if (!invite) {
         // Supabase declines an address that already has an account. That is a
@@ -167,6 +168,31 @@ export async function POST(request: Request) {
         continue
       }
 
+      /**
+       * Point the button at our own callback carrying the hashed token, rather
+       * than at Supabase's `/verify` endpoint.
+       *
+       * `/verify` finishes by putting the session in the URL *fragment*. A
+       * server route cannot read a fragment, and the `@supabase/ssr` browser
+       * client is looking for a PKCE `code` that a server-minted link never
+       * has — so the recipient arrived at the app signed out, the callback set
+       * `auth_error=callback_failed`, and `claimInvitationOnSignIn` never ran.
+       * Their credits and membership waited for a sign-in that had, from the
+       * app's point of view, not happened.
+       *
+       * Verifying the token in our own callback produces a real server session,
+       * which is the only path on which the claim can fire. Supabase's link is
+       * kept as a fallback for the case where no hashed token comes back.
+       */
+      const actionUrl = invite.hashedToken
+        ? `${callback}?token_hash=${encodeURIComponent(invite.hashedToken)}&type=invite&next=${encodeURIComponent(landing)}`
+        : invite.link
+      if (!invite.hashedToken) {
+        // Still worth sending — Supabase's own link at least reaches the site —
+        // but it is worth knowing that this recipient took the weaker path.
+        log.info('admin.invitation_link_fallback', { invitationId: invitation.id })
+      }
+
       const token = createUnsubscribeToken({ kind: 'invitation', invitationId: invitation.id, programKey: invitation.programKey })
       const optOut = token ? unsubscribeUrl(token) : null
       const rendered = renderAdminParticipantEmail({
@@ -174,7 +200,7 @@ export async function POST(request: Request) {
         displayName: invitation.displayName,
         email: invitation.email,
         operatorNote: body.operatorNote,
-        actionUrl: invite.link,
+        actionUrl,
         unsubscribeUrl: optOut,
       })
 

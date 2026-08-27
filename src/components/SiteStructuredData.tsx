@@ -1,4 +1,5 @@
 import { BRAND } from '@/lib/brand'
+import { faqStructuredData, planOffers } from '@/lib/answers'
 
 export function SiteStructuredData() {
   const data = {
@@ -66,12 +67,11 @@ export function SiteStructuredData() {
         operatingSystem: 'Any',
         browserRequirements: 'Requires a modern web browser',
         isAccessibleForFree: true,
-        offers: {
-          '@type': 'Offer',
-          price: 0,
-          priceCurrency: 'GHS',
-          description: 'A free monthly allowance is available. Paid plans are listed on the pricing page.',
-        },
+        // Real prices, generated from the billing catalogue. This was a single
+        // `price: 0`, which to a machine reads as "the product is free" — so an
+        // answer engine asked what AI360 costs would have said so, confidently
+        // and wrongly.
+        offers: planOffers(),
         provider: [
           { '@id': `${BRAND.companyUrl}/#organization` },
           { '@id': 'https://accrainnovationcenter.com/#organization' },
@@ -81,6 +81,12 @@ export function SiteStructuredData() {
           audienceType: 'Students, professionals, entrepreneurs, teams and public servants',
           geographicArea: { '@type': 'AdministrativeArea', name: 'Ghana and Africa' },
         },
+        // Naming the exact currency and rails is deliberate: "does it take
+        // Mobile Money" is the question that decides whether somebody in Ghana
+        // tries the product at all, and it should be answerable without a
+        // single click.
+        paymentAccepted: 'Mobile Money, Visa, Mastercard',
+        currenciesAccepted: 'GHS',
         featureList: [
           'Current web research with cited sources',
           'Document and media analysis',
@@ -89,6 +95,9 @@ export function SiteStructuredData() {
           'Human approval before paid production or external action',
         ],
       },
+      // The shape answer engines read most directly. Every entry states its
+      // fact outright rather than pointing at the page that holds it.
+      faqStructuredData(),
     ],
   }
 

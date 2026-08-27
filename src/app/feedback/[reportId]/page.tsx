@@ -3,7 +3,7 @@ import { SiteFooter } from '@/components/SiteFooter'
 import { SiteNav } from '@/components/SiteNav'
 
 export const metadata = {
-  title: 'Quality report status | AI360',
+  title: 'Quality report status',
   robots: { index: false, follow: false },
 }
 

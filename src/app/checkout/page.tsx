@@ -2,7 +2,9 @@
 import { CheckoutExperience } from '@/components/CheckoutExperience'
 
 export const metadata: Metadata = {
-  title: 'Secure checkout | AI360',
+  // The layout's template appends "| AI360" to every child route, so naming it
+  // here rendered "Secure checkout | AI360 | AI360".
+  title: 'Secure checkout',
   description: 'Review an AI360 plan and continue to secure ExpressPay checkout.',
   robots: { index: false, follow: false },
 }

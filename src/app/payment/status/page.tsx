@@ -2,7 +2,7 @@
 import { PaymentStatus } from '@/components/PaymentStatus'
 
 export const metadata: Metadata = {
-  title: 'Payment status | AI360',
+  title: 'Payment status',
   robots: { index: false, follow: false },
 }
 

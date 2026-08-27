@@ -39,7 +39,10 @@ const IMPORT_REASONS: Record<string, string> = {
  */
 const INVITE_STATUS_LABELS: Record<string, string> = {
   pending: 'Not sent',
-  sent: 'Sent, no reply',
+  // Not "no reply". Nobody replies to an invitation: the link signs the person
+  // in and the claim grants their credits. The only thing `sent` says is that
+  // the email left and they have not opened their account yet.
+  sent: 'Invited, not signed up',
   accepted: 'Signed up',
   bounced: 'Email bounced',
   revoked: 'Cancelled',
@@ -175,6 +178,15 @@ export function AdminConsole() {
   const [engagement, setEngagement] = useState('all')
   /** The one thing the participation dropdown was genuinely for. */
   const [includeWithdrawn, setIncludeWithdrawn] = useState(false)
+  /**
+   * Which population is on screen. Invitations and people are disjoint sets —
+   * no account yet versus an account — with different actions, and stacking
+   * both tables put a filter bar between them that appeared to belong to the
+   * one above it while actually driving the one below. They are also sequential
+   * phases of a pilot rather than simultaneous concerns, so the operator sees
+   * one at a time.
+   */
+  const [peopleView, setPeopleView] = useState<'people' | 'invitations'>('people')
   const [feature, setFeature] = useState('all')
   const [errorSource, setErrorSource] = useState('all')
   const [severity, setSeverity] = useState('all')
@@ -350,6 +362,8 @@ export function AdminConsole() {
     try {
       const result = await importRequest('commit') as { created: number; unchanged: number }
       setInviteNotice(`${result.created} invitation${result.created === 1 ? '' : 's'} created${result.unchanged ? `, ${result.unchanged} already existed` : ''}. Select them below to send.`)
+      // The notice says "select them below", so show the list it means.
+      setPeopleView('invitations')
       setInviteOpen(false)
       setImportPreview(null)
       setInviteContent('')
@@ -812,7 +826,32 @@ export function AdminConsole() {
                     told the operator nothing either time. */}
                 <section className={styles.pageTitle}><div><span className={styles.eyebrow}>People</span><h1>Move the pilot forward.</h1><p>{filtersActive ? `Showing ${visibleUsers.length} of ${dashboard.users.length}.` : `${dashboard.users.length} ${dashboard.users.length === 1 ? 'person' : 'people'} in the pilot.`}</p></div><div className={styles.pageTitleActions}>{dashboard.capabilities.importParticipants ? <button className={styles.heroAction} onClick={() => { setImportPreview(null); setInviteOpen(true) }}>+ Invite by email list</button> : null}{dashboard.capabilities.managePrograms ? <button className={styles.heroAction} onClick={() => { setPilotAddIds(new Set()); setPilotAddOpen(true) }}>+ Add pilot users</button> : null}</div></section>
 
-                {invitations.length || inviteNotice ? (
+                {/* One population at a time. The two lists hold different people
+                    and take different actions, and the filter bar can only
+                    belong to one of them — which was unreadable when both were
+                    stacked with the filter wedged between. */}
+                <div className={styles.viewSwitch} role="tablist" aria-label="Which list to show">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={peopleView === 'people'}
+                    data-active={peopleView === 'people' || undefined}
+                    onClick={() => setPeopleView('people')}
+                  >
+                    People <span>{dashboard.users.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={peopleView === 'invitations'}
+                    data-active={peopleView === 'invitations' || undefined}
+                    onClick={() => setPeopleView('invitations')}
+                  >
+                    Invitations <span>{invitationCounts.open}</span>
+                  </button>
+                </div>
+
+                {peopleView === 'invitations' && (invitations.length || inviteNotice) ? (
                   <section className={styles.accountPicker} aria-label="Invitations">
                     <header>
                       <span>
@@ -881,10 +920,17 @@ export function AdminConsole() {
                         </label>
                       ))}
                     </div>
+                    {!visibleInvitations.length ? <p>Nothing in this state. Try another from the list above.</p> : null}
                     {visibleInvitations.length > 100 ? <p>Showing the first 100 invitations.</p> : null}
                     {!dashboard.capabilities.sendInvitations ? <p>Sending is unavailable until the email provider and the Supabase service role key are both configured.</p> : null}
                   </section>
                 ) : null}
+
+                {peopleView === 'invitations' && !invitations.length && !inviteNotice ? (
+                  <Empty title="Nobody invited yet" detail="Use “Invite by email list” above to bring participants in." />
+                ) : null}
+
+                {peopleView === 'people' ? <>
                 {/* These were the "Signal" dropdown as well, which offered the
                     same five values one extra click away. Buttons win: they
                     reset the other filters first, so a contradictory stack
@@ -940,6 +986,7 @@ export function AdminConsole() {
                     </tr>)}</tbody></table>
                   {!visibleUsers.length ? <Empty title="No users match these filters" detail="Clear one or more filters to widen the view." /> : null}
                 </section>
+                </> : null}
               </>
             ) : null}
 

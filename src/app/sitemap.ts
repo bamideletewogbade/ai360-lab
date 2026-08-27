@@ -1,7 +1,28 @@
 import type { MetadataRoute } from 'next'
 import { BRAND } from '@/lib/brand'
+import { CHANGELOG_RELEASES } from '@/lib/changelog'
 
-const updated = new Date('2026-08-08T00:00:00.000Z')
+/**
+ * When the site last actually changed, taken from the newest changelog entry.
+ *
+ * This was a hardcoded date, and it aged: it said 8 August for three weeks
+ * while the product shipped almost daily. A sitemap that reports the same
+ * `lastmod` on every crawl teaches a crawler that nothing here changes, so it
+ * comes back less often — the precise opposite of what a sitemap is for.
+ *
+ * Build time would be the other obvious choice and is worse: every deploy
+ * would claim every page changed, including a deploy that only touched a
+ * config value. A crawler that learns a source cries wolf discounts it. The
+ * changelog is the one date in the repository that only moves when something
+ * a visitor could notice actually moved.
+ */
+function lastMeaningfulChange() {
+  const newest = CHANGELOG_RELEASES.map((release) => release.date).sort().at(-1)
+  const parsed = newest ? new Date(`${newest}T00:00:00.000Z`) : null
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date()
+}
+
+const updated = lastMeaningfulChange()
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [

@@ -196,11 +196,17 @@ test('the participant screen speaks the operator’s language, not the column’
   // where every row read `revoked`.
   assert.match(consoleUi, /const INVITE_STATUS_LABELS/)
   for (const [value, shown] of [
-    ['pending', 'Not sent'], ['sent', 'Sent, no reply'], ['accepted', 'Signed up'],
+    ['pending', 'Not sent'], ['sent', 'Invited, not signed up'], ['accepted', 'Signed up'],
     ['bounced', 'Email bounced'], ['revoked', 'Cancelled'],
   ]) {
     assert.match(consoleUi, new RegExp(`${value}: '${shown}'`), `${value} needs a plain-language label`)
   }
+  // No participant ever replies to an invitation — the link does the work — so
+  // no label may imply they were supposed to. Comments are stripped first:
+  // this is a claim about what the screen says, not about what the source
+  // discusses, and the note explaining the old wording legitimately names it.
+  const withoutComments = consoleUi.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/^\s*\/\/.*$/gm, '')
+  assert.doesNotMatch(withoutComments, /no reply/i)
   assert.match(consoleUi, /INVITE_STATUS_LABELS\[invitation\.inviteStatus\] \?\? label\(/,
     'an unknown status must fall back rather than render blank')
 

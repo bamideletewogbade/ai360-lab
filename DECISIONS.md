@@ -1,5 +1,53 @@
 # Decision and incident log
 
+## 2026-08-26 · Incident · The invitation link could not complete a session
+
+**Found by** an operator asking why the console said "Sent, no reply" when the
+flow expects no reply. Tracing the wording led to the mechanism underneath it.
+
+**What was wrong.** `/auth/callback` read only `code`. That is the right and
+only parameter for an OAuth round trip, where the browser began the flow and a
+PKCE verifier exists to exchange against. An invitation link is not that: it is
+minted server-side by `generateLink`, so no verifier was ever created. Supabase's
+`/verify` endpoint finishes such a link by handing the session back in the URL
+**fragment** — which a server route cannot read, and which the `@supabase/ssr`
+browser client does not look for either, since it expects a PKCE `code`.
+
+So the recipient clicked a valid invitation, arrived at
+`/app?...&auth_error=callback_failed` **signed out**, and
+`claimInvitationOnSignIn` — reachable only from the successful branch — never
+ran. Their credits and membership waited on a sign-in that, as far as the
+application was concerned, had not happened. The invitation stayed `sent`
+forever with nothing anywhere reporting a failure.
+
+**Why it hid.** The one live test appeared to work: the tester landed on the
+site, signed in with Google instead, and got an account. The funnel recorded the
+whole visit. Only the absent claim gave it away, and that looked like the
+separate email-mismatch defect logged below. Two different faults with one
+symptom — no credits — is why the first fix did not resolve it.
+
+**The fix.** `generateInviteLink` now also returns `properties.hashed_token`,
+and the emailed button points at our own callback carrying
+`?token_hash=…&type=invite&next=…` rather than at Supabase's `/verify`. The
+callback redeems it with `verifyOtp`, which produces a real server session and
+therefore a working claim. `exchangeCodeForSession` is untouched for OAuth.
+Supabase's own link remains a fallback if no hashed token comes back, logged so
+the weaker path is visible.
+
+**`type` is matched against an allowlist**, not cast. It arrives in a URL anyone
+can edit, and passing it through would let a caller name a flow the app never
+issues.
+
+**The label that started it.** `sent` means the email left and the person has
+not opened their account — not that they owe anyone a reply. It reads "Invited,
+not signed up", and a test asserts no rendered copy anywhere says "no reply",
+with comments stripped first so the note explaining this history does not trip
+its own guard.
+
+**Revisit if.** Supabase changes what `generateLink` returns. The fallback keeps
+invitations sending, but silently on the path that does not sign anyone in, so
+`admin.invitation_link_fallback` is worth alerting on rather than only logging.
+
 ## 2026-08-26 · Decision · At sixty-three people, filtering was never the problem
 
 **Why.** The participant screen carried nine dropdowns, twenty buttons, two

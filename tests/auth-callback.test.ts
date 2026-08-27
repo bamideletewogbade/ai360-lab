@@ -1,5 +1,6 @@
-import assert from 'node:assert/strict'
+﻿import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFile } from 'node:fs/promises'
 import { isBindAllHost, isLocalHost, resolveCallbackOrigin, safeInternalPath } from '../src/lib/auth-callback.ts'
 
 const PROD = 'https://ai360.africa'
@@ -129,3 +130,42 @@ test('post-auth redirects stay inside AI360', () => {
   assert.equal(safeInternalPath('https://attacker.example'), '/app')
   assert.equal(safeInternalPath(null), '/app')
 })
+
+test('an emailed invitation link can actually complete a session', async () => {
+  // The callback used to read only `code`. An OAuth round trip has one; an
+  // invitation minted server-side does not, because there is no PKCE verifier
+  // for a link the browser never started. So an invited participant fell
+  // straight through to `callback_failed`, arrived signed out, and
+  // `claimInvitationOnSignIn` never ran — their credits and membership waited
+  // on a sign-in the app did not believe had happened.
+  const route = await readFile(new URL('../src/app/auth/callback/route.ts', import.meta.url), 'utf8')
+  assert.match(route, /token_hash/, 'the callback must accept an emailed token')
+  assert.match(route, /verifyOtp/, 'an emailed token is redeemed with verifyOtp, not a code exchange')
+  assert.match(route, /exchangeCodeForSession/, 'OAuth must keep working')
+
+  // `type` arrives in a URL anyone can edit, so it is matched against a list
+  // rather than passed through.
+  assert.match(route, /EMAIL_OTP_TYPES/)
+  assert.doesNotMatch(route, /type: *(url|searchParams)/, 'type must never reach verifyOtp unchecked')
+
+  // Whichever way in was used, the claim has to fire on it.
+  assert.match(route, /claimInvitationOnSignIn/)
+})
+
+test('the invitation email points at our own callback, not Supabase verify', async () => {
+  const inviteRoute = await readFile(new URL('../src/app/api/admin/participants/invite/route.ts', import.meta.url), 'utf8')
+  const admin = await readFile(new URL('../src/lib/supabase/admin.ts', import.meta.url), 'utf8')
+
+  // Supabase's /verify hands the session back in the URL fragment, which no
+  // server route can read.
+  assert.match(admin, /hashed_token/, 'the hashed token must be returned for our own callback to verify')
+  assert.match(inviteRoute, /token_hash=/, 'the emailed button must carry the token to our callback')
+  assert.match(inviteRoute, /type=invite/)
+  assert.match(inviteRoute, /actionUrl,/, 'the built URL must be what the email actually sends')
+
+  // The funnel tag has to survive the round trip or every invited visit lands
+  // unattributed.
+  assert.match(inviteRoute, /FUNNEL_INVITATION_PARAM/)
+  assert.match(inviteRoute, /next=\$\{encodeURIComponent\(landing\)\}/)
+})
+

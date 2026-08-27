@@ -44,13 +44,23 @@ export function getSupabaseAdminClient(): SupabaseClient {
  * branded participant template and be recorded in the invitation ledger like
  * every other message the module sends.
  *
+ * Returns `hashedToken` as well as Supabase's own `action_link`, because the
+ * two lead to different places. `action_link` points at Supabase's `/verify`
+ * endpoint, which finishes by handing the session back in the URL *fragment* —
+ * unreadable by a server route, and not what an `@supabase/ssr` browser client
+ * looks for either, since it expects a PKCE `code` that a server-minted link
+ * never carries. An invitation built on it lands the recipient on the app
+ * signed out. The hashed token can instead be verified directly by our own
+ * callback, which is the documented pattern for server-rendered apps and the
+ * only one that produces a real session for an invited person.
+ *
  * Returns null when Supabase declines — most often because the address already
  * has an account, which the caller treats as "already a user", not an error.
  */
 export async function generateInviteLink(input: {
   email: string
   redirectTo: string
-}): Promise<{ link: string } | null> {
+}): Promise<{ link: string; hashedToken: string | null } | null> {
   const admin = getSupabaseAdminClient()
   const { data, error } = await admin.auth.admin.generateLink({
     type: 'invite',
@@ -58,5 +68,8 @@ export async function generateInviteLink(input: {
     options: { redirectTo: input.redirectTo },
   })
   if (error || !data?.properties?.action_link) return null
-  return { link: data.properties.action_link }
+  return {
+    link: data.properties.action_link,
+    hashedToken: data.properties.hashed_token || null,
+  }
 }

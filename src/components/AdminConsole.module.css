@@ -534,6 +534,48 @@
   font-weight: 600 !important; letter-spacing: 0 !important; text-transform: none !important;
 }
 
+/* Which population is on screen. Sits directly under the page title so the
+   tables below it are unambiguously one thing, and the filter bar can only be
+   read as belonging to what is currently showing. */
+.viewSwitch {
+  display: inline-flex;
+  gap: 3px;
+  margin: 0 0 18px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #eae8e1;
+}
+.viewSwitch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+.viewSwitch button span {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 20px;
+  background: #dcd9d0;
+  color: var(--ink);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.viewSwitch button:hover { color: var(--ink); }
+.viewSwitch button[data-active] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.viewSwitch button[data-active] span { background: var(--orange); color: #fff; }
+.viewSwitch button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+
+
 .srOnly {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
