@@ -161,6 +161,7 @@ function StudioBuildRoom({
   specialists,
   sectionsCount,
   reviewNote,
+  streaming,
   complete,
   elapsed,
 }: {
@@ -169,6 +170,7 @@ function StudioBuildRoom({
   specialists: ProjectSpecialist[]
   sectionsCount: number
   reviewNote: string
+  streaming: Partial<Record<SpecialistId, string>>
   complete: boolean
   elapsed: number
 }) {
@@ -220,6 +222,16 @@ function StudioBuildRoom({
               <span className="relay-handoff">
                 {status === 'complete' ? <><i>→</i>output ready</> : status === 'failed' ? specialist.detail || 'not produced' : status === 'active' ? <span className="relay-dots"><i /><i /><i /></span> : 'queued'}
               </span>
+              {/* The words as they are written. Only while this specialist is
+                  still working — once the section is finished it belongs in the
+                  project, not in a progress view. The tail rather than the whole
+                  thing, so a long section does not push the rest of the relay
+                  off the screen. */}
+              {status === 'active' && streaming[specialist.id] ? (
+                <p className="relay-stream" aria-hidden="true">
+                  {streaming[specialist.id]!.trimStart().slice(-260)}
+                </p>
+              ) : null}
             </div>
           )
         })}
@@ -325,6 +337,13 @@ export function StudioWorkspace({
   const [buildSpecialists, setBuildSpecialists] = useState<ProjectSpecialist[]>(initialProjectSpecialists(findPack('plan') ?? PACKS[0]))
   const [buildSectionsCount, setBuildSectionsCount] = useState(0)
   const [buildReviewNote, setBuildReviewNote] = useState('')
+  /**
+   * What each specialist has written so far, keyed by specialist.
+   *
+   * Keyed rather than a single string because a stage can run two specialists
+   * at once, and their deltas arrive interleaved on one connection.
+   */
+  const [buildStreaming, setBuildStreaming] = useState<Partial<Record<SpecialistId, string>>>({})
   const [briefInput, setBriefInput] = useState('')
   const [projectGoalInput, setProjectGoalInput] = useState('')
   const [briefTurns, setBriefTurns] = useState<StudioBriefTurn[]>([])
@@ -670,6 +689,7 @@ export function StudioWorkspace({
     setBuildElapsed(0)
     setBuildSectionsCount(0)
     setBuildReviewNote('')
+    setBuildStreaming({})
     const startedAt = eventTimestamp()
     let specialistState = initialProjectSpecialists(selectedPack)
     setBuildSpecialists(specialistState)
@@ -699,6 +719,11 @@ export function StudioWorkspace({
             ? { ...specialist, status: event.status, detail: event.detail }
             : specialist)
           setBuildSpecialists(specialistState)
+        } else if (event.type === 'delta') {
+          setBuildStreaming((current) => ({
+            ...current,
+            [event.id]: (current[event.id] ?? '') + event.text,
+          }))
         } else if (event.type === 'section') {
           setBuildSectionsCount((count) => count + 1)
         } else if (event.type === 'review') {
@@ -1203,6 +1228,7 @@ export function StudioWorkspace({
     setBuildSpecialists(initialProjectSpecialists(pack))
     setBuildSectionsCount(0)
     setBuildReviewNote('')
+    setBuildStreaming({})
     setExpandedId('')
     setEditingId('')
     setRevisionId('')
@@ -1523,6 +1549,7 @@ export function StudioWorkspace({
             specialists={buildSpecialists}
             sectionsCount={buildSectionsCount}
             reviewNote={buildReviewNote}
+            streaming={buildStreaming}
             complete={buildComplete}
             elapsed={buildElapsed}
           />

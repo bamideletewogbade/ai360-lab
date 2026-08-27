@@ -477,6 +477,42 @@
 .bulkModal { width: min(560px, 100%); }
 .addPilotModal { width: min(680px, 100%); }
 .addPilotModal > header p { max-width: 520px; margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+/* Reviewing an invitation: the words on the left, the real message on the right. */
+.composeModal { width: min(1040px, 100%); }
+.composeModal > header p { max-width: 620px; margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.composeBody { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 18px; margin-top: 18px; }
+/* One column on a laptop screen with the console chrome around it. The preview
+   goes first there, because the message is the thing being approved. */
+@media (max-width: 900px) {
+  .composeBody { grid-template-columns: minmax(0, 1fr); }
+  .composePreview { order: -1; }
+}
+.composeEditor { display: grid; align-content: start; gap: 13px; max-height: 62vh; overflow-y: auto; padding-right: 6px; }
+/* `.creditModal > label` is a direct-child rule, so labels nested in here
+   inherit none of it and need the field styling restated. */
+.composeEditor label { display: grid; gap: 6px; }
+.composeEditor label > span { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 10px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.composeEditor label em { flex: 0 1 auto; font-size: 9px; font-style: normal; font-weight: 700; letter-spacing: 0; text-align: right; text-transform: none; }
+.composeEditor input, .composeEditor select, .composeEditor textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); outline: 0; }
+.composeEditor input, .composeEditor select { height: 44px; padding: 0 11px; font-size: 13px; }
+.composeEditor textarea { padding: 11px; resize: vertical; font-size: 13px; line-height: 1.45; }
+.composeEditor input:disabled, .composeEditor textarea:disabled { opacity: .55; }
+.composeReset { justify-self: start; min-height: 34px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); cursor: pointer; font-size: 11px; font-weight: 800; }
+
+.composePreview { display: grid; align-content: start; gap: 10px; min-width: 0; }
+.composeSubject { padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.composeSubject span { display: block; color: var(--muted); font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.composeSubject b { display: block; margin-top: 4px; font-size: 14px; line-height: 1.35; }
+.composeSubject small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.composeWarnings { padding: 12px 13px; border: 1px solid #e6c7ba; border-radius: 10px; background: #fff1eb; color: #7b3422; }
+.composeWarnings b { font-size: 11px; font-weight: 850; letter-spacing: .05em; text-transform: uppercase; }
+.composeWarnings ul { margin: 7px 0 0; padding-left: 17px; }
+.composeWarnings li { font-size: 12px; line-height: 1.5; }
+/* White regardless of the console's theme: this is an email body, and it will
+   be read on the recipient's own white background, not on this page's. */
+.composeFrame { width: 100%; height: 54vh; min-height: 340px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.composeEmpty { display: grid; place-items: center; height: 54vh; min-height: 340px; margin: 0; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; }
 .accountPicker { overflow: hidden; margin-top: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); }
 .accountPicker > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: #eceae3; }
 .accountPicker > header span, .accountPicker > header b, .accountPicker > header small { display: block; }

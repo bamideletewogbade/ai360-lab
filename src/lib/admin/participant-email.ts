@@ -28,6 +28,111 @@ type ParticipantCopy = {
   closing?: string
 }
 
+/**
+ * An operator's edits to one send.
+ *
+ * Every field is optional and falls back to the written copy, so an operator
+ * who changes one sentence does not have to retype the message around it. This
+ * carries words only — never the layout, the link, the brand or the opt-out —
+ * because those are the parts that make the message safe to send in bulk, and
+ * an editor that can break them is a liability rather than a feature.
+ *
+ * Edits are per-send and are not persisted. The written copy stays the default
+ * for the next batch, so one operator's wording for one cohort cannot silently
+ * become the product's voice.
+ */
+export type ParticipantCopyOverride = Partial<{
+  subject: string
+  heading: string
+  body: string
+  cta: string
+  detail: string
+  steps: string[]
+  closing: string
+}>
+
+/** Limits, so an edited message stays a message rather than a document. */
+export const COPY_LIMITS = {
+  subject: 160,
+  heading: 160,
+  body: 1_200,
+  detail: 1_200,
+  closing: 600,
+  cta: 60,
+  step: 300,
+  steps: 8,
+} as const
+
+/**
+ * Wording an operator is about to send that probably should not go out.
+ *
+ * Not a block — an operator may have a reason, and refusing to send is worse
+ * than telling them what they wrote. It exists because the invitation copy was
+ * deliberately stripped of credit amounts, plan prices and promises of more
+ * credits on request, and an editable field is exactly how those come back.
+ */
+const LEAK_RULES: Array<{ pattern: RegExp; warning: string }> = [
+  { pattern: /\b\d+\s*credits?\b/i, warning: 'Mentions a credit amount. The balance is already visible in the product.' },
+  { pattern: /GH₵|GHS\s*\d|\$\s*\d/i, warning: 'Mentions a price. Invitations deliberately carry no pricing.' },
+  { pattern: /\b(everyday|explorer|team)\s+plan\b/i, warning: 'Names an internal plan tier.' },
+  { pattern: /\b(top[-\s]?up|we will add more|more credits)\b/i, warning: 'Promises more credits, which commits the programme to something it may not want to keep.' },
+  { pattern: /\b(free|no cost|at no charge)\b/i, warning: 'Says the pilot is free. That is true, but it invites the question of what it costs afterwards.' },
+]
+
+export function reviewParticipantCopy(copy: ParticipantCopyOverride): string[] {
+  const haystack = [copy.subject, copy.heading, copy.body, copy.detail, copy.closing, copy.cta, ...(copy.steps ?? [])]
+    .filter(Boolean)
+    .join('\n')
+  if (!haystack.trim()) return []
+  return LEAK_RULES.filter((rule) => rule.pattern.test(haystack)).map((rule) => rule.warning)
+}
+
+/** The written copy for a template, so an editor can start from it. */
+export function participantCopyFor(template: AdminParticipantEmailTemplate) {
+  const copy = COPY[template]
+  return {
+    subject: copy.subject,
+    heading: copy.heading,
+    body: copy.body,
+    cta: copy.cta,
+    detail: copy.detail ?? '',
+    steps: [...(copy.steps ?? [])],
+    closing: copy.closing ?? '',
+  }
+}
+
+/**
+ * Merges an operator's edits over the written copy.
+ *
+ * A field that is present but blank is treated as a deliberate removal for the
+ * optional parts, and ignored for the parts a message cannot be sent without —
+ * a blank subject or button label is a mistake in an editor, not an intention.
+ */
+function applyCopyOverride(base: ParticipantCopy, override?: ParticipantCopyOverride | null): ParticipantCopy {
+  if (!override) return base
+  const required = (value: string | undefined, fallback: string, limit: number) => {
+    const trimmed = (value ?? '').trim()
+    return trimmed ? trimmed.slice(0, limit) : fallback
+  }
+  const optional = (value: string | undefined, fallback: string | undefined, limit: number) => (
+    value === undefined ? fallback : (value.trim().slice(0, limit) || undefined)
+  )
+  return {
+    subject: required(override.subject, base.subject, COPY_LIMITS.subject),
+    heading: required(override.heading, base.heading, COPY_LIMITS.heading),
+    body: required(override.body, base.body, COPY_LIMITS.body),
+    cta: required(override.cta, base.cta, COPY_LIMITS.cta),
+    detail: optional(override.detail, base.detail, COPY_LIMITS.detail),
+    closing: optional(override.closing, base.closing, COPY_LIMITS.closing),
+    steps: override.steps === undefined
+      ? base.steps
+      : override.steps
+        .map((step) => step.trim().slice(0, COPY_LIMITS.step))
+        .filter(Boolean)
+        .slice(0, COPY_LIMITS.steps),
+  }
+}
+
 const COPY: Record<AdminParticipantEmailTemplate, ParticipantCopy> = {
   /**
    * Warm, personal, and deliberately free of operating detail.
@@ -176,8 +281,10 @@ export function renderAdminParticipantEmail(input: {
   actionUrl?: string | null
   /** Omitted only when no signing secret is configured to mint one. */
   unsubscribeUrl?: string | null
+  /** An operator's per-send edits. Words only; see `ParticipantCopyOverride`. */
+  copyOverride?: ParticipantCopyOverride | null
 }): RenderedEmail {
-  const copy = COPY[input.template]
+  const copy = applyCopyOverride(COPY[input.template], input.copyOverride)
   const { appUrl, replyTo } = emailSettings()
   const target = input.actionUrl?.trim() || appUrl
   const name = firstName(input.displayName, input.email)

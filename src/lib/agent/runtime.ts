@@ -6,7 +6,7 @@ import {
   saveProgress, saveResult, setRunStatus, setTaskStatus,
 } from '@/lib/agent/store'
 import {
-  compactFindings, DEPTHS, MAX_TASKS, parsePlan, parseVerdict, readStreamLine, shorten, textOf,
+  compactFindings, consumeStream, DEPTHS, MAX_TASKS, parsePlan, parseVerdict, shorten, textOf,
   type AgentDepth,
 } from '@/lib/agent/protocol'
 import type { WorkspaceAuthContext } from '@/lib/workspace'
@@ -121,39 +121,6 @@ List at most three issues, each a specific, actionable correction.`
 
 function budgetExceeded(spent: number) {
   return spent >= MAX_RUN_COST_USD
-}
-
-/** Drains a streaming completion, forwarding text as it arrives. */
-async function consumeStream(
-  body: ReadableStream<Uint8Array>,
-  onDelta: (text: string) => void,
-  onSource: (source: { url: string; title: string }) => void,
-  onUsage: (usage: { cost?: unknown; total_tokens?: unknown } | undefined) => void,
-) {
-  const reader = body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let text = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
-    for (const line of lines) {
-      const chunk = readStreamLine(line)
-      if (!chunk) continue
-      if (chunk.done) return text
-      if (chunk.delta) {
-        text += chunk.delta
-        onDelta(chunk.delta)
-      }
-      for (const source of citationSources(chunk.annotations)) onSource(source)
-      if (chunk.usage) onUsage(chunk.usage)
-    }
-  }
-  return text
 }
 
 export async function runAgent(input: AgentRunInput): Promise<AgentRunResult> {

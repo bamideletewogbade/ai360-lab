@@ -39,6 +39,12 @@ function ProductIcon({ product }: { product: MarketProduct }) {
       return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><path d="m12 12 7-7M16 5h3v3" /></svg>
     case 'pitch':
       return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="12" rx="2" /><path d="M8 20h8M12 16v4m-5-8 3-3 2 2 4-4" /></svg>
+    case 'discover':
+      /* A lamp: finding something already there rather than acquiring it. */
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 1 3.5 10.9V17h-7v-3.1A6 6 0 0 1 12 3Z" /><path d="M10 20h4M9.5 17h5" /></svg>
+    case 'sidehustle':
+      /* A rising step beside a steady line: earning added alongside, not instead. */
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M6 20v-4h4v4M14 20V9h4v11" /><path d="m5 11 4-4 3 3 5-6" /></svg>
   }
 }
 

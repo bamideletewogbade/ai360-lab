@@ -1,5 +1,6 @@
 import { providerPreferences, REASONING_BUDGET, routeFor } from '@/lib/models'
 import { citationSources, RESEARCH_TOOLS } from '@/lib/live-tools'
+import { consumeStream } from '@/lib/agent/protocol'
 import { languageDirective, type LanguageCode } from '@/lib/languages'
 import { providerErrorDetails } from '@/lib/observability'
 import { checkDomains, type DomainResult } from '@/lib/studio/domains'
@@ -38,6 +39,16 @@ export type Intake = {
 export type PackEvent =
   | { type: 'pack'; packId: string; specialists: Array<{ id: SpecialistId; label: string; working: string }>; estimatedCredits: number }
   | { type: 'specialist'; id: SpecialistId; status: 'pending' | 'active' | 'complete' | 'failed'; detail?: string }
+  /**
+   * Text as the specialist writes it, before the section is finished.
+   *
+   * A pack is several model calls in sequence, so the total wait is the sum of
+   * all of them — a three-stage pack has measured at over a minute and a half.
+   * That total does not change by streaming, but what the person stares at
+   * does: without this they watch a spinner for the whole of the first stage
+   * before a single word appears.
+   */
+  | { type: 'delta'; id: SpecialistId; text: string }
   | { type: 'section'; id: SpecialistId; title: string; content: string }
   | { type: 'domains'; results: DomainResult[] }
   | { type: 'review'; status: 'checking' | 'correcting' | 'complete'; evaluations: SectionEvaluation[]; detail: string }
@@ -139,6 +150,47 @@ Vary the kind of post: proof, teaching, offer, behind the scenes, customer voice
 
   pitch: `You are the pitch coach. Make the case for this business to someone who can fund it or buy from it.
 Produce: a one page summary with the problem, what they do, why now, and what they want; a spoken pitch of about 60 seconds; the five hardest questions with honest answers; and one follow up email.`,
+
+  /**
+   * Skills discovery, built on three documented methods rather than invented
+   * personality categories:
+   *
+   *   - Motivational Interviewing (Miller & Rollnick): open questions,
+   *     affirmations, reflective listening, summarising. Its central finding is
+   *     that people talk themselves into change; being told what they are good
+   *     at does not stick, recognising it themselves does.
+   *   - The Good Time Journal (Burnett & Evans, Designing Your Life, Stanford):
+   *     locate skill by tracking engagement and energy in real past activity,
+   *     not by asking someone to rate abstract traits.
+   *   - Transferable-skills inventory (Bolles, What Color Is Your Parachute?):
+   *     separate the skill from the setting it happened in, which is what lets
+   *     unpaid and informal work count as evidence.
+   *
+   * The Ghana framing is not decoration. All three methods were written for
+   * labour markets with formal jobs, written CVs and career ladders. Here the
+   * strongest evidence is often unpaid, informal or family work, and the
+   * realistic next step is usually earning alongside a job or studies rather
+   * than instead of one. A version that ignores that returns advice nobody can
+   * act on.
+   */
+  interviewer: `You are the discovery interviewer. Find what this person can already do, from evidence they give you — never from flattery or guesswork.
+
+Work from what is in the brief. Do not ask for more; draw everything you can out of what is there.
+
+Method:
+- Look for concrete past episodes, not self-descriptions. "I organised my church's harvest" is evidence. "I am a good leader" is not.
+- For each episode, separate the skill from the setting. Someone who ran a susu group for two years has done bookkeeping, collections, trust-holding and dispute resolution, whether or not anyone called it that.
+- Weight engagement and energy, not just competence. Something they did well but hated is not a direction.
+- Count unpaid, informal, family and apprenticeship work as real evidence. For most people here it is the strongest evidence they have.
+- Reflect back what you heard before concluding, so they can correct you.
+
+Produce:
+1. Five to eight skills you can actually evidence, each with the specific episode it comes from.
+2. Which of those they seemed most alive doing, and what makes you say so.
+3. What the evidence does not show — gaps and open questions, stated plainly.
+4. Two or three honest questions they should sit with.
+
+Never invent an episode, a qualification or an achievement. If the brief is thin, say what is missing rather than filling it in. Do not flatter; an inflated reading of someone's skills costs them money later.`,
 }
 
 export async function runPack(input: PackRunInput): Promise<PackRunResult> {
@@ -189,8 +241,27 @@ export async function runPack(input: PackRunInput): Promise<PackRunResult> {
     knowledge ? `\nProject knowledge base (treat as authoritative project context):\n${knowledge}` : '',
   ].filter(Boolean).join('\n')
 
-  /** One specialist. Tools only where the brief genuinely needs the network. */
-  async function callSpecialist(id: SpecialistId, priorWork: string, correctionIssues: string[] = []) {
+  /**
+   * One specialist. Tools only where the brief genuinely needs the network.
+   *
+   * Streamed, so the section fills in as it is written rather than appearing
+   * whole after the stage finishes. The specialists that use tools stream too:
+   * `RESEARCH_TOOLS` are OpenRouter's own server-side tools, so the search runs
+   * on their side and the model's text arrives on the same stream, citations
+   * included. There is a pause before the first token while that search runs,
+   * which is why the caller keeps showing the "working" line until text starts.
+   *
+   * Passing no `onDelta` falls back to a single buffered response. The
+   * correction pass uses that: it rewrites a section that is already on screen,
+   * and streaming a replacement over the top would show the reader their
+   * finished work being unwritten and rewritten.
+   */
+  async function callSpecialist(
+    id: SpecialistId,
+    priorWork: string,
+    correctionIssues: string[] = [],
+    onDelta?: (text: string) => void,
+  ) {
     const specialist = SPECIALISTS[id]
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -212,6 +283,7 @@ export async function runPack(input: PackRunInput): Promise<PackRunResult> {
           },
         ],
         ...(specialist.usesTools ? { tools: RESEARCH_TOOLS } : {}),
+        ...(onDelta ? { stream: true } : {}),
         provider: providerPreferences('studio', { withTools: specialist.usesTools }),
         reasoning: REASONING_BUDGET,
         max_tokens: STAGE_TOKENS,
@@ -224,16 +296,35 @@ export async function runPack(input: PackRunInput): Promise<PackRunResult> {
       throw new Error(`${id} failed with status ${response.status}`)
     }
 
+    // Usage arrives in the stream's final frame rather than a response body, so
+    // the budget is credited through the same callback either way. Getting this
+    // wrong would uncap the pack: `outOfRoom` reads `spent`.
+    const accounted = (usage: { cost?: unknown; total_tokens?: unknown } | undefined) => {
+      const cost = Number(usage?.cost)
+      if (Number.isFinite(cost)) spent += cost
+      const used = Number(usage?.total_tokens)
+      if (Number.isFinite(used)) tokens += used
+    }
+
+    if (onDelta) {
+      if (!response.body) throw new Error(`${id} returned no stream`)
+      const content = await consumeStream(
+        response.body,
+        onDelta,
+        (source) => sources.set(source.url, source.title),
+        accounted,
+      )
+      input.log.info('studio.specialist.completed', { specialist: id, streamed: true, characters: content.length })
+      return content
+    }
+
     const json = await response.json()
     const message = json.choices?.[0]?.message
-    const cost = Number(json.usage?.cost)
-    if (Number.isFinite(cost)) spent += cost
-    const used = Number(json.usage?.total_tokens)
-    if (Number.isFinite(used)) tokens += used
+    accounted(json.usage)
     for (const source of citationSources(message?.annotations)) sources.set(source.url, source.title)
 
     const content = typeof message?.content === 'string' ? message.content : ''
-    input.log.info('studio.specialist.completed', { specialist: id, costUsd: cost, characters: content.length })
+    input.log.info('studio.specialist.completed', { specialist: id, streamed: false, characters: content.length })
     return content
   }
 
@@ -293,7 +384,13 @@ export async function runPack(input: PackRunInput): Promise<PackRunResult> {
           input.emit({ type: 'domains', results })
           return { id, content, ok: true as const }
         }
-        return { id, content: await callSpecialist(id, priorWork), ok: true as const }
+        // Specialists in the same stage stream at the same time, so every delta
+        // carries its own id and the client keeps them in separate sections
+        // rather than interleaving two authors into one block of text.
+        const content = await callSpecialist(id, priorWork, [], (text) => {
+          input.emit({ type: 'delta', id, text })
+        })
+        return { id, content, ok: true as const }
       } catch (error) {
         input.log.warn('studio.specialist.error', {
           specialist: id,

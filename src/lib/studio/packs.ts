@@ -29,6 +29,7 @@ export type SpecialistId =
   | 'ads'
   | 'calendar'
   | 'pitch'
+  | 'interviewer'
 
 export type Specialist = {
   id: SpecialistId
@@ -56,9 +57,10 @@ export const SPECIALISTS: Record<SpecialistId, Specialist> = {
   ads: { id: 'ads', label: 'Ads', working: 'Writing and varying the ads', usesTools: false, credits: 3 },
   calendar: { id: 'calendar', label: 'Calendar', working: 'Laying the posts across the weeks', usesTools: false, credits: 2 },
   pitch: { id: 'pitch', label: 'Pitch', working: 'Sharpening the argument and the answers', usesTools: false, credits: 2 },
+  interviewer: { id: 'interviewer', label: 'Discovery', working: 'Drawing out what you can already do', usesTools: false, credits: 3 },
 }
 
-export type PackId = 'research' | 'plan' | 'write' | 'learn' | 'decide' | 'launch' | 'marketing' | 'ads' | 'naming' | 'pitch' | 'calendar'
+export type PackId = 'research' | 'plan' | 'write' | 'learn' | 'decide' | 'launch' | 'marketing' | 'ads' | 'naming' | 'pitch' | 'calendar' | 'discover' | 'sidehustle'
 
 export type Pack = {
   id: PackId
@@ -224,6 +226,43 @@ export const PACKS: Pack[] = [
     ],
     deliverables: ['Four weeks of posts', 'Captions ready to send', 'Best times to post'],
     needsBrandFile: true,
+  },
+  {
+    id: 'discover',
+    name: 'Find what you are good at',
+    outcome: 'Work out what you can already do, and what it could be worth.',
+    bestFor: 'Anyone who suspects they have a skill but cannot name it.',
+    mark: '12',
+    stages: [
+      { specialists: ['interviewer'] },
+      { specialists: ['analyst'] },
+      { specialists: ['planner'] },
+    ],
+    deliverables: [
+      'What you are actually good at, with the evidence',
+      'Where that is worth money here',
+      'One small thing to test this month',
+    ],
+    needsBrandFile: false,
+  },
+  {
+    id: 'sidehustle',
+    name: 'Start a side hustle',
+    outcome: 'Turn a skill into something that earns while you keep your job or studies.',
+    bestFor: 'Starting small, with little capital and limited time.',
+    mark: '13',
+    stages: [
+      { specialists: ['researcher'] },
+      { specialists: ['analyst'] },
+      { specialists: ['planner', 'copy'] },
+    ],
+    deliverables: [
+      'Who will pay, and what they pay now',
+      'What it costs to start and when it breaks even',
+      'A week-by-week start plan around your existing hours',
+      'The first messages to send',
+    ],
+    needsBrandFile: false,
   },
 ]
 

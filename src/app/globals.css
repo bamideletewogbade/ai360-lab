@@ -8046,6 +8046,39 @@ button {
   border-color: #c8d5c9;
   background: rgba(246, 250, 246, 0.9);
 }
+/*
+ * The specialist's text as it is written.
+ *
+ * Spans every column on its own row: the step is a three-column grid, so
+ * without this the paragraph becomes a fourth item and lands beside the
+ * handoff label instead of under the step.
+ *
+ * A tail, not the whole section — the component passes the last of the text,
+ * and the fixed height keeps a growing section from pushing the rest of the
+ * relay down the page while somebody is reading it.
+ */
+.relay-stream {
+  grid-column: 1 / -1;
+  margin: 6px 0 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid #efe6da;
+  color: #6d6459;
+  font-size: 12px;
+  line-height: 1.5;
+  height: 36px;
+  overflow: hidden;
+  /* Reads from the bottom, so the newest words sit against the lower edge and
+     the older ones scroll out of the top. */
+  display: flex;
+  align-items: flex-end;
+  /* The top line fades rather than being cut through the middle of the letters. */
+  mask-image: linear-gradient(to bottom, transparent, #000 60%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 60%);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .relay-avatar {
   position: relative;
   z-index: 2;

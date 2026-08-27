@@ -9,7 +9,9 @@ import {
   unsubscribeHeaders,
   unsubscribeUrl,
 } from '../src/lib/email/unsubscribe.ts'
-import { renderAdminParticipantEmail } from '../src/lib/admin/participant-email.ts'
+import {
+  COPY_LIMITS, participantCopyFor, renderAdminParticipantEmail, reviewParticipantCopy,
+} from '../src/lib/admin/participant-email.ts'
 import { createResendProvider } from '../src/lib/email/provider.ts'
 
 const ENV_KEYS = [
@@ -173,6 +175,121 @@ test('an invitation points at its sign-up link, not the app front door', () => {
   } finally {
     restore()
   }
+})
+
+// ---------------------------------------------------------------------------
+// Operator edits to one send
+
+test('an operator edit replaces only the field it touched', () => {
+  const restore = withEnv(SIGNED)
+  try {
+    const written = participantCopyFor('pilot_invite')
+    const rendered = renderAdminParticipantEmail({
+      template: 'pilot_invite',
+      displayName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      copyOverride: { heading: 'A different heading entirely' },
+    })
+    assert.match(rendered.html, /A different heading entirely/)
+    // Everything the operator did not touch still follows the written copy,
+    // so a one-word fix cannot silently freeze the rest of the message.
+    assert.ok(rendered.text.includes(written.body))
+    assert.equal(rendered.subject, written.subject)
+  } finally {
+    restore()
+  }
+})
+
+test('a blank edit to a required field keeps the written copy', () => {
+  const restore = withEnv(SIGNED)
+  try {
+    const written = participantCopyFor('pilot_invite')
+    const rendered = renderAdminParticipantEmail({
+      template: 'pilot_invite',
+      displayName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      // An emptied subject box is a mistake in an editor, never an intention:
+      // a message with no subject line must not be sendable by accident.
+      copyOverride: { subject: '   ', cta: '' },
+    })
+    assert.equal(rendered.subject, written.subject)
+    assert.ok(rendered.text.includes(written.cta))
+  } finally {
+    restore()
+  }
+})
+
+test('an emptied optional section is removed rather than left blank', () => {
+  const restore = withEnv(SIGNED)
+  try {
+    const rendered = renderAdminParticipantEmail({
+      template: 'pilot_invite',
+      displayName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      copyOverride: { closing: '', steps: [] },
+    })
+    assert.doesNotMatch(rendered.html, /<ol/)
+    assert.doesNotMatch(rendered.html, /Thank you for being one of the first/)
+  } finally {
+    restore()
+  }
+})
+
+test('an edit cannot break out of the template into markup', () => {
+  const restore = withEnv(SIGNED)
+  try {
+    const rendered = renderAdminParticipantEmail({
+      template: 'pilot_invite',
+      displayName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      copyOverride: {
+        heading: '<script>alert(1)</script>',
+        steps: ['<img src=x onerror=alert(1)>'],
+      },
+    })
+    // What matters is that no tag can form: the angle brackets are escaped, so
+    // the payload is delivered as visible text. Asserting the absence of the
+    // substring "onerror=" would be the wrong test — it survives harmlessly
+    // inside `&lt;img src=x onerror=alert(1)&gt;`, which renders as characters.
+    assert.doesNotMatch(rendered.html, /<script/i)
+    assert.doesNotMatch(rendered.html, /<img/i)
+    assert.match(rendered.html, /&lt;script&gt;/)
+    assert.match(rendered.html, /&lt;img src=x onerror=alert\(1\)&gt;/)
+  } finally {
+    restore()
+  }
+})
+
+test('an over-long edit is trimmed rather than sent whole', () => {
+  const restore = withEnv(SIGNED)
+  try {
+    const rendered = renderAdminParticipantEmail({
+      template: 'pilot_invite',
+      displayName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      copyOverride: { subject: 'x'.repeat(400) },
+    })
+    assert.equal(rendered.subject.length, COPY_LIMITS.subject)
+  } finally {
+    restore()
+  }
+})
+
+test('the wording review catches the operational detail the copy excludes', () => {
+  // These are the exact things the written invitation was stripped of. An
+  // editable field is how they come back, so the reviewer is what stands
+  // between one edit and sixty-three people being told the wrong thing.
+  assert.ok(reviewParticipantCopy({ body: 'You have 120 credits to spend.' }).length)
+  assert.ok(reviewParticipantCopy({ body: 'It is worth GH₵125 a month.' }).length)
+  assert.ok(reviewParticipantCopy({ detail: 'You are on the Everyday plan.' }).length)
+  assert.ok(reviewParticipantCopy({ closing: 'We will add more when you run out.' }).length)
+  assert.ok(reviewParticipantCopy({ body: 'Ask us for a top-up.' }).length)
+})
+
+test('the wording review passes the copy we actually ship', () => {
+  // A reviewer that objects to the written invitation would be noise, and an
+  // operator who sees a warning on every send stops reading them.
+  assert.deepEqual(reviewParticipantCopy(participantCopyFor('pilot_invite')), [])
 })
 
 test('a message without an opt-out link renders no opt-out text at all', () => {

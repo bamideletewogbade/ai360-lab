@@ -7,7 +7,12 @@ import {
   isMissingAdminInvitationTables,
   listSendableInvitations,
 } from '@/lib/admin/invitations'
-import { renderAdminParticipantEmail } from '@/lib/admin/participant-email'
+import {
+  COPY_LIMITS,
+  participantCopyFor,
+  renderAdminParticipantEmail,
+  reviewParticipantCopy,
+} from '@/lib/admin/participant-email'
 import { createEmailProvider, EmailError } from '@/lib/email/provider'
 import { emailSettings, isEmailConfigured } from '@/lib/email/config'
 import {
@@ -51,12 +56,36 @@ const RATE_LIMIT_BACKOFF_MS = 2_000
  */
 const MAX_PER_RUN = 75
 
+/**
+ * Per-send wording edits.
+ *
+ * Words only. There is deliberately no field here for the destination link,
+ * the layout, the sender or the opt-out — those are what make a bulk send safe,
+ * and the editor exists to change the message, not the mechanics.
+ */
+const CopyOverride = z.object({
+  subject: z.string().trim().max(COPY_LIMITS.subject).optional(),
+  heading: z.string().trim().max(COPY_LIMITS.heading).optional(),
+  body: z.string().trim().max(COPY_LIMITS.body).optional(),
+  cta: z.string().trim().max(COPY_LIMITS.cta).optional(),
+  detail: z.string().trim().max(COPY_LIMITS.detail).optional(),
+  closing: z.string().trim().max(COPY_LIMITS.closing).optional(),
+  steps: z.array(z.string().trim().max(COPY_LIMITS.step)).max(COPY_LIMITS.steps).optional(),
+})
+
 const InviteRequest = z.object({
   mode: z.enum(['preview', 'send']),
   invitationIds: z.array(z.string().min(2).max(160).regex(/^[A-Za-z0-9._:-]+$/)).min(1).max(MAX_PER_RUN),
   programKey: z.string().trim().min(2).max(80).regex(/^[A-Za-z0-9._:-]+$/).default('pilot'),
   operatorNote: z.string().trim().max(500).optional(),
   idempotencyKey: z.string().min(8).max(100).regex(/^[A-Za-z0-9._:-]+$/).optional(),
+  copy: CopyOverride.optional(),
+  /**
+   * Which recipient the preview should be rendered as. The greeting and the
+   * name correction differ per person, so previewing a fixed recipient hides
+   * exactly the fault most worth catching before a bulk send.
+   */
+  previewInvitationId: z.string().min(2).max(160).regex(/^[A-Za-z0-9._:-]+$/).optional(),
 })
 
 function wait(ms: number) {
@@ -101,22 +130,38 @@ export async function POST(request: Request) {
     const unavailable = body.invitationIds.filter((id) => !invitations.some((item) => item.id === id))
 
     if (body.mode === 'preview') {
-      const first = invitations[0]
-      const sample = first
+      // Render as whoever the operator is looking at, not always the first row.
+      const subject = invitations.find((item) => item.id === body.previewInvitationId) ?? invitations[0]
+      const sample = subject
         ? renderAdminParticipantEmail({
           template: 'pilot_invite',
-          displayName: first.displayName,
-          email: first.email,
+          displayName: subject.displayName,
+          email: subject.email,
           operatorNote: body.operatorNote,
           // The real link is minted at send time; a preview must not burn one.
           actionUrl: `${emailSettings().appUrl}/auth/callback`,
           unsubscribeUrl: `${emailSettings().appUrl}/api/email/unsubscribe?token=preview`,
+          copyOverride: body.copy,
         })
         : null
       return Response.json({
         eligible: invitations.map((item) => ({ id: item.id, email: item.email, displayName: item.displayName, sendAttempts: item.sendAttempts })),
         unavailable,
-        sample: sample ? { subject: sample.subject, text: sample.text } : null,
+        // The written copy, so the editor can start from it and reset to it.
+        defaults: participantCopyFor('pilot_invite'),
+        // Advisory only. An operator may have a reason; they should just know.
+        warnings: reviewParticipantCopy(body.copy ?? {}),
+        sample: sample
+          ? {
+            subject: sample.subject,
+            text: sample.text,
+            // The HTML is what almost every recipient will actually see, so a
+            // preview that showed only the plain-text half was previewing the
+            // fallback rather than the message.
+            html: sample.html,
+            renderedFor: { id: subject.id, email: subject.email, displayName: subject.displayName },
+          }
+          : null,
       }, { headers: log.headers({ 'Cache-Control': 'private, no-store' }) })
     }
 
@@ -202,6 +247,9 @@ export async function POST(request: Request) {
         operatorNote: body.operatorNote,
         actionUrl,
         unsubscribeUrl: optOut,
+        // The same edits the operator previewed. Applied per recipient, so the
+        // greeting and the correction still come from their own record.
+        copyOverride: body.copy,
       })
 
       const send = () => provider.send({
@@ -244,7 +292,21 @@ export async function POST(request: Request) {
     const sent = results.filter((item) => item.status === 'sent').length
     const failed = results.filter((item) => item.status === 'failed').length
     const skipped = results.filter((item) => item.status === 'skipped').length
-    log.finish(200, { outcome: 'success', sent, failed, skipped })
+    // Which fields an operator rewrote, and whether the wording review objected.
+    // Recorded because "what exactly did we send to those sixty-three people"
+    // is unanswerable afterwards otherwise — the copy is not stored per send.
+    const editedFields = Object.entries(body.copy ?? {})
+      .filter(([, value]) => value !== undefined)
+      .map(([field]) => field)
+    log.finish(200, {
+      outcome: 'success',
+      sent,
+      failed,
+      skipped,
+      ...(editedFields.length
+        ? { copyEdited: editedFields, copyWarnings: reviewParticipantCopy(body.copy ?? {}) }
+        : {}),
+    })
     return Response.json({ sent, failed, skipped, unavailable, results }, {
       headers: log.headers({ 'Cache-Control': 'private, no-store' }),
     })

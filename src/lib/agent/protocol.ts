@@ -10,6 +10,7 @@
  */
 
 import { providerContentText, stripThinkingBlocks } from '@/lib/provider-content'
+import { citationSources } from '@/lib/live-tools'
 
 export const MAX_TASKS = 3
 
@@ -75,6 +76,49 @@ export function readStreamLine(line: string): StreamChunk | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Drains a streaming completion, forwarding text as it arrives.
+ *
+ * Shared by the agent and the Create coordinator. Both talk to the same
+ * endpoint and both need the same three things out of it — the text as it is
+ * written, the citations, and the usage that lands in the final frame — so
+ * having two copies of this loop only creates the chance for one of them to be
+ * fixed and the other not.
+ */
+export async function consumeStream(
+  body: ReadableStream<Uint8Array>,
+  onDelta: (text: string) => void,
+  onSource: (source: { url: string; title: string }) => void,
+  onUsage: (usage: { cost?: unknown; total_tokens?: unknown } | undefined) => void,
+) {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let text = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    // The last element is whatever arrived mid-line; it stays in the buffer
+    // until the rest of it turns up.
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      const chunk = readStreamLine(line)
+      if (!chunk) continue
+      if (chunk.done) return text
+      if (chunk.delta) {
+        text += chunk.delta
+        onDelta(chunk.delta)
+      }
+      for (const source of citationSources(chunk.annotations)) onSource(source)
+      if (chunk.usage) onUsage(chunk.usage)
+    }
+  }
+  return text
 }
 
 /** Objectives sent back for approval must be ones we proposed, not new work. */

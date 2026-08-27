@@ -1,9 +1,24 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  compactFindings, DEPTHS, isAgentDepth, MAX_TASKS, parseJsonObject, parsePlan,
+  compactFindings, consumeStream, DEPTHS, isAgentDepth, MAX_TASKS, parseJsonObject, parsePlan,
   parseVerdict, readStreamLine, reconcileApprovedPlan, shorten, textOf,
 } from '../src/lib/agent/protocol.ts'
+
+/** A provider stream, delivered in whatever byte-chunks the test asks for. */
+function streamOf(chunks: string[]) {
+  const encoder = new TextEncoder()
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk))
+      controller.close()
+    },
+  })
+}
+
+function frame(delta: string) {
+  return `data: ${JSON.stringify({ choices: [{ delta: { content: delta } }] })}\n`
+}
 
 test('a plan is read even when the model wraps it in commentary', () => {
   const plan = parsePlan('Sure, here is the plan:\n```json\n{"tasks":[{"objective":"Find current tuition fees"}]}\n```\nHope that helps.')
@@ -140,4 +155,82 @@ test('json is extracted from the first brace to the last', () => {
   assert.deepEqual(parseJsonObject('noise {"a":1} noise'), { a: 1 })
   assert.equal(parseJsonObject('no json here'), null)
   assert.equal(parseJsonObject('{broken'), null)
+})
+
+test('a streamed answer is forwarded piece by piece and returned whole', async () => {
+  const seen: string[] = []
+  const text = await consumeStream(
+    streamOf([frame('Hello'), frame(' world'), 'data: [DONE]\n']),
+    (delta) => seen.push(delta),
+    () => undefined,
+    () => undefined,
+  )
+  assert.deepEqual(seen, ['Hello', ' world'])
+  assert.equal(text, 'Hello world')
+})
+
+test('a frame split across two network chunks is not lost or duplicated', async () => {
+  // The reader gets whatever the socket hands it, which is not aligned to
+  // lines. Half a frame must be held until the rest of it arrives.
+  const whole = frame('together')
+  const seen: string[] = []
+  const text = await consumeStream(
+    streamOf([whole.slice(0, 12), whole.slice(12), 'data: [DONE]\n']),
+    (delta) => seen.push(delta),
+    () => undefined,
+    () => undefined,
+  )
+  assert.deepEqual(seen, ['together'])
+  assert.equal(text, 'together')
+})
+
+test('usage from the final frame is reported, so a stream still bills', async () => {
+  // The pack coordinator stops itself using the spend this reports. A stream
+  // that forgot to surface usage would leave the run uncapped.
+  const usages: Array<{ cost?: unknown } | undefined> = []
+  await consumeStream(
+    streamOf([
+      frame('work'),
+      `data: ${JSON.stringify({ choices: [{ delta: {} }], usage: { cost: 0.0042, total_tokens: 210 } })}\n`,
+      'data: [DONE]\n',
+    ]),
+    () => undefined,
+    () => undefined,
+    (usage) => usages.push(usage),
+  )
+  assert.equal(usages.length, 1)
+  assert.equal(usages[0]?.cost, 0.0042)
+})
+
+test('a malformed frame is skipped rather than losing the rest of the answer', async () => {
+  const seen: string[] = []
+  const text = await consumeStream(
+    streamOf([frame('before'), 'data: {not json\n', frame(' after'), 'data: [DONE]\n']),
+    (delta) => seen.push(delta),
+    () => undefined,
+    () => undefined,
+  )
+  assert.equal(text, 'before after')
+  assert.deepEqual(seen, ['before', ' after'])
+})
+
+test('citations found mid-stream are reported as they arrive', async () => {
+  const sources: Array<{ url: string; title: string }> = []
+  await consumeStream(
+    streamOf([
+      `data: ${JSON.stringify({
+        choices: [{
+          delta: {
+            content: 'cited',
+            annotations: [{ type: 'url_citation', url_citation: { url: 'https://example.com', title: 'Example' } }],
+          },
+        }],
+      })}\n`,
+      'data: [DONE]\n',
+    ]),
+    () => undefined,
+    (source) => sources.push(source),
+    () => undefined,
+  )
+  assert.deepEqual(sources, [{ url: 'https://example.com', title: 'Example' }])
 })

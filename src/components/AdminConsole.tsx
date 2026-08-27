@@ -18,6 +18,40 @@ import styles from './AdminConsole.module.css'
 type AdminTab = 'overview' | 'users' | 'credits' | 'finance' | 'errors' | 'cohorts' | 'insights'
 type BulkKind = 'program' | 'credits' | 'email'
 
+/** The editable words of the invitation. Mirrors the server's copy shape. */
+type InviteCopy = {
+  subject: string
+  heading: string
+  body: string
+  cta: string
+  detail: string
+  steps: string[]
+  closing: string
+}
+
+/** One rendered invitation, as a named recipient would receive it. */
+type InvitePreview = {
+  subject: string
+  html: string
+  text: string
+  renderedFor: { id: string; email: string; displayName: string | null }
+}
+
+/** The parts of the message an operator can rewrite, in the order they appear. */
+const INVITE_FIELDS: Array<{
+  key: Exclude<keyof InviteCopy, 'steps'>
+  label: string
+  hint: string
+  rows?: number
+}> = [
+  { key: 'subject', label: 'Subject', hint: 'What they see in the inbox list.' },
+  { key: 'heading', label: 'Heading', hint: 'The first line inside the message.' },
+  { key: 'body', label: 'Opening', hint: 'Why you are writing to this person.', rows: 4 },
+  { key: 'detail', label: 'Second paragraph', hint: 'Optional. Leave empty to drop it.', rows: 4 },
+  { key: 'cta', label: 'Button', hint: 'Keep it short — it is a button, not a sentence.' },
+  { key: 'closing', label: 'Closing', hint: 'Optional. Sits under the button.', rows: 3 },
+]
+
 /** Why an imported row was set aside, in words an operator can act on. */
 const IMPORT_REASONS: Record<string, string> = {
   already_a_user: 'Already has an account — add them from “Add pilot users”',
@@ -243,6 +277,24 @@ export function AdminConsole() {
   const [inviteSendWorking, setInviteSendWorking] = useState(false)
   const [inviteNotice, setInviteNotice] = useState('')
 
+  /**
+   * Reviewing the invitation before it goes out.
+   *
+   * `composeDefaults` is the written copy as the server holds it, kept so the
+   * editor can show what changed and put it back. `composeCopy` is the working
+   * draft. Only the difference between them is sent, so an unedited field keeps
+   * following the product's copy rather than being frozen at whatever the
+   * console happened to load.
+   */
+  const [composeOpen, setComposeOpen] = useState(false)
+  const [composeFor, setComposeFor] = useState('')
+  const [composeNote, setComposeNote] = useState('')
+  const [composeLoading, setComposeLoading] = useState(false)
+  const [composeDefaults, setComposeDefaults] = useState<InviteCopy | null>(null)
+  const [composeCopy, setComposeCopy] = useState<InviteCopy | null>(null)
+  const [composeWarnings, setComposeWarnings] = useState<string[]>([])
+  const [composePreview, setComposePreview] = useState<InvitePreview | null>(null)
+
   const fetchDashboard = useCallback(async (nextRange: AdminRange) => {
     const response = await fetch(`/api/admin/overview?range=${nextRange}`, { cache: 'no-store' })
     const data = await response.json().catch(() => ({}))
@@ -328,6 +380,29 @@ export function AdminConsole() {
     setInviteContent('')
   }, [inviteWorking])
 
+  /**
+   * Opens the message before it goes out, rather than after.
+   *
+   * Sending used to be one button: select rows, press Send, and sixty-three
+   * people received copy nobody had looked at in its rendered form. The preview
+   * is rendered by the same function that does the sending, as a real recipient,
+   * so what is on screen is the message — not an approximation of it.
+   */
+  const openCompose = useCallback(async () => {
+    if (!actionableInvitations.length) return
+    setComposeOpen(true)
+    setComposeFor(actionableInvitations[0].id)
+    setComposeCopy(null)
+    setComposePreview(null)
+    setError('')
+  }, [actionableInvitations])
+
+  const closeCompose = useCallback(() => {
+    if (inviteSendWorking) return
+    setComposeOpen(false)
+    setComposePreview(null)
+  }, [inviteSendWorking])
+
   const importRequest = useCallback(async (mode: 'preview' | 'commit') => {
     const response = await fetch('/api/admin/participants/import', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -378,6 +453,49 @@ export function AdminConsole() {
     }
   }, [importRequest, refreshInvitations])
 
+  /** Only the fields the operator actually changed travel to the server. */
+  const composeEdits = useCallback(() => {
+    if (!composeCopy || !composeDefaults) return undefined
+    const changed: Record<string, string | string[]> = {}
+    for (const field of ['subject', 'heading', 'body', 'cta', 'detail', 'closing'] as const) {
+      if (composeCopy[field] !== composeDefaults[field]) changed[field] = composeCopy[field]
+    }
+    if (composeCopy.steps.join(' ') !== composeDefaults.steps.join(' ')) {
+      changed.steps = composeCopy.steps
+    }
+    return Object.keys(changed).length ? changed : undefined
+  }, [composeCopy, composeDefaults])
+
+  const refreshPreview = useCallback(async () => {
+    if (!actionableInvitations.length) return
+    setComposeLoading(true)
+    setError('')
+    try {
+      const response = await fetch('/api/admin/participants/invite', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'preview', programKey: 'pilot',
+          invitationIds: actionableInvitations.map((item) => item.id),
+          previewInvitationId: composeFor || undefined,
+          operatorNote: composeNote.trim() || undefined,
+          copy: composeEdits(),
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'The preview could not be prepared.')
+      setComposePreview(data.sample ?? null)
+      setComposeWarnings(Array.isArray(data.warnings) ? data.warnings : [])
+      // The written copy arrives with the first preview and seeds the editor,
+      // so the operator edits the real message rather than an empty form.
+      setComposeDefaults((current) => current ?? data.defaults ?? null)
+      setComposeCopy((current) => current ?? (data.defaults ? { ...data.defaults } : null))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The preview could not be prepared.')
+    } finally {
+      setComposeLoading(false)
+    }
+  }, [actionableInvitations, composeEdits, composeFor, composeNote])
+
   const sendInvitations = useCallback(async () => {
     if (!actionableInvitations.length) return
     setInviteSendWorking(true)
@@ -388,6 +506,8 @@ export function AdminConsole() {
         body: JSON.stringify({
           mode: 'send', programKey: 'pilot',
           invitationIds: actionableInvitations.map((item) => item.id),
+          operatorNote: composeNote.trim() || undefined,
+          copy: composeEdits(),
           idempotencyKey: `invite_${crypto.randomUUID()}`,
         }),
       })
@@ -395,13 +515,29 @@ export function AdminConsole() {
       if (!response.ok) throw new Error(data.error || 'The invitations could not be sent.')
       setInviteNotice(`${data.sent} sent${data.failed ? `, ${data.failed} failed` : ''}${data.skipped ? `, ${data.skipped} already handled` : ''}.`)
       setInvitationIds(new Set())
+      setComposeOpen(false)
+      setComposePreview(null)
       await refreshInvitations()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The invitations could not be sent.')
     } finally {
       setInviteSendWorking(false)
     }
-  }, [actionableInvitations, refreshInvitations])
+  }, [actionableInvitations, composeEdits, composeNote, refreshInvitations])
+
+  /**
+   * Re-renders the preview as the operator types, on a short delay.
+   *
+   * Debounced rather than live: every render is a server round trip through the
+   * real template, which is the point — a preview built in the browser would be
+   * a second implementation of the message and could disagree with the one that
+   * actually goes out.
+   */
+  useEffect(() => {
+    if (!composeOpen) return
+    const timer = window.setTimeout(() => { void refreshPreview() }, 500)
+    return () => window.clearTimeout(timer)
+  }, [composeOpen, composeFor, composeCopy, composeNote, refreshPreview])
 
   const revokeInvitations = useCallback(async () => {
     if (!actionableInvitations.length) return
@@ -882,7 +1018,11 @@ export function AdminConsole() {
                           visibleInvitations.forEach((item) => { if (all) next.delete(item.id); else next.add(item.id) })
                           return next
                         })}>{visibleInvitations.length && visibleInvitations.every((item) => invitationIds.has(item.id)) ? 'Clear' : 'Select all'}</button>
-                        {dashboard.capabilities.sendInvitations ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void sendInvitations()}>{inviteSendWorking ? 'Working…' : `Send${actionableInvitations.length ? ` ${actionableInvitations.length}` : ''}`}</button> : null}
+                        {/* Opens the message rather than sending it. A bulk
+                            send is not undoable, and this button used to be the
+                            only thing between a selection and sixty-three
+                            inboxes. */}
+                        {dashboard.capabilities.sendInvitations ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void openCompose()}>{`Review & send${actionableInvitations.length ? ` ${actionableInvitations.length}` : ''}`}</button> : null}
                         {dashboard.capabilities.importParticipants ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void revokeInvitations()}>Cancel</button> : null}
                       </span>
                     </header>
@@ -1229,6 +1369,117 @@ export function AdminConsole() {
           <p className={styles.auditNote}>Creating invitations sends nothing. You choose who to email, and when, from the invitation list.</p>
           <footer><button type="button" disabled={inviteWorking} onClick={() => setImportPreview(null)}>Back</button><button type="button" disabled={inviteWorking || !importPreview.ready.length} onClick={() => void commitImport()}>{inviteWorking ? 'Creating…' : `Create ${importPreview.ready.length} invitation${importPreview.ready.length === 1 ? '' : 's'}`}</button></footer>
         </>}
+      </section></div> : null}
+
+      {/*
+        Read the message, edit it, then send it.
+
+        The right half is an iframe holding the server's own rendered HTML, not
+        a styled approximation built here — a preview that is a second
+        implementation of the template can be wrong in exactly the way that
+        matters. It is sandboxed with no allowed capabilities, because it
+        renders a document the operator is about to mail rather than one they
+        should be able to interact with.
+      */}
+      {composeOpen ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) closeCompose() }}><section className={`${styles.creditModal} ${styles.composeModal}`}>
+        <header>
+          <div>
+            <span className={styles.eyebrow}>Invitation · {actionableInvitations.length} recipient{actionableInvitations.length === 1 ? '' : 's'}</span>
+            <h2>Review before sending</h2>
+            <p>Edits apply to this send only and are not saved as the default. Each person still gets their own name and their own single-use link.</p>
+          </div>
+          <button type="button" onClick={closeCompose}>×</button>
+        </header>
+
+        <div className={styles.composeBody}>
+          <div className={styles.composeEditor}>
+            <label>
+              <span>Preview as <em>The greeting differs per person — check a few</em></span>
+              <select value={composeFor} onChange={(event) => setComposeFor(event.target.value)}>
+                {actionableInvitations.slice(0, 75).map((item) => (
+                  <option key={item.id} value={item.id}>{item.displayName || item.email}</option>
+                ))}
+              </select>
+            </label>
+
+            {INVITE_FIELDS.map((field) => (
+              <label key={field.key}>
+                <span>{field.label} <em>{field.hint}</em></span>
+                {field.rows
+                  ? <textarea
+                    rows={field.rows}
+                    value={composeCopy?.[field.key] ?? ''}
+                    disabled={!composeCopy}
+                    onChange={(event) => setComposeCopy((current) => current && { ...current, [field.key]: event.target.value })}
+                  />
+                  : <input
+                    value={composeCopy?.[field.key] ?? ''}
+                    disabled={!composeCopy}
+                    onChange={(event) => setComposeCopy((current) => current && { ...current, [field.key]: event.target.value })}
+                  />}
+              </label>
+            ))}
+
+            <label>
+              <span>Steps <em>One per line. Empty lines are dropped.</em></span>
+              <textarea
+                rows={6}
+                value={composeCopy?.steps.join('\n') ?? ''}
+                disabled={!composeCopy}
+                onChange={(event) => setComposeCopy((current) => current && { ...current, steps: event.target.value.split('\n') })}
+              />
+            </label>
+
+            <label>
+              <span>Note for this batch <em>Optional. Appears as a highlighted block.</em></span>
+              <textarea rows={3} maxLength={500} value={composeNote} onChange={(event) => setComposeNote(event.target.value)} />
+            </label>
+
+            {composeDefaults && composeCopy && composeEdits() ? (
+              <button type="button" className={styles.composeReset} onClick={() => setComposeCopy({ ...composeDefaults, steps: [...composeDefaults.steps] })}>
+                Put the written copy back
+              </button>
+            ) : null}
+          </div>
+
+          <div className={styles.composePreview}>
+            <div className={styles.composeSubject}>
+              <span>Subject</span>
+              <b>{composePreview?.subject || '—'}</b>
+              {composePreview ? <small>To {composePreview.renderedFor.email}</small> : null}
+            </div>
+
+            {/* Advisory, never blocking. The invitation copy was deliberately
+                stripped of credit amounts, prices and promises; an editable
+                field is exactly how those come back without anyone noticing. */}
+            {composeWarnings.length ? (
+              <div className={styles.composeWarnings} role="status">
+                <b>Worth a second look</b>
+                <ul>{composeWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+              </div>
+            ) : null}
+
+            {composePreview ? (
+              <iframe
+                className={styles.composeFrame}
+                title="Invitation preview"
+                sandbox=""
+                srcDoc={composePreview.html}
+              />
+            ) : <p className={styles.composeEmpty}>{composeLoading ? 'Rendering…' : 'Preparing the preview.'}</p>}
+          </div>
+        </div>
+
+        <footer>
+          <button type="button" onClick={closeCompose}>Cancel</button>
+          <button
+            type="button"
+            disabled={inviteSendWorking || composeLoading || !composePreview || !actionableInvitations.length}
+            onClick={() => void sendInvitations()}
+          >
+            {inviteSendWorking ? 'Sending…' : `Send to ${actionableInvitations.length}`}
+          </button>
+        </footer>
       </section></div> : null}
 
       {bulkKind && bulkKind !== 'email' ? <div className={styles.modalBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget && !bulkWorking) closeBulk() }}><form className={`${styles.creditModal} ${styles.bulkModal}`} onSubmit={(event) => { event.preventDefault(); void runBulkAction() }}>

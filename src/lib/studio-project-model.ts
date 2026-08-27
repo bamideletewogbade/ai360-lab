@@ -111,6 +111,7 @@ const SECTION_PRESENTATION: Record<SpecialistId, Pick<StudioAsset, 'title' | 'ty
   ads: { title: 'Ad variants', type: 'messaging', channel: 'Paid media', purpose: 'Distinct ad angles worth testing' },
   calendar: { title: 'Content calendar', type: 'social', channel: 'Social media', purpose: 'A practical four-week publishing plan' },
   pitch: { title: 'Pitch materials', type: 'strategy', channel: 'Pitch', purpose: 'A clear case for customers, partners or funders' },
+  interviewer: { title: 'What you can already do', type: 'strategy', channel: 'Discovery', purpose: 'Skills evidenced from real past work, and what the evidence does not show' },
 }
 
 export function packProjectAssets(sections: PackSection[], createdAt: number): StudioAsset[] {
