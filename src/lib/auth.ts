@@ -20,19 +20,24 @@ export async function getOptionalAuthContext(): Promise<WorkspaceAuthContext | n
   if (!isAuthConfigured()) return null
   try {
     const supabase = await createSupabaseServerClient()
-    const { data, error } = await supabase.auth.getUser()
+    // getClaims() verifies the JWT locally against the cached JWKS when the
+    // project uses asymmetric signing keys, unlike getUser() which always
+    // makes a network round trip to the Auth server. The proxy middleware
+    // already refreshed the session cookie earlier in this request, so this
+    // is a second verification, not a second refresh.
+    const { data, error } = await supabase.auth.getClaims()
     if (error) {
       if (!isMissingSession(error)) logEvent('warn', 'auth.context_unavailable', errorDetails(error))
       return null
     }
-    const user = data.user
-    if (!user?.id) return null
+    const claims = data?.claims
+    if (!claims?.sub) return null
 
     return createWorkspaceAuthContext({
-      userId: user.id,
-      email: user.email ?? null,
-      displayName: authDisplayName(user),
-      imageUrl: authImageUrl(user),
+      userId: claims.sub,
+      email: claims.email ?? null,
+      displayName: authDisplayName(claims),
+      imageUrl: authImageUrl(claims),
     })
   } catch (error) {
     logEvent('error', 'auth.context_resolution_failed', errorDetails(error))
