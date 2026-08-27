@@ -30,7 +30,7 @@ export async function getOptionalAuthContext(): Promise<WorkspaceAuthContext | n
       if (!isMissingSession(error)) logEvent('warn', 'auth.context_unavailable', errorDetails(error))
       return null
     }
-    const claims = data.claims
+    const claims = data?.claims
     if (!claims?.sub) return null
 
     return createWorkspaceAuthContext({
