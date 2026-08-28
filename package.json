@@ -15,6 +15,7 @@
     "db:postgres:verify": "node scripts/verify-postgres.mjs",
     "credits:verify": "node --experimental-strip-types scripts/verify-credits.mjs",
     "spend:verify": "node --experimental-strip-types scripts/verify-spend-caps.mjs",
+    "pilot:verify": "node --experimental-strip-types scripts/verify-pilot-allowance.mjs",
     "email:verify": "node --experimental-strip-types scripts/verify-email.mjs",
     "invite:trace": "node --experimental-strip-types scripts/trace-invitation.mjs",
     "invite:mismatches": "node --experimental-strip-types scripts/report-invitation-mismatches.mjs",

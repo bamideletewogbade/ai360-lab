@@ -252,12 +252,18 @@ test('participant exports offer authenticated Excel workbooks as well as CSV', a
   assert.match(route, /autoFilter: true/)
 })
 
-test('admins can onboard existing accounts into the pilot with optional starting credits', async () => {
+test('admins can onboard existing accounts and stage the pilot credit reward', async () => {
   const consoleUi = await readFile(new URL('../src/components/AdminConsole.tsx', import.meta.url), 'utf8')
   const bulkRoute = await readFile(new URL('../src/app/api/admin/bulk/route.ts', import.meta.url), 'utf8')
   assert.match(consoleUi, /\+ Add pilot users/)
   assert.match(consoleUi, /Choose existing AI360 accounts/)
-  assert.match(consoleUi, /Starting credits per user/)
+  assert.match(consoleUi, /PILOT_INITIAL_CREDITS/, 'the invite explanation must follow the pilot policy')
+  assert.match(consoleUi, /String\(PILOT_FEEDBACK_REWARD_CREDITS\)/,
+    'the active-tester reward should follow the pilot policy')
+  assert.match(consoleUi, /const \[pilotAddCredits, setPilotAddCredits\] = useState\('0'\)/,
+    'existing users must not receive an accidental top-up')
+  assert.match(bulkRoute, /allowanceCredits: PILOT_INITIAL_CREDITS/,
+    'existing accounts added to the pilot must receive the same bounded entitlement as invitees')
   assert.doesNotMatch(consoleUi, /Program tools need migration 0025/)
   assert.match(bulkRoute, /action: z\.literal\('pilot_onboard'\)/)
   assert.match(bulkRoute, /sourceType: 'sponsored_seat'/)

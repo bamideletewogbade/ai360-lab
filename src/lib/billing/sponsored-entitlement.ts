@@ -51,6 +51,8 @@ export async function grantSponsoredEntitlement(input: {
   cohort: string
   planSlug?: string
   periodDays?: number
+  /** Optional programme allowance while preserving the selected plan's access. */
+  allowanceCredits?: number
   operatorAudit?: {
     actorId: string
     reason: string
@@ -77,7 +79,12 @@ export async function grantSponsoredEntitlement(input: {
       planSlug: row.plan_slug,
     }))
 
-    const decision = decideSponsoredEntitlement({ planSlug, periodDays, activeSubscriptions })
+    const decision = decideSponsoredEntitlement({
+      planSlug,
+      periodDays,
+      allowanceCredits: input.allowanceCredits,
+      activeSubscriptions,
+    })
     if (!decision.ok) return { granted: false as const, reason: decision.reason }
 
     // The ledger is checked before anything moves, for the same reason
@@ -89,6 +96,7 @@ export async function grantSponsoredEntitlement(input: {
     if (existing) return { granted: false as const, reason: 'already_granted' as const }
 
     const plan = decision.plan
+    const allowanceCredits = decision.allowanceCredits
 
     const [subscription] = await tx<{ current_period_end: Date }[]>`
       insert into public.lab_subscriptions
@@ -141,8 +149,8 @@ export async function grantSponsoredEntitlement(input: {
 
     await tx`
       update public.lab_credit_accounts
-         set available_credits = available_credits + ${plan.includedCredits},
-             allowance_credits = ${plan.includedCredits},
+         set available_credits = available_credits + ${allowanceCredits},
+             allowance_credits = ${allowanceCredits},
              allowance_period = ${currentBillingPeriod()},
              allowance_plan = ${plan.slug},
              allowance_grant_id = ${key},
@@ -152,10 +160,12 @@ export async function grantSponsoredEntitlement(input: {
       insert into public.lab_credit_ledger
         (workspace_key, entry_type, credits_delta, balance_after, source_type,
          source_id, idempotency_key, metadata)
-      select ${workspaceKey}, 'grant', ${plan.includedCredits}, available_credits,
+      select ${workspaceKey}, 'grant', ${allowanceCredits}, available_credits,
              'sponsored_seat', ${input.cohort}, ${key},
              ${tx.json({
                plan: plan.slug,
+               allowanceCredits,
+               catalogAllowanceCredits: plan.includedCredits,
                catalogVersion: BILLING_CATALOG_VERSION,
                periodDays: decision.periodDays,
                cohort: input.cohort,
@@ -163,7 +173,7 @@ export async function grantSponsoredEntitlement(input: {
         from public.lab_credit_accounts where workspace_key = ${workspaceKey}
       on conflict (idempotency_key) do nothing`
 
-    const balanceAfter = Math.max(0, balanceBefore - oldAllowance) + plan.includedCredits
+    const balanceAfter = Math.max(0, balanceBefore - oldAllowance) + allowanceCredits
 
     if (input.operatorAudit) {
       const audit = input.operatorAudit
@@ -172,16 +182,16 @@ export async function grantSponsoredEntitlement(input: {
           (id, actor_id, target_workspace_key, action, credits_delta, balance_before,
            balance_after, reason, request_id, idempotency_key, metadata)
         values (${`adm_${crypto.randomUUID()}`}, ${audit.actorId}, ${workspaceKey},
-                'credit_grant', ${plan.includedCredits}, ${balanceBefore}, ${balanceAfter},
+                'credit_grant', ${allowanceCredits}, ${balanceBefore}, ${balanceAfter},
                 ${audit.reason.slice(0, 240)}, ${audit.requestId.slice(0, 80)}, ${key},
-                ${tx.json({ sponsoredPlan: plan.slug, cohort: input.cohort })})
+                ${tx.json({ sponsoredPlan: plan.slug, allowanceCredits, cohort: input.cohort })})
         on conflict (idempotency_key) do nothing`
     }
 
     return {
       granted: true as const,
       plan: plan.slug,
-      credits: plan.includedCredits,
+      credits: allowanceCredits,
       periodEnd: new Date(subscription.current_period_end).toISOString(),
       balanceBefore,
       balanceAfter,

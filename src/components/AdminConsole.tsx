@@ -13,6 +13,7 @@ import type {
   AdminUser,
   AdminUserDetail,
 } from '@/lib/admin/contracts'
+import { PILOT_FEEDBACK_REWARD_CREDITS, PILOT_INITIAL_CREDITS } from '@/lib/billing/pilot-policy'
 import styles from './AdminConsole.module.css'
 
 type AdminTab = 'overview' | 'users' | 'credits' | 'finance' | 'errors' | 'cohorts' | 'insights'
@@ -245,7 +246,8 @@ export function AdminConsole() {
   const [bulkCohort, setBulkCohort] = useState('pilot-main')
   const [bulkParticipation, setBulkParticipation] = useState('enrolled')
   const [bulkFeedback, setBulkFeedback] = useState('keep')
-  const [bulkCredits, setBulkCredits] = useState('25')
+  // The agreed second-stage pilot reward for people who actively test or reply.
+  const [bulkCredits, setBulkCredits] = useState(String(PILOT_FEEDBACK_REWARD_CREDITS))
   const [bulkTemplate, setBulkTemplate] = useState('onboarding_reminder')
   const [bulkNote, setBulkNote] = useState('')
   const [emailPreview, setEmailPreview] = useState<null | {
@@ -258,16 +260,16 @@ export function AdminConsole() {
   const [pilotAddIds, setPilotAddIds] = useState<Set<string>>(new Set())
   const [pilotAddCohort, setPilotAddCohort] = useState('pilot-main')
   const [pilotAddStatus, setPilotAddStatus] = useState<'invited' | 'enrolled'>('enrolled')
-  const [pilotAddCredits, setPilotAddCredits] = useState('25')
+  const [pilotAddCredits, setPilotAddCredits] = useState('0')
   const [pilotAddReason, setPilotAddReason] = useState('')
   const [pilotAddWorking, setPilotAddWorking] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteContent, setInviteContent] = useState('')
   const [inviteCohort, setInviteCohort] = useState('pilot-main')
   const [inviteStage, setInviteStage] = useState<'invited' | 'enrolled'>('enrolled')
-  // Zero, because an invited participant is now placed on the Everyday plan and
-  // its allowance is the grant. Anything here is added on top of that, so a
-  // number typed out of habit would quietly double what the pilot hands out.
+  // Zero, because an invited participant receives the bounded 10-credit pilot
+  // allowance with Everyday access. Anything here is an immediate extra grant;
+  // the agreed 5-credit reward is applied later only to active testers.
   const [inviteCredits, setInviteCredits] = useState('0')
   const [inviteReason, setInviteReason] = useState('')
   const [inviteWorking, setInviteWorking] = useState(false)
@@ -1335,7 +1337,7 @@ export function AdminConsole() {
           <label><span>Starting stage</span><select value={pilotAddStatus} onChange={(event) => setPilotAddStatus(event.target.value as 'invited' | 'enrolled')}><option value="enrolled">Enrolled</option><option value="invited">Invited</option></select></label>
           <label><span>Cohort</span><input maxLength={120} value={pilotAddCohort} onChange={(event) => setPilotAddCohort(event.target.value)} placeholder="pilot-main" /></label>
         </div>
-        {dashboard?.capabilities.manageCredits ? <label><span>Starting credits per user <em>Enter 0 for none</em></span><input type="number" min="0" max="10000" step="1" value={pilotAddCredits} onChange={(event) => setPilotAddCredits(event.target.value)} /></label> : null}
+        {dashboard?.capabilities.manageCredits ? <label><span>Extra credits per user <em>They receive {PILOT_INITIAL_CREDITS} pilot credits and Everyday access automatically. Keep this at 0 unless you deliberately want an immediate top-up.</em></span><input type="number" min="0" max="10000" step="1" value={pilotAddCredits} onChange={(event) => setPilotAddCredits(event.target.value)} /></label> : null}
         {dashboard?.capabilities.manageCredits && pilotAddIds.size ? <div className={styles.bulkImpact}><b>{number(Math.max(0, Number(pilotAddCredits) || 0) * pilotAddIds.size)} credits total</b><span>{Math.max(0, Number(pilotAddCredits) || 0)} × {pilotAddIds.size} selected accounts</span></div> : null}
         <label><span>Reason <em>Required for audit</em></span><textarea rows={3} maxLength={240} value={pilotAddReason} onChange={(event) => setPilotAddReason(event.target.value)} placeholder="Example: August creator pilot intake" /></label>
         <p className={styles.auditNote}>Each participant receives an individual program history entry. Any starting credits also receive an immutable credit-ledger and operator audit entry.</p>
@@ -1358,7 +1360,7 @@ export function AdminConsole() {
             <label><span>Starting stage</span><select value={inviteStage} onChange={(event) => setInviteStage(event.target.value as 'invited' | 'enrolled')}><option value="enrolled">Enrolled</option><option value="invited">Invited</option></select></label>
             <label><span>Cohort</span><input maxLength={120} value={inviteCohort} onChange={(event) => setInviteCohort(event.target.value)} placeholder="pilot-main" /></label>
           </div>
-          {dashboard?.capabilities.manageCredits ? <label><span>Extra credits per participant <em>On top of the Everyday plan allowance they already receive. Leave at 0 for the pilot.</em></span><input type="number" min="0" max="10000" step="1" value={inviteCredits} onChange={(event) => setInviteCredits(event.target.value)} /></label> : null}
+          {dashboard?.capabilities.manageCredits ? <label><span>Extra credits per participant <em>Every invite already receives {PILOT_INITIAL_CREDITS} pilot credits with Everyday access. Leave this at 0; grant the {PILOT_FEEDBACK_REWARD_CREDITS}-credit follow-up later to active testers.</em></span><input type="number" min="0" max="10000" step="1" value={inviteCredits} onChange={(event) => setInviteCredits(event.target.value)} /></label> : null}
           <label><span>Reason <em>Required for audit</em></span><textarea rows={2} maxLength={240} value={inviteReason} onChange={(event) => setInviteReason(event.target.value)} placeholder="Example: August creator pilot intake" /></label>
           <div className={styles.emailSafety}><b>Before anything is written</b><p>AI360 will show you every address it accepted, every one it set aside, and why — invalid addresses, repeats, people already invited, and people who already have an account.</p></div>
           <footer><button type="button" onClick={closeInvite}>Cancel</button><button type="button" disabled={inviteWorking || !inviteContent.trim() || !inviteReason.trim()} onClick={() => void previewImport()}>{inviteWorking ? 'Reading…' : 'Review the list'}</button></footer>

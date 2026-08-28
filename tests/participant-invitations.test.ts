@@ -386,12 +386,18 @@ test('a message with no headers does not send an empty headers field', async () 
 
 test('an invited participant is placed on a plan, not just handed credits', async () => {
   const claim = await readFile(new URL('../src/lib/admin/invitation-claim.ts', import.meta.url), 'utf8')
+  const pilotPolicy = await import('../src/lib/billing/pilot-policy.ts')
 
   // Credits alone leave the person on Explorer, capped at ten chat messages a
   // day, so their allowance drains on the cheapest work in the product and
   // never reaches what the pilot is measuring.
   assert.match(claim, /grantSponsoredEntitlement/, 'the claim must grant the plan, not only credits')
   assert.match(claim, /PILOT_ENTITLEMENT_PLAN = 'everyday'/, 'the pilot plan must be Everyday')
+  assert.equal(pilotPolicy.PILOT_INITIAL_CREDITS, 10, 'the pilot must begin with the agreed bounded allowance')
+  assert.equal(pilotPolicy.PILOT_FEEDBACK_REWARD_CREDITS, 5, 'active testers receive the agreed second-stage reward')
+  assert.equal(pilotPolicy.PILOT_TOTAL_BUDGET_USD, 20, 'the programme has the agreed cumulative ceiling')
+  assert.match(claim, /allowanceCredits: PILOT_INITIAL_CREDITS/,
+    'Everyday access must not silently restore the commercial 120-credit allowance')
 
   // The entitlement must never be able to block a sign-in.
   assert.match(claim, /catch \(cause\)/, 'an entitlement failure must be caught')
@@ -400,6 +406,16 @@ test('an invited participant is placed on a plan, not just handed credits', asyn
   // whether anything is granted at all.
   assert.doesNotMatch(claim, /let creditsGranted = 0\s*\n\s*if \(claimed\.startingCredits/,
     'credits must no longer be gated solely on startingCredits')
+})
+
+test('sponsored pilot settings show the real allowance and no subscription price', async () => {
+  const route = await readFile(new URL('../src/app/api/billing/subscription/route.ts', import.meta.url), 'utf8')
+  const repository = await readFile(new URL('../src/lib/payments/payment-repository.ts', import.meta.url), 'utf8')
+  assert.match(repository, /provider: string/, 'the subscription reader must identify sponsored access')
+  assert.match(route, /subscription\?\.provider === SPONSORED_PROVIDER/)
+  assert.match(route, /sponsoredBalance\?\.allowance/, 'settings must show the actual 10-credit allowance')
+  assert.match(route, /monthlyPriceGhs: sponsored \? 0/,
+    'a sponsored tester must not be shown the commercial monthly price as their charge')
 })
 
 test('the invitation email guides rather than gestures', async () => {

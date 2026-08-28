@@ -43,15 +43,21 @@ export type SponsoredEntitlementRefusal =
   | 'unknown_plan'
   | 'organization_plan'
   | 'invalid_period'
+  | 'invalid_allowance'
   | 'has_paid_subscription'
 
 export type SponsoredEntitlementDecision =
-  | { ok: true; plan: BillingPlan; periodDays: number }
+  | { ok: true; plan: BillingPlan; periodDays: number; allowanceCredits: number }
   | { ok: false; reason: SponsoredEntitlementRefusal }
 
 export function decideSponsoredEntitlement(input: {
   planSlug: string
   periodDays?: number
+  /**
+   * A sponsored programme may provide the plan's feature access with a smaller
+   * prepaid allowance. It may never silently exceed the commercial plan.
+   */
+  allowanceCredits?: number
   activeSubscriptions: ActiveSubscription[]
 }): SponsoredEntitlementDecision {
   const plan = findBillingPlan(input.planSlug)
@@ -67,6 +73,11 @@ export function decideSponsoredEntitlement(input: {
     return { ok: false, reason: 'invalid_period' }
   }
 
+  const allowanceCredits = input.allowanceCredits ?? plan.includedCredits
+  if (!Number.isSafeInteger(allowanceCredits) || allowanceCredits < 1 || allowanceCredits > plan.includedCredits) {
+    return { ok: false, reason: 'invalid_allowance' }
+  }
+
   // `resolvePlan` takes whichever active subscription runs latest, so a
   // sponsored seat granted over a live paid subscription could silently move a
   // paying customer onto a smaller plan. Refuse instead: a customer who is
@@ -75,7 +86,7 @@ export function decideSponsoredEntitlement(input: {
   const paid = input.activeSubscriptions.some((row) => row.provider !== SPONSORED_PROVIDER)
   if (paid) return { ok: false, reason: 'has_paid_subscription' }
 
-  return { ok: true, plan, periodDays }
+  return { ok: true, plan, periodDays, allowanceCredits }
 }
 
 /** Operator-facing text for a refusal, so every surface explains it the same way. */
@@ -87,6 +98,8 @@ export function explainSponsoredRefusal(reason: SponsoredEntitlementRefusal) {
       return 'Team is an organization plan and cannot be sponsored onto a personal workspace.'
     case 'invalid_period':
       return `Sponsored access must run for 1 to ${MAX_SPONSORED_DAYS} whole days.`
+    case 'invalid_allowance':
+      return 'Sponsored credits must be a positive whole number no larger than the selected plan allowance.'
     case 'has_paid_subscription':
       return 'This workspace already has active paid access. Sponsoring it could downgrade the plan they paid for.'
   }

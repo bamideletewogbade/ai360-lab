@@ -254,6 +254,7 @@ export async function readPaymentAttempt(context: WorkspaceAuthContext, id: stri
 
 export type WorkspaceSubscription = {
   id: string
+  provider: string
   planSlug: string
   status: string
   cadence: string
@@ -266,6 +267,7 @@ export async function readWorkspaceSubscription(context: WorkspaceAuthContext): 
   if (!isPostgresConfigured()) return null
   const [row] = await getPostgres()<{
     id: string
+    provider: string
     plan_slug: string
     status: string
     cadence: string
@@ -273,13 +275,14 @@ export async function readWorkspaceSubscription(context: WorkspaceAuthContext): 
     current_period_end: Date
     cancel_at_period_end: boolean
   }[]>`
-    select id, plan_slug, status, cadence, current_period_start, current_period_end, cancel_at_period_end
+    select id, provider, plan_slug, status, cadence, current_period_start, current_period_end, cancel_at_period_end
       from public.lab_subscriptions
      where workspace_key = ${context.workspace.key} and status = 'active'
        and current_period_end > now()`
   if (!row) return null
   return {
     id: row.id,
+    provider: row.provider,
     planSlug: row.plan_slug,
     status: row.status,
     cadence: row.cadence,

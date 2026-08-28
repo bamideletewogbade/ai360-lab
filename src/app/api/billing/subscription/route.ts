@@ -1,5 +1,7 @@
 import { getOptionalAuthContext } from '@/lib/auth'
 import { findBillingPlan } from '@/lib/billing/catalog'
+import { readBalance } from '@/lib/billing/credit-repository'
+import { SPONSORED_PROVIDER } from '@/lib/billing/sponsored-entitlement-policy'
 import { errorDetails, requestLogger } from '@/lib/observability'
 import { listWorkspacePaymentAttempts, readWorkspaceSubscription } from '@/lib/payments/payment-repository'
 import { isPostgresConfigured } from '@/lib/postgres'
@@ -34,20 +36,22 @@ export async function GET(request: Request) {
     const attempts = await listWorkspacePaymentAttempts(context, 15)
 
     const activePlan = subscription ? findBillingPlan(subscription.planSlug) : findBillingPlan('explorer')
+    const sponsored = subscription?.provider === SPONSORED_PROVIDER
+    const sponsoredBalance = sponsored ? await readBalance(context) : null
 
     log.finish(200, { outcome: 'success', hasSubscription: Boolean(subscription) })
     return Response.json({
       subscription: subscription ? {
         id: subscription.id,
         planSlug: subscription.planSlug,
-        planName: activePlan?.name ?? subscription.planSlug,
+        planName: sponsored ? `${activePlan?.name ?? subscription.planSlug} pilot access` : (activePlan?.name ?? subscription.planSlug),
         status: subscription.status,
         cadence: subscription.cadence,
         currentPeriodStart: subscription.currentPeriodStart,
         currentPeriodEnd: subscription.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-        includedCredits: activePlan?.includedCredits ?? 0,
-        monthlyPriceGhs: activePlan?.monthlyPriceGhs ?? 0,
+        includedCredits: sponsoredBalance?.allowance ?? activePlan?.includedCredits ?? 0,
+        monthlyPriceGhs: sponsored ? 0 : (activePlan?.monthlyPriceGhs ?? 0),
       } : null,
       attempts: attempts.map((attempt) => ({
         id: attempt.id,

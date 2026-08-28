@@ -3,6 +3,7 @@ import 'server-only'
 import { claimInvitationForUser, isMissingAdminInvitationTables } from '@/lib/admin/invitations'
 import { grantCredits } from '@/lib/billing/credit-repository'
 import { grantSponsoredEntitlement } from '@/lib/billing/sponsored-entitlement'
+import { PILOT_INITIAL_CREDITS } from '@/lib/billing/pilot-policy'
 import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { createWorkspaceAuthContext } from '@/lib/workspace'
 import { ensureWorkspaceRecord } from '@/lib/workspace-db'
@@ -80,6 +81,7 @@ export async function claimInvitationOnSignIn(input: {
         context,
         cohort,
         planSlug: PILOT_ENTITLEMENT_PLAN,
+        allowanceCredits: PILOT_INITIAL_CREDITS,
       })
     } catch (cause) {
       // Never block a sign-in over this. An operator can grant the seat by
@@ -94,9 +96,9 @@ export async function claimInvitationOnSignIn(input: {
 
     /**
      * `startingCredits` is a top-up *on top of* the plan allowance, not a
-     * replacement for it. For the pilot it is set to zero: the Everyday
-     * allowance is exactly the number whose utilisation the pilot is measuring,
-     * and adding to it would make that measurement unreadable.
+     * replacement for it. For this pilot it stays at zero because the sponsored
+     * entitlement already grants the deliberately bounded 10-credit allowance.
+     * The separate 5-credit follow-up is granted later only to active testers.
      */
     if (claimed.startingCredits > 0) {
       const result = await grantCredits({

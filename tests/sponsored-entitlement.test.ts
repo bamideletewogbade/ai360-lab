@@ -10,7 +10,7 @@ import {
 import { CHAT_FAIR_USE_DAILY, findBillingPlan } from '../src/lib/billing/catalog.ts'
 import { allowanceAction } from '../src/lib/billing/allowance-policy.ts'
 
-test('a sponsored seat carries the plan allowance, not an invented number', () => {
+test('a sponsored seat defaults to the selected plan allowance', () => {
   const decision = decideSponsoredEntitlement({ planSlug: 'everyday', activeSubscriptions: [] })
   assert.equal(decision.ok, true)
   assert.ok(decision.ok)
@@ -18,7 +18,27 @@ test('a sponsored seat carries the plan allowance, not an invented number', () =
   // so the sponsored grant must be that exact allowance and nothing else.
   assert.equal(decision.plan.includedCredits, findBillingPlan('everyday')?.includedCredits)
   assert.equal(decision.plan.includedCredits, 120)
+  assert.equal(decision.allowanceCredits, 120)
   assert.equal(decision.periodDays, DEFAULT_SPONSORED_DAYS)
+})
+
+test('a sponsored pilot may keep Everyday access with a smaller bounded allowance', () => {
+  const decision = decideSponsoredEntitlement({
+    planSlug: 'everyday',
+    allowanceCredits: 10,
+    activeSubscriptions: [],
+  })
+  assert.equal(decision.ok, true)
+  assert.ok(decision.ok)
+  assert.equal(decision.plan.slug, 'everyday')
+  assert.equal(decision.allowanceCredits, 10)
+
+  for (const allowanceCredits of [0, -1, 1.5, 121, Number.NaN]) {
+    const refused = decideSponsoredEntitlement({
+      planSlug: 'everyday', allowanceCredits, activeSubscriptions: [],
+    })
+    assert.deepEqual(refused, { ok: false, reason: 'invalid_allowance' })
+  }
 })
 
 test('sponsoring a plan is the only thing that lifts the daily chat cap', () => {
@@ -121,7 +141,7 @@ test('the default sponsored window outlasts a four-week pilot', () => {
 
 test('every refusal explains itself to the operator', () => {
   const reasons = [
-    'unknown_plan', 'organization_plan', 'invalid_period', 'has_paid_subscription',
+    'unknown_plan', 'organization_plan', 'invalid_period', 'invalid_allowance', 'has_paid_subscription',
   ] as const
   for (const reason of reasons) {
     const text = explainSponsoredRefusal(reason)

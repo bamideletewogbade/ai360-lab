@@ -23,6 +23,8 @@ import { emailSettings, isEmailConfigured } from '@/lib/email/config'
 import { getPostgres, isPostgresConfigured } from '@/lib/postgres'
 import { createWorkspaceAuthContext } from '@/lib/workspace'
 import { grantCredits } from '@/lib/billing/credit-repository'
+import { PILOT_INITIAL_CREDITS } from '@/lib/billing/pilot-policy'
+import { grantSponsoredEntitlement } from '@/lib/billing/sponsored-entitlement'
 import { errorDetails, requestLogger } from '@/lib/observability'
 
 export const runtime = 'nodejs'
@@ -110,7 +112,7 @@ export async function POST(request: Request) {
 
     if (body.action === 'pilot_onboard') {
       if (!canManageAdminPrograms(operator)) return Response.json({ error: 'Program-manager access is required.' }, { status: 403, headers: log.headers() })
-      if (body.credits > 0 && !canManageAdminCredits(operator)) return Response.json({ error: 'Credit-manager access is required to include starting credits.' }, { status: 403, headers: log.headers() })
+      if (body.credits > 0 && !canManageAdminCredits(operator)) return Response.json({ error: 'Credit-manager access is required to include extra credits.' }, { status: 403, headers: log.headers() })
       const targets = await existingUsers(body.userIds)
       if (targets.length !== body.userIds.length) return Response.json({ error: 'One or more selected users no longer exist.' }, { status: 409, headers: log.headers() })
       const enrolled = await upsertAdminProgramMemberships({
@@ -119,10 +121,29 @@ export async function POST(request: Request) {
         actorId: operator.userId, reason: body.reason, idempotencyKey: body.idempotencyKey,
       })
       const creditResults: Array<{ userId: string; applied: boolean; reason: string | null }> = []
-      if (body.credits > 0) {
-        for (const target of targets) {
+      const entitlementResults: Array<{ userId: string; applied: boolean; reason: string | null }> = []
+      for (const target of targets) {
+        const context = createWorkspaceAuthContext({
+          userId: target.clerk_user_id, email: target.email, displayName: target.display_name,
+        })
+        const entitlement = await grantSponsoredEntitlement({
+          context,
+          cohort: body.cohortKey,
+          planSlug: 'everyday',
+          allowanceCredits: PILOT_INITIAL_CREDITS,
+          operatorAudit: {
+            actorId: operator.userId, reason: body.reason, requestId: log.requestId,
+          },
+        })
+        entitlementResults.push({
+          userId: target.clerk_user_id,
+          applied: entitlement.granted,
+          reason: entitlement.granted ? null : entitlement.reason,
+        })
+
+        if (body.credits > 0) {
           const result = await grantCredits({
-            context: createWorkspaceAuthContext({ userId: target.clerk_user_id, email: target.email, displayName: target.display_name }),
+            context,
             credits: body.credits, sourceType: 'sponsored_seat', sourceId: body.cohortKey,
             idempotencyKey: `admin:${operator.userId}:${body.idempotencyKey}:pilot:${target.clerk_user_id}`,
             operatorAudit: { actorId: operator.userId, action: 'credit_grant', reason: body.reason, requestId: log.requestId },
@@ -130,10 +151,11 @@ export async function POST(request: Request) {
           creditResults.push({ userId: target.clerk_user_id, applied: result.granted, reason: result.granted ? null : (result.reason || 'not_granted') })
         }
       }
+      const entitlementsApplied = entitlementResults.filter((item) => item.applied).length
       const creditsApplied = creditResults.filter((item) => item.applied).length
-      log.finish(200, { outcome: 'success', action: body.action, enrolled: enrolled.length, creditsApplied })
+      log.finish(200, { outcome: 'success', action: body.action, enrolled: enrolled.length, entitlementsApplied, creditsApplied })
       return Response.json({
-        enrolled: enrolled.length, creditsApplied, creditResults,
+        enrolled: enrolled.length, entitlementsApplied, entitlementResults, creditsApplied, creditResults,
       }, { headers: log.headers({ 'Cache-Control': 'private, no-store' }) })
     }
 

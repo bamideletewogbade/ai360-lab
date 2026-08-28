@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     if (!parsed.success) return Response.json({ error: 'Review the list and the import details.' }, { status: 400, headers: log.headers() })
     const body = parsed.data
     if (body.credits > 0 && !canManageAdminCredits(operator)) {
-      return Response.json({ error: 'Credit-manager access is required to include starting credits.' }, { status: 403, headers: log.headers() })
+      return Response.json({ error: 'Credit-manager access is required to include extra credits.' }, { status: 403, headers: log.headers() })
     }
 
     const preview = await classifyImportRows(parseParticipantList(body.content), body.programKey)
