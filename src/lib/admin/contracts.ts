@@ -11,12 +11,13 @@ export type AdminEmailStatus = 'contactable' | 'unsubscribed' | 'suppressed'
 export type AdminInviteStatus = 'pending' | 'sent' | 'accepted' | 'bounced' | 'revoked'
 
 /**
- * Why an imported address will or will not become an invitation. Everything
- * except `new` is a reason the row is skipped, and the operator sees all of
- * them before anything is written.
+ * Why an imported address will or will not change invitation storage. `new`
+ * creates an invitation, while `name_update` repairs a blank name on an
+ * existing invitation. The operator sees both before anything is written.
  */
 export type AdminImportDisposition =
   | 'new'
+  | 'name_update'
   | 'already_invited'
   | 'already_a_user'
   | 'invalid_email'
@@ -77,6 +78,8 @@ export type AdminImportPreview = {
   truncated: boolean
   /** Rows that would create an invitation. */
   ready: AdminImportPreviewRow[]
+  /** Existing invitations whose blank display name would be repaired. */
+  updates: AdminImportPreviewRow[]
   /** Rows that would not, each carrying the reason and its source line. */
   skipped: AdminImportPreviewRow[]
   counts: Record<AdminImportDisposition, number>

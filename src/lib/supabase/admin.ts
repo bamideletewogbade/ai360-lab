@@ -60,16 +60,30 @@ export function getSupabaseAdminClient(): SupabaseClient {
 export async function generateInviteLink(input: {
   email: string
   redirectTo: string
-}): Promise<{ link: string; hashedToken: string | null } | null> {
+  displayName?: string | null
+}): Promise<{ link: string; hashedToken: string | null; type: 'invite' | 'magiclink' } | null> {
   const admin = getSupabaseAdminClient()
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: 'invite',
-    email: input.email,
-    options: { redirectTo: input.redirectTo },
-  })
+  const options = {
+    redirectTo: input.redirectTo,
+    ...(input.displayName?.trim() ? { data: { full_name: input.displayName.trim() } } : {}),
+  }
+
+  // A previous invitation may have created the Supabase identity even when the
+  // recipient never finished onboarding. Supabase then refuses another
+  // `invite` as an existing user. A magic link is the correct resend for that
+  // identity: it proves ownership of the same address and reaches the same
+  // callback without creating a duplicate account.
+  let type: 'invite' | 'magiclink' = 'invite'
+  let generated = await admin.auth.admin.generateLink({ type, email: input.email, options })
+  if (generated.error || !generated.data?.properties?.action_link) {
+    type = 'magiclink'
+    generated = await admin.auth.admin.generateLink({ type, email: input.email, options })
+  }
+  const { data, error } = generated
   if (error || !data?.properties?.action_link) return null
   return {
     link: data.properties.action_link,
     hashedToken: data.properties.hashed_token || null,
+    type,
   }
 }

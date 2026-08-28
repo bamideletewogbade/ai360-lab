@@ -292,6 +292,11 @@ test('the wording review passes the copy we actually ship', () => {
   assert.deepEqual(reviewParticipantCopy(participantCopyFor('pilot_invite')), [])
 })
 
+test('the invitation may explain that testing credits were supplied without promising a free product', () => {
+  assert.deepEqual(reviewParticipantCopy({ body: 'We added free credits so you can test the system.' }), [])
+  assert.ok(reviewParticipantCopy({ body: 'AI360 will always be free.' }).length)
+})
+
 test('a message without an opt-out link renders no opt-out text at all', () => {
   const restore = withEnv(SIGNED)
   try {
@@ -420,9 +425,9 @@ test('the invitation email guides rather than gestures', async () => {
   // Numbered guidance, present in both halves of the message.
   assert.match(rendered.html, /<ol/, 'steps render as a list, not a paragraph')
   assert.match(rendered.text, /1\. /, 'the plain-text half must carry the steps too')
-  assert.match(rendered.text, /5\. /)
+  assert.match(rendered.text, /3\. /)
   // A text alternative that is merely a stub scores worse with spam filters.
-  assert.ok(rendered.text.length > 700, 'the plain-text alternative must be real')
+  assert.ok(rendered.text.length > 350, 'the plain-text alternative must be real')
   assert.match(rendered.html, /auth\/callback\?token_hash=abc/, 'the sign-in link must survive escaping')
   assert.match(rendered.html, /Unsubscribe/)
 })
@@ -466,7 +471,7 @@ test('a name that is already correct is never re-cased', async () => {
   }
 })
 
-test('a missing name falls back to something addressable, never blank', async () => {
+test('a missing name uses a neutral greeting, never an email handle', async () => {
   const { renderAdminParticipantEmail } = await import('../src/lib/admin/participant-email.ts')
   const cases: Array<[string | null, string]> = [
     [null, 'hitupstevo@gmail.com'],
@@ -476,6 +481,7 @@ test('a missing name falls back to something addressable, never blank', async ()
   for (const [name, email] of cases) {
     const rendered = renderAdminParticipantEmail({ template: 'pilot_invite', displayName: name, email })
     assert.doesNotMatch(rendered.html, /Hi ,/, 'an empty greeting must never ship')
-    assert.match(rendered.html, /Hi [A-Z]/, 'the fallback should start with a capital')
+    assert.match(rendered.html, /Hi there,/, 'the fallback should not expose the address handle')
+    assert.doesNotMatch(rendered.html, new RegExp(`Hi ${email.split('@')[0]}`, 'i'))
   }
 })

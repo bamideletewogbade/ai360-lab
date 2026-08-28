@@ -76,7 +76,7 @@ const LEAK_RULES: Array<{ pattern: RegExp; warning: string }> = [
   { pattern: /GH₵|GHS\s*\d|\$\s*\d/i, warning: 'Mentions a price. Invitations deliberately carry no pricing.' },
   { pattern: /\b(everyday|explorer|team)\s+plan\b/i, warning: 'Names an internal plan tier.' },
   { pattern: /\b(top[-\s]?up|we will add more|more credits)\b/i, warning: 'Promises more credits, which commits the programme to something it may not want to keep.' },
-  { pattern: /\b(free|no cost|at no charge)\b/i, warning: 'Says the pilot is free. That is true, but it invites the question of what it costs afterwards.' },
+  { pattern: /\b(?:free(?!\s+credits?\b)|no cost|at no charge)\b/i, warning: 'Says the whole pilot is free. Mentioning the supplied testing credits is clearer and does not promise future pricing.' },
 ]
 
 export function reviewParticipantCopy(copy: ParticipantCopyOverride): string[] {
@@ -149,8 +149,8 @@ const COPY: Record<AdminParticipantEmailTemplate, ParticipantCopy> = {
    * what they thought.
    */
   pilot_invite: {
-    subject: 'Your seat in the first AI360 pilot',
-    heading: 'We would like you in the first group',
+    subject: 'Your AI360 pilot access is ready',
+    heading: 'Come and try AI360',
     /**
      * "Signed up for", not "came to" or "spent a Saturday with us".
      *
@@ -160,23 +160,15 @@ const COPY: Record<AdminParticipantEmailTemplate, ParticipantCopy> = {
      * not spend is the worst kind of personalisation error: it proves nobody
      * checked. This wording is warm and true for all of them.
      */
-    body:
-      'You put your name down for one of our AI360 introduction sessions earlier this year, back when this was still mostly an idea. '
-      + 'It is not an idea any more — and the people who were interested first are the people we want using it first.',
-    detail:
-      'AI360 is built here in Accra, for the way work actually gets done here, and it is being shaped by a small group rather than designed at a distance. '
-      + 'That group is who we are writing to today. Everything is open to you and there is nothing to pay — what we are asking for instead is your honest reaction.',
+    body: 'You registered for one of our AI360 introduction sessions. We now have a working version, and I would like you to try it.',
+    detail: 'We have added free credits to your account so you can test it properly. Use AI360 for one real task, then reply and tell me what worked, what was confusing, or what broke.',
     steps: [
-      'Tap the button below. It signs you in — there is no password to create.',
-      'Bring one real task, not a test question. A proposal you owe someone, a market you need to understand, posts for your business, a report you have been putting off.',
-      'Write it the way you would say it out loud. There is no special way to phrase things, and if the first answer is not right, tell it what is wrong in your own words.',
-      'Download what you make — Word, PDF, Excel or PowerPoint.',
-      'Tell us the moment something breaks or annoys you. That is the single most useful thing you can do for us, and honest beats kind every time.',
+      'Open your private link below. It will confirm your email and take you through a short account setup.',
+      'Try one real task, such as research, a proposal, content, or a report.',
+      'Reply to this email with your honest feedback. Short and direct is perfect.',
     ],
-    closing:
-      'You are not testing a finished product. You are helping decide what it becomes, and the things you tell us in these first days are the ones that actually change it. '
-      + 'We will check in shortly and ask for twenty minutes once you have had a proper go. Thank you for being one of the first.',
-    cta: 'Open AI360 and start',
+    closing: 'Thank you for helping us improve AI360 before launch.',
+    cta: 'Start testing AI360',
   },
   onboarding_reminder: {
     subject: 'A quick nudge to start with AI360',
@@ -233,20 +225,20 @@ const NON_NAME_WORDS = new Set([
  * The name to greet somebody by, from a field they filled in themselves.
  *
  * Three things are corrected, all of them observed in the real pilot list:
- * a leading title, a name typed in capitals ("Hi NURUDEEN," reads as
- * shouting at somebody you are thanking), and a fallback to the email handle
- * when no name was captured at all.
+ * a leading title and a name typed in capitals ("Hi NURUDEEN," reads as
+ * shouting at somebody you are thanking). If no name was captured, the neutral
+ * "Hi there" is safer than pretending an email handle is somebody's name.
  *
  * Names are deliberately *not* fully re-cased. "McCarthy" and "Naa Aku" are
  * correct as written, and a tidy-up that mangles somebody's own spelling is a
  * worse failure than the one being fixed — so only an all-capitals word, which
  * carries no intended casing, is touched.
  */
-function firstName(name: string | null, email: string) {
+function firstName(name: string | null) {
   const words = (name || '').trim().split(/\s+/).filter(Boolean)
   const meaningful = words.find((word) => !NON_NAME_WORDS.has(word.replace(/[.,]/g, '').toLowerCase()))
 
-  let chosen = meaningful || words[0] || email.split('@')[0] || 'there'
+  let chosen = meaningful || words[0] || 'there'
   chosen = chosen.replace(/[.,]+$/, '').slice(0, 50)
 
   // Shouting only. A word already carrying mixed case is left exactly alone.
@@ -254,7 +246,7 @@ function firstName(name: string | null, email: string) {
     chosen = chosen[0] + chosen.slice(1).toLowerCase()
   }
   // An email handle arrives lowercase; a greeting should not.
-  if (chosen[0] && chosen[0] === chosen[0].toLowerCase()) {
+  if (chosen !== 'there' && chosen[0] && chosen[0] === chosen[0].toLowerCase()) {
     chosen = chosen[0].toUpperCase() + chosen.slice(1)
   }
 
@@ -262,8 +254,8 @@ function firstName(name: string | null, email: string) {
 }
 
 /** The same name, unescaped, for the plain-text half of the message. */
-function plainFirstName(name: string | null, email: string) {
-  return firstName(name, email)
+function plainFirstName(name: string | null) {
+  return firstName(name)
     .replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>')
     .replaceAll('&quot;', '"').replaceAll('&#39;', "'")
 }
@@ -287,7 +279,7 @@ export function renderAdminParticipantEmail(input: {
   const copy = applyCopyOverride(COPY[input.template], input.copyOverride)
   const { appUrl, replyTo } = emailSettings()
   const target = input.actionUrl?.trim() || appUrl
-  const name = firstName(input.displayName, input.email)
+  const name = firstName(input.displayName)
   const note = input.operatorNote?.trim().slice(0, 500) || ''
   const safeNote = escapeHtml(note)
   const noteHtml = safeNote ? `<div style="margin:20px 0;padding:14px 16px;border-left:3px solid #d8643b;background:#f6f1e8;color:#30322f;line-height:1.55;">${safeNote.replaceAll('\n', '<br>')}</div>` : ''
@@ -325,7 +317,7 @@ export function renderAdminParticipantEmail(input: {
     // The same corrected name as the HTML half. This previously took the raw
     // first word, so the two halves of one message could greet somebody
     // differently — "Hi Fatima," in HTML and "Hi The," in plain text.
-    `Hi ${plainFirstName(input.displayName, input.email)},`,
+    `Hi ${plainFirstName(input.displayName)},`,
     copy.heading,
     copy.body,
     copy.detail || '',

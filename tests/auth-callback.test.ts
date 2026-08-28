@@ -160,12 +160,27 @@ test('the invitation email points at our own callback, not Supabase verify', asy
   // server route can read.
   assert.match(admin, /hashed_token/, 'the hashed token must be returned for our own callback to verify')
   assert.match(inviteRoute, /token_hash=/, 'the emailed button must carry the token to our callback')
-  assert.match(inviteRoute, /type=invite/)
+  assert.match(inviteRoute, /type=\$\{invite\.type\}/, 'invite and resend links must carry their actual OTP type')
   assert.match(inviteRoute, /actionUrl,/, 'the built URL must be what the email actually sends')
+
+  // Sending again to an address whose first link already created an Auth user
+  // must not fail with "already registered".
+  assert.match(admin, /type = 'magiclink'/, 'existing Auth users need a secure magic-link resend')
 
   // The funnel tag has to survive the round trip or every invited visit lands
   // unattributed.
   assert.match(inviteRoute, /FUNNEL_INVITATION_PARAM/)
-  assert.match(inviteRoute, /next=\$\{encodeURIComponent\(landing\)\}/)
+  assert.match(inviteRoute, /welcome = `\/welcome\?next=\$\{encodeURIComponent\(landing\)\}`/)
+  assert.match(inviteRoute, /next=\$\{encodeURIComponent\(welcome\)\}/)
+})
+
+test('invited users can create a password before entering the workspace', async () => {
+  const inviteRoute = await readFile(new URL('../src/app/api/admin/participants/invite/route.ts', import.meta.url), 'utf8')
+  const welcome = await readFile(new URL('../src/components/PilotWelcome.tsx', import.meta.url), 'utf8')
+
+  assert.match(inviteRoute, /\/welcome\?next=/, 'invitation callbacks should hand off to onboarding')
+  assert.match(welcome, /auth\.updateUser\(\{ password \}\)/, 'the verified session should set its own password')
+  assert.match(welcome, /Skip for now/, 'password creation should not strand someone who wants to start immediately')
+  assert.match(welcome, /free testing credits/i, 'the welcome screen should confirm why access was granted')
 })
 

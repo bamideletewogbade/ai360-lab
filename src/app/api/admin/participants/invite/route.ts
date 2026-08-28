@@ -197,10 +197,17 @@ export async function POST(request: Request) {
       // is an analytics tag only: claiming an invitation is done by verified
       // email address, so the id grants nothing to whoever holds it.
       const landing = `/app?${FUNNEL_INVITATION_PARAM}=${encodeURIComponent(invitation.id)}`
+      // The email link proves ownership of the address and creates the session.
+      // A first-time invitee then gets one calm account step before entering a
+      // busy workspace: choose a password for next time, or skip and add one
+      // later from Account Settings. The eventual app destination keeps the
+      // invitation id so funnel tracking still records the landing.
+      const welcome = `/welcome?next=${encodeURIComponent(landing)}`
       const callback = `${settings.appUrl}/auth/callback`
       const invite = await generateInviteLink({
         email: invitation.email,
-        redirectTo: `${callback}?next=${encodeURIComponent(landing)}`,
+        redirectTo: `${callback}?next=${encodeURIComponent(welcome)}`,
+        displayName: invitation.displayName,
       })
       if (!invite) {
         // Supabase declines an address that already has an account. That is a
@@ -230,7 +237,7 @@ export async function POST(request: Request) {
        * kept as a fallback for the case where no hashed token comes back.
        */
       const actionUrl = invite.hashedToken
-        ? `${callback}?token_hash=${encodeURIComponent(invite.hashedToken)}&type=invite&next=${encodeURIComponent(landing)}`
+        ? `${callback}?token_hash=${encodeURIComponent(invite.hashedToken)}&type=${invite.type}&next=${encodeURIComponent(welcome)}`
         : invite.link
       if (!invite.hashedToken) {
         // Still worth sending — Supabase's own link at least reaches the site —

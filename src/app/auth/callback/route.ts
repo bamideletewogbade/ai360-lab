@@ -65,12 +65,19 @@ export async function GET(request: NextRequest) {
     // into a membership. It never throws and never blocks the redirect.
     const user = authenticated.data?.user
     if (user?.id) {
-      await claimInvitationOnSignIn({
+      const claimed = await claimInvitationOnSignIn({
         userId: user.id,
         email: user.email ?? null,
         displayName: authDisplayName(user),
         imageUrl: authImageUrl(user),
       })
+      // Name-less identities were created by the first invitation batch before
+      // the registration export was reconciled. Once the invitation is safely
+      // claimed by verified email, keep that reviewed name on the auth profile
+      // too so the welcome screen and future sessions address the person well.
+      if (claimed?.displayName && !authDisplayName(user)) {
+        await supabase.auth.updateUser({ data: { full_name: claimed.displayName } }).catch(() => undefined)
+      }
     }
     return NextResponse.redirect(redirectUrl)
   }

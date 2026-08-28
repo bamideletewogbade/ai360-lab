@@ -5,6 +5,7 @@ import {
   classifyImportRows,
   createAdminInvitations,
   isMissingAdminInvitationTables,
+  updateMissingAdminInvitationNames,
 } from '@/lib/admin/invitations'
 import { MAX_IMPORT_ROWS, parseParticipantList } from '@/lib/admin/participant-import'
 import { isPostgresConfigured } from '@/lib/postgres'
@@ -55,14 +56,14 @@ export async function POST(request: Request) {
     const preview = await classifyImportRows(parseParticipantList(body.content), body.programKey)
 
     if (body.mode === 'preview') {
-      log.finish(200, { outcome: 'success', mode: 'preview', ready: preview.ready.length, skipped: preview.skipped.length })
+      log.finish(200, { outcome: 'success', mode: 'preview', ready: preview.ready.length, updates: preview.updates.length, skipped: preview.skipped.length })
       return Response.json({ ...preview, maxRows: MAX_IMPORT_ROWS }, {
         headers: log.headers({ 'Cache-Control': 'private, no-store' }),
       })
     }
 
-    if (!preview.ready.length) {
-      return Response.json({ error: 'None of these addresses would create a new invitation.' }, { status: 400, headers: log.headers() })
+    if (!preview.ready.length && !preview.updates.length) {
+      return Response.json({ error: 'None of these addresses would create or improve an invitation.' }, { status: 400, headers: log.headers() })
     }
 
     const created = await createAdminInvitations({
@@ -77,13 +78,21 @@ export async function POST(request: Request) {
       reason: body.reason,
       importKey: body.importKey,
     })
+    const updated = await updateMissingAdminInvitationNames({
+      rows: preview.updates.map((row) => ({ email: row.email, displayName: row.displayName })),
+      programKey: body.programKey,
+      actorId: operator.userId,
+      reason: body.reason,
+      importKey: body.importKey,
+    })
 
     log.finish(200, {
-      outcome: 'success', mode: 'commit', created: created.length, offered: preview.ready.length,
+      outcome: 'success', mode: 'commit', created: created.length, namesUpdated: updated.length, offered: preview.ready.length,
     })
     return Response.json({
       created: created.length,
       invitations: created,
+      namesUpdated: updated.length,
       // A re-submitted import creates nothing; saying so beats a silent success.
       unchanged: preview.ready.length - created.length,
       skipped: preview.skipped,

@@ -98,7 +98,7 @@ export async function readAdminInvitations(programKey = 'pilot') {
 }
 
 const DISPOSITIONS: AdminImportDisposition[] = [
-  'new', 'already_invited', 'already_a_user', 'invalid_email', 'duplicate_in_file', 'missing_email',
+  'new', 'name_update', 'already_invited', 'already_a_user', 'invalid_email', 'duplicate_in_file', 'missing_email',
 ]
 
 function emptyCounts() {
@@ -129,8 +129,8 @@ export async function classifyImportRows(
         select distinct lower(email) as email
           from public.lab_users
          where deleted_at is null and lower(email) = any(${emails})`,
-      sql<Array<{ email: string }>>`
-        select email
+      sql<Array<{ email: string; display_name: string | null }>>`
+        select email, display_name
           from public.lab_admin_invitations
          where program_key = ${programKey}
            and email = any(${emails})
@@ -139,9 +139,10 @@ export async function classifyImportRows(
     : [[], []]
 
   const users = new Set(existingUsers.map((row) => row.email))
-  const invited = new Set(existingInvitations.map((row) => row.email))
+  const invited = new Map(existingInvitations.map((row) => [row.email, row.display_name]))
 
   const ready: AdminImportPreviewRow[] = []
+  const updates: AdminImportPreviewRow[] = []
   const skipped: AdminImportPreviewRow[] = []
   const counts = emptyCounts()
 
@@ -151,11 +152,12 @@ export async function classifyImportRows(
     const disposition: AdminImportDisposition = users.has(row.email)
       ? 'already_a_user'
       : invited.has(row.email)
-        ? 'already_invited'
+        ? (!invited.get(row.email)?.trim() && row.displayName?.trim() ? 'name_update' : 'already_invited')
         : 'new'
     const entry: AdminImportPreviewRow = { ...row, disposition }
     counts[disposition] += 1
     if (disposition === 'new') ready.push(entry)
+    else if (disposition === 'name_update') updates.push(entry)
     else skipped.push(entry)
   }
 
@@ -171,7 +173,49 @@ export async function classifyImportRows(
   }
 
   skipped.sort((left, right) => left.line - right.line)
-  return { format: parse.format, truncated: parse.truncated, ready, skipped, counts }
+  return { format: parse.format, truncated: parse.truncated, ready, updates, skipped, counts }
+}
+
+/**
+ * Repairs only blank invitation names from a confirmed import. Existing names
+ * are never overwritten: the source may be newer, but it is not necessarily
+ * more correct than the spelling the operator already reviewed.
+ */
+export async function updateMissingAdminInvitationNames(input: {
+  rows: Array<{ email: string; displayName: string | null }>
+  programKey: string
+  actorId: string
+  reason: string
+  importKey: string
+}) {
+  const sql = getPostgres()
+  const updated: AdminInvitation[] = []
+  await sql.begin(async (tx) => {
+    for (const row of input.rows) {
+      if (!row.displayName?.trim()) continue
+      const [invitation] = await tx<InvitationRow[]>`
+        update public.lab_admin_invitations
+           set display_name = ${row.displayName.trim().slice(0, 200)}, updated_at = now()
+         where program_key = ${input.programKey}
+           and email = ${row.email}
+           and invite_status <> 'revoked'
+           and (display_name is null or btrim(display_name) = '')
+        returning id, program_key, email, display_name, cohort_key, participation_status,
+                  starting_credits, invite_status, claimed_user_id, invited_by, import_key,
+                  sent_at, accepted_at, last_attempt_at, send_attempts, created_at, updated_at`
+      if (!invitation) continue
+      updated.push(mapInvitation(invitation))
+      await tx`
+        insert into public.lab_admin_invitation_events
+          (id, invitation_id, actor_id, action, recipient_email, reason, idempotency_key, metadata)
+        values (${`invitation_event_${crypto.randomUUID()}`}, ${invitation.id}, ${input.actorId},
+                'imported', ${row.email}, ${input.reason.slice(0, 240)},
+                ${`${input.importKey}:name:${row.email}`},
+                ${tx.json({ kind: 'display_name_repair' })})
+        on conflict (idempotency_key) do nothing`
+    }
+  })
+  return updated
 }
 
 /**
@@ -467,6 +511,7 @@ export type ClaimedInvitation = {
   cohortKey: string | null
   participationStatus: 'invited' | 'enrolled'
   startingCredits: number
+  displayName: string | null
 }
 
 /**
@@ -542,6 +587,15 @@ export async function claimInvitationForUser(input: {
              accepted_at = now(), updated_at = now()
        where id = ${invitation.id}`
 
+    // Older invitation links created the auth identity before names were
+    // imported. Carry the reviewed registration name into the product profile
+    // when the identity provider has none, without overwriting a name the user
+    // has already chosen for themselves.
+    await tx`
+      update public.lab_users
+         set display_name = coalesce(display_name, ${invitation.display_name}), updated_at = now()
+       where clerk_user_id = ${input.userId}`
+
     // The membership is created exactly as `pilot_onboard` would have created
     // it, so a claimed invitee is indistinguishable from a hand-enrolled one
     // everywhere downstream.
@@ -572,6 +626,7 @@ export async function claimInvitationForUser(input: {
       cohortKey: invitation.cohort_key,
       participationStatus: invitation.participation_status,
       startingCredits: Number(invitation.starting_credits || 0),
+      displayName: input.displayName || invitation.display_name,
     }
   })
 }

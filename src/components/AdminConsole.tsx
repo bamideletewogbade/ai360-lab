@@ -55,6 +55,7 @@ const INVITE_FIELDS: Array<{
 /** Why an imported row was set aside, in words an operator can act on. */
 const IMPORT_REASONS: Record<string, string> = {
   already_a_user: 'Already has an account — add them from “Add pilot users”',
+  name_update: 'Existing invitation — missing name will be repaired',
   already_invited: 'Already invited',
   invalid_email: 'Not a usable email address',
   duplicate_in_file: 'Repeated in this list',
@@ -438,8 +439,8 @@ export function AdminConsole() {
     setInviteWorking(true)
     setError('')
     try {
-      const result = await importRequest('commit') as { created: number; unchanged: number }
-      setInviteNotice(`${result.created} invitation${result.created === 1 ? '' : 's'} created${result.unchanged ? `, ${result.unchanged} already existed` : ''}. Select them below to send.`)
+      const result = await importRequest('commit') as { created: number; namesUpdated: number; unchanged: number }
+      setInviteNotice(`${result.created} invitation${result.created === 1 ? '' : 's'} created${result.namesUpdated ? `, ${result.namesUpdated} missing name${result.namesUpdated === 1 ? '' : 's'} repaired` : ''}${result.unchanged ? `, ${result.unchanged} already existed` : ''}. Select them below to send.`)
       // The notice says "select them below", so show the list it means.
       setPeopleView('invitations')
       setInviteOpen(false)
@@ -1362,12 +1363,13 @@ export function AdminConsole() {
           <div className={styles.emailSafety}><b>Before anything is written</b><p>AI360 will show you every address it accepted, every one it set aside, and why — invalid addresses, repeats, people already invited, and people who already have an account.</p></div>
           <footer><button type="button" onClick={closeInvite}>Cancel</button><button type="button" disabled={inviteWorking || !inviteContent.trim() || !inviteReason.trim()} onClick={() => void previewImport()}>{inviteWorking ? 'Reading…' : 'Review the list'}</button></footer>
         </> : <>
-          <div className={styles.recipientCounts}><div><b>{importPreview.ready.length}</b><span>will be invited</span></div><div><b>{importPreview.skipped.length}</b><span>set aside</span></div></div>
+          <div className={styles.recipientCounts}><div><b>{importPreview.ready.length}</b><span>will be invited</span></div><div><b>{importPreview.updates.length}</b><span>names repaired</span></div><div><b>{importPreview.skipped.length}</b><span>set aside</span></div></div>
           {importPreview.truncated ? <p className={styles.warningNote}>This list was longer than the {number(importPreview.ready.length + importPreview.skipped.length)} rows shown. Import these first, then bring the rest in a second batch.</p> : null}
-          <div className={styles.recipientList}><header><b>New invitations</b><span>{importPreview.format === 'csv' ? 'Read as a CSV' : 'Read as an address list'}</span></header>{importPreview.ready.slice(0, 12).map((row) => <div key={row.email}><span>{row.displayName || row.email.split('@')[0]}</span><small>{row.email}{row.cohortKey ? ` · ${row.cohortKey}` : ''}</small></div>)}{importPreview.ready.length > 12 ? <p>+ {importPreview.ready.length - 12} more</p> : null}{!importPreview.ready.length ? <p>Nothing in this list would create a new invitation.</p> : null}</div>
+          <div className={styles.recipientList}><header><b>New invitations</b><span>{importPreview.format === 'csv' ? 'Read as a CSV' : 'Read as an address list'}</span></header>{importPreview.ready.slice(0, 12).map((row) => <div key={row.email}><span>{row.displayName || 'Name not provided'}</span><small>{row.email}{row.cohortKey ? ` · ${row.cohortKey}` : ''}</small></div>)}{importPreview.ready.length > 12 ? <p>+ {importPreview.ready.length - 12} more</p> : null}{!importPreview.ready.length ? <p>Nothing in this list would create a new invitation.</p> : null}</div>
+          {importPreview.updates.length ? <div className={styles.recipientList}><header><b>Missing names to repair</b><span>Existing invitation records</span></header>{importPreview.updates.slice(0, 12).map((row) => <div key={row.email}><span>{row.displayName}</span><small>{row.email}</small></div>)}{importPreview.updates.length > 12 ? <p>+ {importPreview.updates.length - 12} more</p> : null}</div> : null}
           {importPreview.skipped.length ? <div className={styles.excludedList}><b>Set aside</b><span>{importPreview.skipped.slice(0, 8).map((row) => `line ${row.line}: ${row.email.slice(0, 40)} · ${IMPORT_REASONS[row.disposition] || label(row.disposition)}`).join('  |  ')}{importPreview.skipped.length > 8 ? `  |  + ${importPreview.skipped.length - 8} more` : ''}</span></div> : null}
           <p className={styles.auditNote}>Creating invitations sends nothing. You choose who to email, and when, from the invitation list.</p>
-          <footer><button type="button" disabled={inviteWorking} onClick={() => setImportPreview(null)}>Back</button><button type="button" disabled={inviteWorking || !importPreview.ready.length} onClick={() => void commitImport()}>{inviteWorking ? 'Creating…' : `Create ${importPreview.ready.length} invitation${importPreview.ready.length === 1 ? '' : 's'}`}</button></footer>
+          <footer><button type="button" disabled={inviteWorking} onClick={() => setImportPreview(null)}>Back</button><button type="button" disabled={inviteWorking || (!importPreview.ready.length && !importPreview.updates.length)} onClick={() => void commitImport()}>{inviteWorking ? 'Saving…' : `Save ${importPreview.ready.length + importPreview.updates.length} change${importPreview.ready.length + importPreview.updates.length === 1 ? '' : 's'}`}</button></footer>
         </>}
       </section></div> : null}
 
