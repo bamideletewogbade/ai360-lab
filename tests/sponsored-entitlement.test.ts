@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFile } from 'node:fs/promises'
 import {
   decideSponsoredEntitlement,
   explainSponsoredRefusal,
@@ -147,4 +148,35 @@ test('every refusal explains itself to the operator', () => {
     const text = explainSponsoredRefusal(reason)
     assert.ok(text.length > 20, `${reason} needs a usable explanation`)
   }
+})
+
+// ---------------------------------------------------------------------------
+// Correcting a grant made under a superseded policy
+
+test('the operator audit accepts a correction without accepting a negative grant', async () => {
+  const migration = await readFile(
+    new URL('../database/postgres/0029_credit_adjustment_audit.sql', import.meta.url),
+    'utf8',
+  )
+
+  // The new action exists at all.
+  assert.match(migration, /'credit_adjustment'/)
+  assert.match(migration, /action in \('credit_grant', 'credit_refund', 'credit_adjustment'\)/)
+
+  // The point of the migration is that it relaxes the sign rule for exactly one
+  // action. A blanket `credits_delta <> 0` would also let a `credit_grant`
+  // record a balance going down, which is a bug the old constraint caught.
+  assert.match(migration, /when action = 'credit_adjustment' then credits_delta <> 0/)
+  assert.match(migration, /else credits_delta > 0/)
+
+  // A correction may still never drive somebody below zero, so the balance
+  // checks must survive untouched.
+  assert.doesNotMatch(migration, /drop constraint if exists lab_admin_audit_events_balance_after_check/)
+  assert.doesNotMatch(migration, /drop constraint if exists lab_admin_audit_events_balance_before_check/)
+
+  // Re-runnable: every drop is guarded, and the index is created if absent.
+  assert.doesNotMatch(migration, /drop constraint (?!if exists)/)
+  assert.match(migration, /create index if not exists/)
+  assert.match(migration, /^begin;/)
+  assert.match(migration, /commit;\s*$/)
 })

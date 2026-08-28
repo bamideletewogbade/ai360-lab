@@ -506,6 +506,47 @@ export async function settleReservation(input: {
   }) as Promise<SettlementResult>
 }
 
+/**
+ * What an operator action may be recorded as in `lab_admin_audit_events`.
+ *
+ * `credit_adjustment` is the only one whose delta may be negative — it exists so
+ * a grant made under a superseded policy can be corrected on the record rather
+ * than filed as a refund, which would state the opposite of what happened.
+ * Migration 0029 enforces the same rule in the database.
+ */
+export type OperatorAuditAction = 'credit_grant' | 'credit_refund' | 'credit_adjustment'
+
+/**
+ * Writes an operator audit row for a balance change.
+ *
+ * Shared so every caller records the same shape. `creditsDelta` is signed: it is
+ * the change as it happened, which for a correction is negative. The database
+ * refuses a negative delta on any action other than `credit_adjustment`, and
+ * refuses zero on all of them.
+ */
+export async function writeOperatorAudit(sql: TransactionSql, entry: {
+  actorId: string
+  workspaceKey: string
+  action: OperatorAuditAction
+  creditsDelta: number
+  balanceBefore: number
+  balanceAfter: number
+  reason: string
+  requestId: string
+  idempotencyKey: string
+  metadata?: LedgerMetadata
+}) {
+  await sql`
+    insert into public.lab_admin_audit_events
+      (id, actor_id, target_workspace_key, action, credits_delta, balance_before,
+       balance_after, reason, request_id, idempotency_key, metadata)
+    values (${`adm_${crypto.randomUUID()}`}, ${entry.actorId}, ${entry.workspaceKey},
+            ${entry.action}, ${entry.creditsDelta}, ${entry.balanceBefore}, ${entry.balanceAfter},
+            ${entry.reason.slice(0, 240)}, ${entry.requestId.slice(0, 80)}, ${entry.idempotencyKey},
+            ${sql.json(entry.metadata ?? {})})
+    on conflict (idempotency_key) do nothing`
+}
+
 /** Grants an operator-approved allowance, purchased top-up or adjustment. */
 export async function grantCredits(input: {
   context: WorkspaceAuthContext
@@ -515,7 +556,7 @@ export async function grantCredits(input: {
   idempotencyKey: string
   operatorAudit?: {
     actorId: string
-    action: 'credit_grant' | 'credit_refund'
+    action: OperatorAuditAction
     reason: string
     requestId: string
   }

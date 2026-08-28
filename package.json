@@ -37,7 +37,10 @@
     "video:render": "remotion render src/remotion/index.ts AI360Explainer out/ai360-explainer.mp4",
     "video:render:short": "remotion render src/remotion/index.ts AI360SocialShort out/ai360-social-short.mp4",
     "video:render:fast": "remotion render src/remotion/index.ts AI360FastDemo out/ai360-fast-demo.mp4",
-    "video:render:all": "npm run video:render && npm run video:render:short && npm run video:render:fast"
+    "video:render:all": "npm run video:render && npm run video:render:short && npm run video:render:fast",
+    "pilot:ads": "node scripts/render-pilot-campaign.mjs",
+    "pilot:ads:video": "node scripts/render-pilot-campaign.mjs --only=video",
+    "pilot:ads:stills": "node scripts/render-pilot-campaign.mjs --only=poster,carousel"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
