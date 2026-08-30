@@ -1,5 +1,6 @@
 ﻿import type { NextRequest } from 'next/server'
 import { isChatMode, isPremiumChatMode, providerPreferences, REASONING_BUDGET, routeFor, SYSTEM_PROMPT, type ChatMode } from '@/lib/models'
+import { complexityForMessage } from '@/lib/complexity-router'
 import {
   configuredLimit, consumeDailyBucketFallback, rateLimit, rejectLargeRequest, resolveRequester,
   type Requester,
@@ -176,6 +177,23 @@ export async function POST(req: NextRequest) {
   const key = process.env.OPENROUTER_API_KEY
   const policy = policyForConversation(messages)
   const attachments = messages.flatMap((message) => message.attachments ?? [])
+
+  // Auto-mode escalation: a cheap, synchronous heuristic decides whether this
+  // message looks demanding enough to warrant Claude instead of the fast
+  // default. Computed once, here, before billing and routing both read it,
+  // so the two can never disagree about whether this request was escalated.
+  // AI360_MODEL_ESCALATION_MODE=shadow observes the heuristic's decisions
+  // without acting on them (no billing or routing change); =active lets it
+  // drive both. Default is off (identical to today's behavior).
+  const escalationRollout = process.env.AI360_MODEL_ESCALATION_MODE === 'active'
+    ? 'active'
+    : process.env.AI360_MODEL_ESCALATION_MODE === 'shadow' ? 'shadow' : 'off'
+  const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user')
+  const heuristicComplexity = mode === 'auto' && lastUserMessage
+    ? complexityForMessage({ prompt: lastUserMessage.content, turnCount: messages.length })
+    : 'simple'
+  const escalated = escalationRollout === 'active' && heuristicComplexity === 'demanding'
+
   log.info('chat.accepted', {
     mode,
     messageCount: messages.length,
@@ -186,6 +204,9 @@ export async function POST(req: NextRequest) {
     liveInformation: policy.liveInformation,
     contextCharacters: policy.contextCharacters,
     aiConfigured: Boolean(key),
+    heuristicComplexity,
+    escalationRollout,
+    escalated,
   })
 
   const guestDocumentMessage = guestDocumentSignInMessage({
@@ -213,7 +234,7 @@ export async function POST(req: NextRequest) {
     // research-shaped request enters the metered multi-source workflow.
     liveResearch: policy.deepResearch,
     hasAttachment: policy.hasAttachments,
-    premium: isPremiumChatMode(mode),
+    premium: isPremiumChatMode(mode) || escalated,
   })
   let overflow = false
   if (feature === 'chat') {
@@ -272,6 +293,7 @@ export async function POST(req: NextRequest) {
           workload: 'chat',
           hasVideo: policy.hasVideo,
           hasAttachments: policy.hasAttachments,
+          complexity: escalated ? 'demanding' : 'simple',
         })
 
         /**
