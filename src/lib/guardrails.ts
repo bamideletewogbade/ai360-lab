@@ -73,7 +73,11 @@ export function configuredLimit(key: string, fallback: number) {
 
 export type RateScope =
   | 'chat' | 'agent' | 'studio' | 'studio_image' | 'studio_video'
-  | 'studio_video_quote' | 'studio_video_status' | 'studio_media_delete' | 'voice' | 'export' | 'documents' | 'action' | 'feedback'
+  // `studio_video_tiers` prices the quality cards and fires on every format
+  // change. It is deliberately its own scope: while it shared a bucket with
+  // `studio_video_quote` it both starved the binding quote and left the studio
+  // showing the previous length's price.
+  | 'studio_video_quote' | 'studio_video_tiers' | 'studio_video_status' | 'studio_media_delete' | 'voice' | 'export' | 'documents' | 'action' | 'feedback'
   | 'billing_checkout' | 'payment_callback' | 'browser'
 
 /**
