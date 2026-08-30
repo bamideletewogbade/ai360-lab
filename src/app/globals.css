@@ -3042,6 +3042,15 @@ button {
   border-radius: 14px;
   background: var(--warm-white);
 }
+/* The quote is the only block on the page waiting on a decision, so it stops
+   looking like one more panel among several. Scroll-margin keeps it clear of
+   the sticky workspace header when it is scrolled into view. */
+.ms-quote.is-live {
+  border-color: var(--black);
+  background: var(--white);
+  box-shadow: 0 10px 30px rgb(30 27 22 / 0.1);
+  scroll-margin-block: 84px;
+}
 .ms-quote > div:first-child {
   flex: 1 1 190px;
   min-width: 0;
@@ -3729,6 +3738,23 @@ button {
   }
   .ms-quote-actions button {
     flex: 1;
+  }
+  /* On a phone the quote sits below the composer and the options panel, so it
+     can open entirely off screen. Sticking it to the bottom of the viewport
+     keeps the decision and the press in the same place — and above the home
+     indicator. Cancel stays narrow so the primary action owns the width. */
+  .ms-quote.is-live {
+    position: sticky;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 4;
+    margin-inline: max(10px, env(safe-area-inset-left));
+  }
+  .ms-quote.is-live .ms-ghost-btn {
+    flex: 0 0 auto;
+    min-width: 92px;
+  }
+  .ms-quote.is-live .ms-confirm-btn {
+    flex: 1 1 auto;
   }
   .ms-pagination {
     align-items: center;

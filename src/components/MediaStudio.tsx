@@ -369,6 +369,13 @@ function mediaError(
   data: { error?: string; required?: number; status?: string },
 ) {
   if (status === 401) return "Sign in to generate media.";
+  // Was falling through to the generic "Media generation failed", which reads
+  // as a broken render rather than "wait a moment and press again".
+  if (status === 429)
+    return (
+      data.error ||
+      "Too many video requests just now. Wait a minute and try again — nothing was charged."
+    );
   if (status === 402)
     return `${data.error || "You do not have enough credits for this."} Buy more credits in Settings.`;
   if (status === 409 && data.status === "quote_changed")
@@ -565,6 +572,25 @@ export function MediaStudio() {
   const [videoJob, setVideoJob] = useState<VideoJob | null>(readStoredVideoJob);
   const [creditPanel, setCreditPanel] = useState<CreditPanelState | null>(null);
   const [tierPrices, setTierPrices] = useState<TierPrice[]>([]);
+  /**
+   * The exact format `tierPrices` was quoted for, as `aspect|seconds`.
+   *
+   * Prices are per-second and per-shape, so a price only means anything
+   * alongside the format it was fetched for. Holding the two together is what
+   * stops the studio showing a four-second figure on an eight-second clip when
+   * a refetch is dropped — rate limited, offline, or simply still in flight.
+   * When this does not match the current selection the price is treated as
+   * absent rather than shown, and the render falls back to confirming the
+   * quote instead of pressing straight through.
+   */
+  const [tierPriceKey, setTierPriceKey] = useState("");
+  /**
+   * The quote panel renders below the composer and below the options panel, so
+   * on a phone — and on a laptop with the options open — it can appear entirely
+   * off screen. A button that silently spawns a decision the person cannot see
+   * reads as a dead button, which is exactly how this was being experienced.
+   */
+  const quoteRef = useRef<HTMLDivElement | null>(null);
   // Data-saver: people on metered or slow connections do not need looping
   // video previews. This is a real constraint for this audience, not a nicety.
   const [dataSaver, setDataSaver] = useState(false);
@@ -687,9 +713,14 @@ export function MediaStudio() {
   useEffect(() => {
     if (mode !== "video") return;
     let cancelled = false;
+    // A slower earlier request must never land after a newer one and overwrite
+    // it with the wrong format's prices.
+    const controller = new AbortController();
+    const requestedKey = `${videoAspect}|${videoSeconds}`;
     fetch("/api/studio/video", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         action: "tiers",
         intent: videoIntent("", videoAspect, cameraMotion, videoTier, videoSeconds),
@@ -699,17 +730,41 @@ export function MediaStudio() {
       .then((data) => {
         if (cancelled || !data || !Array.isArray(data.tiers)) return;
         setTierPrices(data.tiers as TierPrice[]);
+        // Stamped with the format it describes, so a price can never be read
+        // against a selection it was not quoted for.
+        setTierPriceKey(requestedKey);
       })
       // Prices are a courtesy here; the binding quote still comes before render.
+      // A failure deliberately leaves `tierPriceKey` on the old format, which
+      // reads as "no price for this selection" rather than as a wrong one.
       .catch(() => undefined);
     return () => {
       cancelled = true;
+      controller.abort();
     };
     // Deliberately not keyed on `prompt` or `videoTier`: neither changes the
     // price of the options, and re-quoting on every keystroke would hammer a
     // rate-limited endpoint.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, videoAspect, videoSeconds]);
+
+  /**
+   * Bring the quote into view when it appears.
+   *
+   * It only ever appears because a press needs answering, so leaving it below
+   * the fold turns a question into a dead button. Respects reduced-motion, and
+   * `nearest` so a panel already on screen is not yanked around.
+   */
+  useEffect(() => {
+    if (!videoQuote || !quoteRef.current) return;
+    const reduced = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    quoteRef.current.scrollIntoView({
+      behavior: reduced ? "auto" : "smooth",
+      block: "nearest",
+    });
+  }, [videoQuote]);
 
   /**
    * A 402 means "not enough credits". Instead of a toast that points at
@@ -963,8 +1018,15 @@ export function MediaStudio() {
   ) => {
     const previewForTier = options?.previewForTier;
     if (generating && !options?.continuing) return;
-    // The choice has been made; nothing pending should still be on screen.
-    setVideoQuote(null);
+    /**
+     * The quote panel deliberately stays up until the submit comes back.
+     *
+     * Clearing it here removed the block the person was reading and looking at
+     * the moment they pressed it, so the page collapsed upward and the eye
+     * landed back on the composer — indistinguishable from the button having
+     * done nothing. It now holds its place and shows its own progress, and is
+     * dismissed only once there is a job to replace it.
+     */
     setSharpenOffer(null);
     setGenerating(true);
     setToastNotice("Starting your render…");
@@ -1005,12 +1067,19 @@ export function MediaStudio() {
             "The video could not be started.",
         );
       }
+      // There is a real job now, so the quote it came from can go.
+      setVideoQuote(null);
       const job: VideoJob = {
         token: data.token,
         jobId: data.jobId,
         status: data.status || "pending",
         prompt: prompt.trim(),
-        duration: "4s",
+        // Was hardcoded to "4s", so every 6s and 8s clip was filed under the
+        // wrong length in the gallery.
+        duration: `${
+          (quote.intent as { durationSeconds?: number }).durationSeconds ??
+          videoSeconds
+        }s`,
         aspectRatio: videoAspect,
         previewForTier,
       };
@@ -1040,6 +1109,9 @@ export function MediaStudio() {
    * has not touched anything since.
    */
   const sharpenCredits = (tier: string) => {
+    // Same rule as the tier chips: a price that was quoted for another format
+    // is no price at all, and an unpriced Sharpen goes through the quote panel.
+    if (tierPriceKey !== `${videoAspect}|${videoSeconds}`) return null;
     const price = tierPrices.find((entry) => entry.tier === tier);
     return price?.available && typeof price.credits === "number" ? price.credits : null;
   };
@@ -1312,7 +1384,12 @@ export function MediaStudio() {
    * be bought at all; the button falls back to an unpriced label and the drift
    * check is skipped rather than compared against nothing.
    */
-  const selectedTierPrice = tierPrices.find((entry) => entry.tier === videoTier);
+  const videoFormatKey = `${videoAspect}|${videoSeconds}`;
+  /** Prices are only usable while they still describe what is selected. */
+  const pricesMatchSelection = tierPriceKey === videoFormatKey;
+  const selectedTierPrice = pricesMatchSelection
+    ? tierPrices.find((entry) => entry.tier === videoTier)
+    : undefined;
   const shownVideoCredits =
     selectedTierPrice?.available && typeof selectedTierPrice.credits === "number"
       ? selectedTierPrice.credits
@@ -1851,9 +1928,14 @@ export function MediaStudio() {
                     <span className="ms-control-label">Quality</span>
                     <div className="ms-chips" role="group" aria-label="Quality">
                       {VIDEO_TIERS.map((tier) => {
-                        const price = tierPrices.find(
-                          (entry) => entry.tier === tier.value,
-                        );
+                        // Only prices quoted for the shape and length currently
+                        // selected. A price from a previous format is not a
+                        // cheaper option, it is a wrong number.
+                        const price = pricesMatchSelection
+                          ? tierPrices.find(
+                              (entry) => entry.tier === tier.value,
+                            )
+                          : undefined;
                         // An option nobody can buy is disabled and says why,
                         // rather than failing at the moment of confirming.
                         const unavailable = price ? !price.available : false;
@@ -1936,14 +2018,21 @@ export function MediaStudio() {
               had not loaded and the button went out unpriced — or when a render
               stopped for want of credits and can be resumed once topped up. */}
           {videoQuote ? (
-            <div className="ms-quote" role="status">
+            <div className="ms-quote is-live" role="status" ref={quoteRef}>
               <div>
                 <b>
-                  This one costs {videoQuote.credits} credits
+                  {shownVideoCredits !== null &&
+                  videoQuote.credits !== shownVideoCredits
+                    ? `This one costs ${videoQuote.credits} credits, not ${shownVideoCredits}`
+                    : `This one costs ${videoQuote.credits} credits`}
                 </b>
                 <small>
-                  You are only charged if it works — a failed render returns
-                  your credits.
+                  {generating
+                    ? "Starting your render…"
+                    : `${videoSeconds}s · ${videoAspect} · ${
+                        VIDEO_TIERS.find((tier) => tier.value === videoTier)
+                          ?.label || videoTier
+                      }. You are only charged if it works — a failed render returns your credits.`}
                 </small>
               </div>
               <div className="ms-quote-actions">
@@ -1958,10 +2047,21 @@ export function MediaStudio() {
                 <button
                   type="button"
                   className="ms-confirm-btn"
-                  onClick={() => confirmVideoRender(videoQuote)}
+                  // `continuing` because this press is the decision itself: the
+                  // busy guard must never silently swallow it.
+                  onClick={() =>
+                    confirmVideoRender(videoQuote, { continuing: true })
+                  }
                   disabled={generating}
                 >
-                  Render it
+                  {generating ? (
+                    <>
+                      <span className="ms-spinner" aria-hidden="true" />
+                      Starting…
+                    </>
+                  ) : (
+                    `Render it · ${videoQuote.credits} credits`
+                  )}
                 </button>
               </div>
             </div>

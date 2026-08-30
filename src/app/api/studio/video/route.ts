@@ -293,12 +293,26 @@ export async function POST(request: Request) {
     );
   }
 
+  /**
+   * `tiers` gets its own bucket, deliberately.
+   *
+   * It used to share `studio_video_quote` with the binding quote, and because
+   * the limit below was chosen by `action === "quote"` it fell through to the
+   * generation limit of one a minute and three a day. A pure catalogue price
+   * lookup — fired by the UI every time someone changes shape or length — was
+   * therefore throttled harder than rendering, and it spent the quote
+   * allowance on the way. The visible symptom was a stale price: the tiles kept
+   * showing the previous length's figure while the render quoted the new one,
+   * so a 4-second price sat on the button while the clip cost the 8-second one.
+   */
   const rateScope =
-    body.action === "quote" || body.action === "tiers"
+    body.action === "quote"
       ? "studio_video_quote"
-      : body.action === "status"
-        ? "studio_video_status"
-        : "studio_video";
+      : body.action === "tiers"
+        ? "studio_video_tiers"
+        : body.action === "status"
+          ? "studio_video_status"
+          : "studio_video";
   const requester = await resolveRequester(request);
   const anonymous = requireIdentifiedRequester(rateScope, requester);
   if (anonymous) {
@@ -320,9 +334,13 @@ export async function POST(request: Request) {
     // Generation itself stays tightly limited, because that is what costs money.
     body.action === "quote"
       ? { minute: 8, daily: 50 }
-      : body.action === "status"
-        ? { minute: 40, daily: 600 }
-        : { minute: 1, daily: 3 },
+      : // Pricing the option cards costs nothing to serve and happens on every
+        // format change, so it is limited only enough to stop a runaway loop.
+        body.action === "tiers"
+        ? { minute: 30, daily: 400 }
+        : body.action === "status"
+          ? { minute: 40, daily: 600 }
+          : { minute: 1, daily: 3 },
     requester,
   );
   if (limited) {
