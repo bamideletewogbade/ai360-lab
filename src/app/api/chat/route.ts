@@ -23,6 +23,7 @@ import { readBalance } from '@/lib/billing/credit-repository'
 import { productKnowledgeBlock } from '@/lib/product-knowledge'
 import { projectContextBlock } from '@/lib/studio/project-context'
 import { brandKnowledgeBlock } from '@/lib/brand-knowledge'
+import { cachedContext } from '@/lib/context-cache'
 import { DEFAULT_LANGUAGE, isLanguageCode, languageDirective, type LanguageCode } from '@/lib/languages'
 import { policyForConversation, prepareConversationContext, type ContextMessage } from '@/lib/context-engineering'
 import {
@@ -164,15 +165,18 @@ export async function POST(req: NextRequest) {
   const projectId = typeof body.projectId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.projectId)
     ? body.projectId
     : ''
-  const projectContext = projectId && requester.workspaceKey
-    ? await projectContextBlock({ workspaceKey: requester.workspaceKey, projectId })
-    : ''
   // Workspace-wide, unlike the project context above: applies to every
   // conversation, not just ones inside a project, because a business's own
   // facts and voice are not scoped to one piece of work.
-  const brandKnowledge = requester.workspaceKey
-    ? await brandKnowledgeBlock({ workspaceKey: requester.workspaceKey })
-    : ''
+  const workspaceKey = requester.workspaceKey
+  const [projectContext, brandKnowledge] = await Promise.all([
+    projectId && workspaceKey
+      ? cachedContext(`project:${workspaceKey}:${projectId}`, () => projectContextBlock({ workspaceKey, projectId }))
+      : Promise.resolve(''),
+    workspaceKey
+      ? cachedContext(`brand:${workspaceKey}`, () => brandKnowledgeBlock({ workspaceKey }))
+      : Promise.resolve(''),
+  ])
   const key = process.env.OPENROUTER_API_KEY
   const policy = policyForConversation(messages)
   const attachments = messages.flatMap((message) => message.attachments ?? [])
