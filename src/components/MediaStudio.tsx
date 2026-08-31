@@ -32,6 +32,12 @@ type MediaItem = {
   createdAt: string;
   /** Durable server job. Guest-only results have no job and disappear locally. */
   jobId?: string;
+  /**
+   * The stored asset behind this card. Only work saved to the workspace has
+   * one, and only work with one can be used as a reference for another render
+   * — the server resolves references by asset, inside the workspace.
+   */
+  assetId?: string;
   /** Examples ship with the studio; real work is the person's own. */
   example?: boolean;
 };
@@ -256,11 +262,10 @@ type TierPrice = {
 };
 
 /**
- * Lengths the Veo family accepts. Not a product choice: the engines take 4, 6 or
- * 8 seconds and nothing between or beyond, so offering anything else would only
- * produce a refusal. Price scales per second, and each option shows its own cost.
+ * Safe initial lengths while the live provider capabilities are loading. The
+ * catalogue replaces this list as soon as it answers.
  */
-const VIDEO_LENGTHS = [4, 6, 8] as const;
+const DEFAULT_VIDEO_LENGTHS = [4, 6, 8];
 
 const VIDEO_MOTIONS = [
   { value: "pan", label: "Pan" },
@@ -419,11 +424,13 @@ type VideoJob = {
 /** A completed durable media job as returned by `/api/studio/media?recent=1`. */
 type RecentMediaJob = {
   id: string;
+  projectId?: string | null;
   mediaType: string;
+  status?: string;
   model?: string | null;
   outputAssetId?: string | null;
   createdAt?: string;
-  intent?: { purpose?: string; aspectRatio?: string };
+  intent?: { purpose?: string; aspectRatio?: string; durationSeconds?: number };
 };
 
 
@@ -490,12 +497,40 @@ function imageIntent(prompt: string, aspectRatio: string) {
   };
 }
 
+/**
+ * What an attached image is being used for.
+ *
+ * `first_frame` and `last_frame` are frame control — the clip literally starts
+ * or ends on that picture. `product` is guidance: keep this thing looking like
+ * this. The provider treats the two differently, and so does the price, so the
+ * person chooses which they mean rather than attaching an image and hoping.
+ */
+type VideoReferenceRole = "first_frame" | "last_frame" | "product";
+
+type VideoReference = {
+  assetId: string;
+  role: VideoReferenceRole;
+  /** Kept for the thumbnail so the chip shows the picture, not a filename. */
+  url: string;
+  label: string;
+};
+
+const REFERENCE_ROLE_LABELS: Record<VideoReferenceRole, string> = {
+  first_frame: "Starts here",
+  last_frame: "Ends here",
+  product: "Match this",
+};
+
+/** At most one image per frame position; guidance is capped by the server too. */
+const MAX_PRODUCT_REFERENCES = 4;
+
 function videoIntent(
   prompt: string,
   aspectRatio: string,
   motion: string,
   qualityTier: string,
   durationSeconds: number,
+  references: VideoReference[] = [],
 ) {
   return {
     version: 1,
@@ -515,9 +550,28 @@ function videoIntent(
           : "balanced",
     locale: "en-GH",
     variationCount: 1,
-    references: [],
+    references: references.map((reference) => ({
+      assetId: reference.assetId,
+      role: reference.role,
+    })),
     constraints: [],
   };
+}
+
+/**
+ * Identifies a priced selection, references included.
+ *
+ * A frame changes which engines can take the job and, on some vendors, what a
+ * second costs — so a price quoted without one must never be read against a
+ * selection that has one.
+ */
+function videoSelectionKey(
+  aspectRatio: string,
+  seconds: number,
+  references: VideoReference[],
+) {
+  const roles = references.map((reference) => reference.role).sort().join("+");
+  return `${aspectRatio}|${seconds}|${roles}`;
 }
 
 function newRequestId(prefix: string) {
@@ -543,7 +597,19 @@ export function MediaStudio() {
   const [look, setLook] = useState<string>(IMAGE_LOOKS[0].value);
   const [videoTier, setVideoTier] = useState<string>("draft");
   const [videoSeconds, setVideoSeconds] = useState(4);
+  const [videoLengths, setVideoLengths] = useState<number[]>(DEFAULT_VIDEO_LENGTHS);
   const [cameraMotion, setCameraMotion] = useState("pan");
+  /** Images attached to the next render, and the role being picked for. */
+  const [videoReferences, setVideoReferences] = useState<VideoReference[]>([]);
+  const [pickingRole, setPickingRole] = useState<VideoReferenceRole | null>(null);
+  /**
+   * Frame positions the live engines accept for this shape and length. Offering
+   * an end frame that every engine would refuse is worse than not offering it.
+   */
+  const [frameRoles, setFrameRoles] = useState<string[]>([
+    "first_frame",
+    "last_frame",
+  ]);
   const [generating, setGenerating] = useState(false);
   const [gallery, setGallery] = useState<MediaItem[]>(EXAMPLE_GALLERY);
   const [mediaToDelete, setMediaToDelete] = useState<MediaItem | null>(null);
@@ -553,7 +619,6 @@ export function MediaStudio() {
   const [galleryPage, setGalleryPage] = useState(1);
   const [toastNotice, setToastNotice] = useState("");
   const [toastError, setToastError] = useState(false);
-  const [videoQuote, setVideoQuote] = useState<VideoQuote | null>(null);
   /** Shown once a Quick render finishes: "like this? get it in real quality". */
   const [sharpenOffer, setSharpenOffer] = useState<{
     tier: string;
@@ -584,13 +649,6 @@ export function MediaStudio() {
    * quote instead of pressing straight through.
    */
   const [tierPriceKey, setTierPriceKey] = useState("");
-  /**
-   * The quote panel renders below the composer and below the options panel, so
-   * on a phone — and on a laptop with the options open — it can appear entirely
-   * off screen. A button that silently spawns a decision the person cannot see
-   * reads as a dead button, which is exactly how this was being experienced.
-   */
-  const quoteRef = useRef<HTMLDivElement | null>(null);
   // Data-saver: people on metered or slow connections do not need looping
   // video previews. This is a real constraint for this audience, not a nicety.
   const [dataSaver, setDataSaver] = useState(false);
@@ -702,6 +760,28 @@ export function MediaStudio() {
     void loadCredits();
   }, []);
 
+  // Escape closes the picker, like every other dismissable layer here.
+  useEffect(() => {
+    if (!pickingRole) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPickingRole(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [pickingRole]);
+
+  /**
+   * The roles attached, as a stable string.
+   *
+   * Prices depend on which roles are present, not on which pictures were
+   * chosen, so swapping one product photo for another must not trigger a
+   * re-quote — while adding a first frame must.
+   */
+  const referenceRoleKey = videoReferences
+    .map((reference) => reference.role)
+    .sort()
+    .join("+");
+
   /**
    * Live price for each quality option.
    *
@@ -716,20 +796,40 @@ export function MediaStudio() {
     // A slower earlier request must never land after a newer one and overwrite
     // it with the wrong format's prices.
     const controller = new AbortController();
-    const requestedKey = `${videoAspect}|${videoSeconds}`;
+    const requestedKey = videoSelectionKey(videoAspect, videoSeconds, videoReferences);
     fetch("/api/studio/video", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       signal: controller.signal,
       body: JSON.stringify({
         action: "tiers",
-        intent: videoIntent("", videoAspect, cameraMotion, videoTier, videoSeconds),
+        intent: videoIntent(
+          "",
+          videoAspect,
+          cameraMotion,
+          videoTier,
+          videoSeconds,
+          videoReferences,
+        ),
       }),
     })
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (cancelled || !data || !Array.isArray(data.tiers)) return;
         setTierPrices(data.tiers as TierPrice[]);
+        if (Array.isArray(data.supportedFrameTypes)) {
+          setFrameRoles(data.supportedFrameTypes as string[]);
+        }
+        if (Array.isArray(data.supportedDurations)) {
+          const durations = data.supportedDurations
+            .map(Number)
+            .filter((value: number) => Number.isInteger(value) && value >= 3 && value <= 30)
+            .sort((left: number, right: number) => left - right);
+          if (durations.length) {
+            setVideoLengths([...new Set<number>(durations)]);
+            if (!durations.includes(videoSeconds)) setVideoSeconds(durations[0]);
+          }
+        }
         // Stamped with the format it describes, so a price can never be read
         // against a selection it was not quoted for.
         setTierPriceKey(requestedKey);
@@ -744,27 +844,10 @@ export function MediaStudio() {
     };
     // Deliberately not keyed on `prompt` or `videoTier`: neither changes the
     // price of the options, and re-quoting on every keystroke would hammer a
-    // rate-limited endpoint.
+    // rate-limited endpoint. Attached roles do belong here — a frame narrows
+    // which engines can take the job.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, videoAspect, videoSeconds]);
-
-  /**
-   * Bring the quote into view when it appears.
-   *
-   * It only ever appears because a press needs answering, so leaving it below
-   * the fold turns a question into a dead button. Respects reduced-motion, and
-   * `nearest` so a panel already on screen is not yanked around.
-   */
-  useEffect(() => {
-    if (!videoQuote || !quoteRef.current) return;
-    const reduced = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    quoteRef.current.scrollIntoView({
-      behavior: reduced ? "auto" : "smooth",
-      block: "nearest",
-    });
-  }, [videoQuote]);
+  }, [mode, videoAspect, videoSeconds, referenceRoleKey]);
 
   /**
    * A 402 means "not enough credits". Instead of a toast that points at
@@ -860,6 +943,9 @@ export function MediaStudio() {
         url: data.image,
         createdAt: "Just now",
         jobId: typeof data.jobId === "string" ? data.jobId : undefined,
+        // Present as soon as the image is stored, so a visual made this minute
+        // can be the opening frame of the next video without a refresh.
+        assetId: typeof data.assetId === "string" ? data.assetId : undefined,
       };
       setGallery((previous) => [newItem, ...previous]);
       setGalleryFilter("all");
@@ -944,7 +1030,14 @@ export function MediaStudio() {
     setToastError(false);
     try {
       const main = await fetchVideoQuote(
-        videoIntent(effectivePrompt, effectiveAspect, effectiveMotion, effectiveTier, effectiveSeconds),
+        videoIntent(
+          effectivePrompt,
+          effectiveAspect,
+          effectiveMotion,
+          effectiveTier,
+          effectiveSeconds,
+          videoReferences,
+        ),
       );
       if (!main.ok) {
         if (main.status === 402) {
@@ -969,17 +1062,31 @@ export function MediaStudio() {
        * actually advertised. Two ways it can fail to: the catalogue price moved
        * while the shot was being set up, or the tier prices had not loaded yet
        * and the button went out unpriced. Either way nobody has been shown this
-       * figure, so it goes to the panel to be accepted rather than charged.
+       * figure, so the stable button updates before another press can spend it.
        */
-      if (expected === null || main.quote.credits !== expected) {
-        setVideoQuote(main.quote);
-        setToastNotice("");
+      if (expected === null) {
+        showToast("The current render price is still loading. Try again in a moment.", false);
+        return;
+      }
+      if (main.quote.credits !== expected) {
+        setTierPrices((current) => current.map((entry) => entry.tier === effectiveTier
+          ? { ...entry, available: true, credits: main.quote.credits, model: main.quote.model }
+          : entry));
+        setTierPriceKey(
+          videoSelectionKey(effectiveAspect, effectiveSeconds, videoReferences),
+        );
+        showToast(`The live price changed to ${main.quote.credits} credits. The Render button has been updated.`, false);
         return;
       }
 
       setGenerating(false);
       await confirmVideoRender(main.quote, {
         continuing: true,
+        render: {
+          prompt: effectivePrompt,
+          aspectRatio: effectiveAspect,
+          seconds: effectiveSeconds,
+        },
         // Rendering at the cheapest tier is the "try it first" move, so the
         // offer to re-run it sharper is attached here rather than sold up
         // front. This is what used to be the Draft button inside the confirm
@@ -1007,6 +1114,7 @@ export function MediaStudio() {
     quote: VideoQuote,
     options?: {
       previewForTier?: { tier: string; motion: string; seconds: number };
+      render?: { prompt: string; aspectRatio: string; seconds: number };
       /**
        * Set when `startVideoRender` hands straight over. Its own
        * `setGenerating(false)` has not been applied to this closure yet, so the
@@ -1017,16 +1125,10 @@ export function MediaStudio() {
     },
   ) => {
     const previewForTier = options?.previewForTier;
+    const renderPrompt = options?.render?.prompt ?? prompt.trim();
+    const renderAspectRatio = options?.render?.aspectRatio ?? videoAspect;
+    const renderSeconds = options?.render?.seconds ?? videoSeconds;
     if (generating && !options?.continuing) return;
-    /**
-     * The quote panel deliberately stays up until the submit comes back.
-     *
-     * Clearing it here removed the block the person was reading and looking at
-     * the moment they pressed it, so the page collapsed upward and the eye
-     * landed back on the composer — indistinguishable from the button having
-     * done nothing. It now holds its place and shows its own progress, and is
-     * dismissed only once there is a job to replace it.
-     */
     setSharpenOffer(null);
     setGenerating(true);
     setToastNotice("Starting your render…");
@@ -1043,15 +1145,12 @@ export function MediaStudio() {
           approved: true,
           acceptedCostUsd: quote.costUsd,
           intent: quote.intent,
-          prompt: prompt.trim(),
+          prompt: renderPrompt,
         }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.token) {
         if (response.status === 402) {
-          // Keep the quote on screen so the render can be confirmed again the
-          // moment the balance is topped up, without re-pricing it.
-          setVideoQuote(quote);
           await openCreditPanel(
             typeof data.required === "number" ? data.required : quote.credits,
             typeof data.available === "number" ? data.available : 0,
@@ -1067,20 +1166,18 @@ export function MediaStudio() {
             "The video could not be started.",
         );
       }
-      // There is a real job now, so the quote it came from can go.
-      setVideoQuote(null);
       const job: VideoJob = {
         token: data.token,
         jobId: data.jobId,
         status: data.status || "pending",
-        prompt: prompt.trim(),
+        prompt: renderPrompt,
         // Was hardcoded to "4s", so every 6s and 8s clip was filed under the
         // wrong length in the gallery.
         duration: `${
           (quote.intent as { durationSeconds?: number }).durationSeconds ??
-          videoSeconds
+          renderSeconds
         }s`,
-        aspectRatio: videoAspect,
+        aspectRatio: renderAspectRatio,
         previewForTier,
       };
       persistVideoJob(job);
@@ -1317,6 +1414,33 @@ export function MediaStudio() {
     };
   }, []);
 
+  // Recover projectless Media Studio renders from the durable store, not only
+  // from this browser's sessionStorage. This is what makes an in-flight video
+  // survive a cleared session, another device, or a closed tab.
+  useEffect(() => {
+    if (videoJobRef.current) return;
+    let cancelled = false;
+    fetch("/api/studio/media?active=1", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { jobs?: RecentMediaJob[] } | null) => {
+        if (cancelled || videoJobRef.current) return;
+        const active = data?.jobs?.find((job) => !job.projectId);
+        if (!active) return;
+        const job: VideoJob = {
+          token: "",
+          jobId: active.id,
+          status: active.status || "pending",
+          prompt: active.intent?.purpose || "Video render",
+          duration: `${active.intent?.durationSeconds || 4}s`,
+          aspectRatio: active.intent?.aspectRatio || "9:16",
+        };
+        persistVideoJob(job);
+        scheduleVideoPollRef.current(job, 0);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
   // The gallery is the person's real media, not just this session. Load the
   // most recent completed jobs — including clips that finished while the
   // studio was closed — so generated work survives a refresh. Examples stay
@@ -1352,6 +1476,7 @@ export function MediaStudio() {
                 ? new Date(job.createdAt).toLocaleDateString()
                 : "Recent",
             jobId: job.id,
+            assetId: job.outputAssetId as string,
           }));
         setGallery((previous) => {
           const existingIds = new Set(
@@ -1384,7 +1509,11 @@ export function MediaStudio() {
    * be bought at all; the button falls back to an unpriced label and the drift
    * check is skipped rather than compared against nothing.
    */
-  const videoFormatKey = `${videoAspect}|${videoSeconds}`;
+  const videoFormatKey = videoSelectionKey(
+    videoAspect,
+    videoSeconds,
+    videoReferences,
+  );
   /** Prices are only usable while they still describe what is selected. */
   const pricesMatchSelection = tierPriceKey === videoFormatKey;
   const selectedTierPrice = pricesMatchSelection
@@ -1398,10 +1527,60 @@ export function MediaStudio() {
   const visible = gallery.filter(
     (item) => galleryFilter === "all" || item.kind === galleryFilter,
   );
+
+  /**
+   * What can be attached: the person's own stored images.
+   *
+   * Examples are excluded because they are not the person's and have no
+   * workspace asset behind them, and video is excluded because a reference is
+   * a picture. Anything without an `assetId` never reached storage, so the
+   * server could not resolve it.
+   */
+  const referenceChoices = gallery.filter(
+    (item) => !item.example && item.kind === "image" && Boolean(item.assetId),
+  );
+  const attachedFrame = videoReferences.find(
+    (reference) => reference.role === "first_frame" || reference.role === "last_frame",
+  );
+  const productReferences = videoReferences.filter(
+    (reference) => reference.role === "product",
+  );
+  /**
+   * The provider ignores guidance images entirely once a frame is attached, so
+   * offering both would sell a render that silently drops half of what was
+   * chosen. Disabled with the reason showing beats a warning after the fact.
+   */
+  const productReferencesBlocked = Boolean(attachedFrame);
+
+  const attachReference = (item: MediaItem, role: VideoReferenceRole) => {
+    if (!item.assetId) return;
+    setVideoReferences((current) => [
+      // One image per frame position: picking a new start frame replaces the
+      // old one rather than quietly becoming a second, refused, attachment.
+      ...(role === "product"
+        ? current
+        : current.filter((reference) => reference.role !== role)),
+      {
+        assetId: item.assetId as string,
+        role,
+        url: item.url,
+        label: item.prompt,
+      },
+    ]);
+    setPickingRole(null);
+  };
+
+  const removeReference = (assetId: string, role: VideoReferenceRole) => {
+    setVideoReferences((current) =>
+      current.filter(
+        (reference) => !(reference.assetId === assetId && reference.role === role),
+      ),
+    );
+  };
   const canGenerate =
     Boolean(prompt.trim()) &&
     !generating &&
-    !(isVideo && (Boolean(videoJob) || Boolean(videoQuote)));
+    !(isVideo && (Boolean(videoJob) || shownVideoCredits === null));
 
   /**
    * The work in flight, drawn as a card at the head of the gallery. Video reads
@@ -1534,6 +1713,14 @@ export function MediaStudio() {
     }
 
     setGallery((current) => current.filter((entry) => entry.id !== item.id));
+    // A deleted picture cannot be a reference. Leaving it attached would fail
+    // the render at submit with "no longer available", after the person had
+    // already pressed a priced button.
+    if (item.assetId) {
+      setVideoReferences((current) =>
+        current.filter((reference) => reference.assetId !== item.assetId),
+      );
+    }
     setMediaToDelete(null);
     setMediaDeleteBusy(false);
     showToast(`${item.kind === "video" ? "Video" : "Image"} deleted.`, false);
@@ -1580,6 +1767,63 @@ export function MediaStudio() {
           onConfirm={() => void deleteMedia(mediaToDelete)}
         />
       ) : null}
+
+      {/* One tap to open, one tap to choose. Everything offered here is
+          already the person's own stored work, so there is nothing to upload,
+          name or confirm — picking the picture is the whole interaction. */}
+      {pickingRole ? (
+        <div
+          className="ms-picker-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label={
+            pickingRole === "first_frame"
+              ? "Choose the first frame"
+              : pickingRole === "last_frame"
+                ? "Choose the last frame"
+                : "Choose a product or logo image"
+          }
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setPickingRole(null);
+          }}
+        >
+          <div className="ms-picker">
+            <div className="ms-picker-head">
+              <b>
+                {pickingRole === "first_frame"
+                  ? "Which image should it start on?"
+                  : pickingRole === "last_frame"
+                    ? "Which image should it end on?"
+                    : "Which product or logo should it match?"}
+              </b>
+              <button
+                type="button"
+                className="ms-picker-close"
+                aria-label="Close"
+                onClick={() => setPickingRole(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="ms-picker-grid">
+              {referenceChoices.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="ms-picker-item"
+                  onClick={() => attachReference(item, pickingRole)}
+                >
+                  {/* Served from the media API, not an optimisable static asset. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={item.url} alt="" loading="lazy" />
+                  <small>{item.prompt}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {toastNotice ? (
         <div
           className={`ms-toast${toastError ? " is-error" : ""}`}
@@ -1739,6 +1983,25 @@ export function MediaStudio() {
                     className="ms-card-media"
                     data-ratio={item.aspectRatio}
                   >
+                    {/* A shared 4:3 frame keeps the rows level and nothing
+                        cropped, but a 9:16 clip then sits in a box 58% wider
+                        than itself and the card reads as two black bars with a
+                        sliver of work between them. Filling that space with a
+                        blurred enlargement of the same picture keeps the frame
+                        and the whole result, and gives the dead area the
+                        colours of the work it belongs to. Same URL, so it is
+                        the cached image again rather than a second download. */}
+                    {item.kind === "image" || item.poster ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        className="ms-card-backdrop"
+                        src={item.kind === "image" ? item.url : (item.poster as string)}
+                        alt=""
+                        aria-hidden="true"
+                        draggable={false}
+                        loading="lazy"
+                      />
+                    ) : null}
                     {item.kind === "video" ? (
                       <video
                         src={item.url}
@@ -1906,23 +2169,16 @@ export function MediaStudio() {
                 <>
                   <div className="ms-control">
                     <span className="ms-control-label">Length</span>
-                    <div
-                      className="ms-chips is-compact"
-                      role="group"
-                      aria-label="Length"
+                    <select
+                      className="ms-duration-select"
+                      aria-label="Video length"
+                      value={videoSeconds}
+                      onChange={(event) => setVideoSeconds(Number(event.target.value))}
                     >
-                      {VIDEO_LENGTHS.map((seconds) => (
-                        <button
-                          key={seconds}
-                          type="button"
-                          aria-pressed={videoSeconds === seconds}
-                          className={`ms-chip${videoSeconds === seconds ? " is-active" : ""}`}
-                          onClick={() => setVideoSeconds(seconds)}
-                        >
-                          <b>{seconds}s</b>
-                        </button>
+                      {videoLengths.map((seconds) => (
+                        <option key={seconds} value={seconds}>{seconds} seconds</option>
                       ))}
-                    </div>
+                    </select>
                   </div>
                   <div className="ms-control">
                     <span className="ms-control-label">Quality</span>
@@ -1966,6 +2222,80 @@ export function MediaStudio() {
                       })}
                     </div>
                   </div>
+                  {/* Attaching a picture is the difference between describing
+                      a product and showing it. Kept to one row of small
+                      actions so it reads as another option, not as a second
+                      decision to make before rendering. */}
+                  <div className="ms-control">
+                    <span className="ms-control-label">Start from an image</span>
+                    <div className="ms-references">
+                      {videoReferences.map((reference) => (
+                        <span
+                          key={`${reference.role}:${reference.assetId}`}
+                          className="ms-reference"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={reference.url} alt="" loading="lazy" />
+                          <span className="ms-reference-role">
+                            {REFERENCE_ROLE_LABELS[reference.role]}
+                          </span>
+                          <button
+                            type="button"
+                            className="ms-reference-remove"
+                            aria-label={`Remove ${REFERENCE_ROLE_LABELS[reference.role].toLowerCase()} image`}
+                            onClick={() =>
+                              removeReference(reference.assetId, reference.role)
+                            }
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+
+                      {(["first_frame", "last_frame"] as const)
+                        .filter((role) => frameRoles.includes(role))
+                        .map((role) => (
+                          <button
+                            key={role}
+                            type="button"
+                            className="ms-reference-add"
+                            disabled={referenceChoices.length === 0}
+                            onClick={() => setPickingRole(role)}
+                          >
+                            {videoReferences.some(
+                              (reference) => reference.role === role,
+                            )
+                              ? role === "first_frame"
+                                ? "Change first frame"
+                                : "Change last frame"
+                              : role === "first_frame"
+                                ? "+ First frame"
+                                : "+ Last frame"}
+                          </button>
+                        ))}
+
+                      <button
+                        type="button"
+                        className="ms-reference-add"
+                        disabled={
+                          referenceChoices.length === 0 ||
+                          productReferencesBlocked ||
+                          productReferences.length >= MAX_PRODUCT_REFERENCES
+                        }
+                        onClick={() => setPickingRole("product")}
+                      >
+                        + Product or logo
+                      </button>
+                    </div>
+                    <small className="ms-reference-hint">
+                      {referenceChoices.length === 0
+                        ? "Make an image first — then your video can start from it."
+                        : productReferencesBlocked
+                          ? "A first or last frame decides the picture, so product images are not used alongside one."
+                          : "Optional. Your clip can open or close on one of your images, or keep a product looking the same."}
+                    </small>
+                  </div>
+
                   <div className="ms-control">
                     <span className="ms-control-label">Camera</span>
                     <div
@@ -2012,62 +2342,7 @@ export function MediaStudio() {
             </div>
           ) : null}
 
-          {/* Not a routine step any more. A render goes straight through on one
-              press whenever the quote matches the price on the button. This
-              appears only when it does not — the catalogue moved, or the prices
-              had not loaded and the button went out unpriced — or when a render
-              stopped for want of credits and can be resumed once topped up. */}
-          {videoQuote ? (
-            <div className="ms-quote is-live" role="status" ref={quoteRef}>
-              <div>
-                <b>
-                  {shownVideoCredits !== null &&
-                  videoQuote.credits !== shownVideoCredits
-                    ? `This one costs ${videoQuote.credits} credits, not ${shownVideoCredits}`
-                    : `This one costs ${videoQuote.credits} credits`}
-                </b>
-                <small>
-                  {generating
-                    ? "Starting your render…"
-                    : `${videoSeconds}s · ${videoAspect} · ${
-                        VIDEO_TIERS.find((tier) => tier.value === videoTier)
-                          ?.label || videoTier
-                      }. You are only charged if it works — a failed render returns your credits.`}
-                </small>
-              </div>
-              <div className="ms-quote-actions">
-                <button
-                  type="button"
-                  className="ms-ghost-btn"
-                  onClick={() => setVideoQuote(null)}
-                  disabled={generating}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="ms-confirm-btn"
-                  // `continuing` because this press is the decision itself: the
-                  // busy guard must never silently swallow it.
-                  onClick={() =>
-                    confirmVideoRender(videoQuote, { continuing: true })
-                  }
-                  disabled={generating}
-                >
-                  {generating ? (
-                    <>
-                      <span className="ms-spinner" aria-hidden="true" />
-                      Starting…
-                    </>
-                  ) : (
-                    `Render it · ${videoQuote.credits} credits`
-                  )}
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {sharpenOffer && !videoQuote ? (
+          {sharpenOffer ? (
             <div className="ms-quote ms-sharpen" role="status">
               <div>
                 <b>Like this direction?</b>
@@ -2246,7 +2521,7 @@ export function MediaStudio() {
                       ? "Rendering…"
                       : shownVideoCredits !== null
                         ? `Render · ${shownVideoCredits} credits`
-                        : "Render this video"
+                        : "Checking price…"
                     : "Make the image"}
               </span>
               <span className="ms-generate-short">
@@ -2259,7 +2534,7 @@ export function MediaStudio() {
                       ? "Rendering…"
                       : shownVideoCredits !== null
                         ? `Render · ${shownVideoCredits}`
-                        : "Render"
+                        : "Checking…"
                     : "Make image"}
               </span>
             </button>

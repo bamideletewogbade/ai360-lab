@@ -26,8 +26,20 @@ import {
 import {
   isVideoSelection,
   selectVideoModel,
+  supportedFrameTypes,
+  supportedVideoDurations,
   type VideoModelEntry,
 } from "@/lib/media/video-catalogue";
+import {
+  videoFailureCode,
+  videoFailureMessage,
+} from "@/lib/media/video-completion";
+import {
+  EMPTY_VIDEO_REFERENCES,
+  intendedFrameTypes,
+  resolveVideoReferences,
+  VideoReferenceError,
+} from "@/lib/media/video-references";
 import {
   createMediaJob,
   isMediaJobStoreConfigured,
@@ -101,11 +113,16 @@ async function currentQuote(intent: MediaIntent) {
   const body = (await response.json()) as {
     data?: VideoModelEntry[];
   };
+  // Attached frames change both the routing and, on providers that price
+  // image-to-video separately, the number quoted — so they are read before the
+  // model is chosen rather than added to the body afterwards.
+  const frameTypes = intendedFrameTypes(intent);
   const format = {
     durationSeconds: intent.durationSeconds || 4,
     resolution: intent.resolution,
     aspectRatio: intent.aspectRatio,
     withAudio: intent.audio !== "off",
+    withFrameImages: frameTypes.length > 0,
   };
   const catalogue = body.data || [];
   const selection = selectVideoModel({
@@ -115,15 +132,18 @@ async function currentQuote(intent: MediaIntent) {
     // four-second budget and refused for being twice as long.
     budgetUsd: usdBudgetForCredits(videoCeilingCredits(format.durationSeconds)),
     format,
+    frameTypes,
   });
   if (!isVideoSelection(selection)) {
     throw new Error(
-      selection.cheapestUsd === null
-        ? "No current video engine supports these choices."
-        : "This video quality is above the current credit limit. Choose a shorter or lower-quality version.",
+      selection.reason === "no_model_supports_frames"
+        ? "No engine at this quality can start from the frame you attached. Remove it, or choose another quality."
+        : selection.cheapestUsd === null
+          ? "No current video engine supports these choices."
+          : "This video quality is above the current credit limit. Choose a shorter or lower-quality version.",
     );
   }
-  return { ...selection, format };
+  return { ...selection, format, frameTypes };
 }
 
 function tokenSecret() {
@@ -134,6 +154,18 @@ function tokenSecret() {
 
 function providerKey() {
   return process.env.OPENROUTER_API_KEY || "";
+}
+
+function videoCallbackUrl() {
+  if (!process.env.OPENROUTER_WEBHOOK_SECRET?.trim()) return undefined;
+  const base = process.env.NEXT_PUBLIC_APP_URL || process.env.OPENROUTER_SITE_URL;
+  if (!base) return undefined;
+  try {
+    const url = new URL("/api/webhooks/openrouter/video", base);
+    return url.protocol === "https:" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // The token carries the credit reservation as well as the job, because video
@@ -183,7 +215,7 @@ function readJob(token: string) {
 }
 
 const PROMPT_MODE_EXECUTION =
-  "\n\nExecution: one coherent moment with natural lighting and a strong first frame. No watermark, fake interface, visible third-party logos, trademarks or generated text. Leave clean visual space for editable captions to be added later.";
+  "\n\nExecution: make the requested scene coherent, intentional and visually polished. Follow the requested composition, motion and mood closely.";
 
 function promptFor(body: VideoRequest, intent: MediaIntent) {
   // Raw-prompt mode passes the person's own words through with the execution
@@ -205,7 +237,7 @@ Market and location: ${clean(body.location, 240) || "Use only the supplied busin
 Approved scene plan:
 ${clean(body.asset?.content, 5_000)}
 
-Execution: one coherent moment with ${intent.motion} camera movement, natural lighting and a strong first frame. Ground every person, product and location in the supplied business context instead of using generic regional stereotypes. ${intent.audio === "off" ? "No audio." : `Use ${intent.audio} audio only.`} No watermark, fake interface, visible third-party logos, trademarks or generated text. Leave clean visual space for editable captions to be added later. ${intent.constraints.join(" ")}`;
+Execution: create a coherent, visually polished piece with ${intent.motion} camera movement and a strong first frame. Ground every person, product and location in the supplied business context instead of using generic regional stereotypes. ${intent.audio === "off" ? "No audio." : `Use ${intent.audio} audio only.`} Follow the approved scene plan, including requested brand marks and text. ${intent.constraints.join(" ")}`;
 }
 
 function providerStatus(status?: string) {
@@ -378,11 +410,13 @@ export async function POST(request: Request) {
     // a customer reads and the amount they are charged cannot drift apart.
     if (body.action === "tiers") {
       const intent = requestedIntent(body);
+      const frameTypes = intendedFrameTypes(intent);
       const format = {
         durationSeconds: intent.durationSeconds || 4,
         resolution: intent.resolution,
         aspectRatio: intent.aspectRatio,
         withAudio: intent.audio !== "off",
+        withFrameImages: frameTypes.length > 0,
       };
       const response = await fetch(
         "https://openrouter.ai/api/v1/videos/models",
@@ -392,19 +426,40 @@ export async function POST(request: Request) {
         throw new Error(`Video model catalogue returned ${response.status}`);
       const catalogue =
         ((await response.json()) as { data?: VideoModelEntry[] }).data || [];
+      const supportedDurations = supportedVideoDurations({
+        catalogue,
+        resolution: format.resolution,
+        aspectRatio: format.aspectRatio,
+        withAudio: format.withAudio,
+      });
       const budgetUsd = usdBudgetForCredits(
         videoCeilingCredits(format.durationSeconds),
       );
+      const seenModels = new Set<string>();
       const tiers = (["draft", "standard", "premium"] as const).map((tier) => {
         const selection = selectVideoModel({
           catalogue,
           tier,
           budgetUsd,
           format,
+          frameTypes,
         });
         if (!isVideoSelection(selection)) {
-          return { tier, available: false as const };
+          return {
+            tier,
+            available: false as const,
+            ...(selection.reason === "no_model_supports_frames"
+              ? { reason: "no_frame_support" }
+              : {}),
+          };
         }
+        // A long format can collapse two labels onto the same fallback model.
+        // Show that engine once rather than pretending the same render is two
+        // different quality choices.
+        if (seenModels.has(selection.model)) {
+          return { tier, available: false as const, reason: "same_engine" };
+        }
+        seenModels.add(selection.model);
         return {
           tier,
           available: true as const,
@@ -414,6 +469,20 @@ export async function POST(request: Request) {
             .reserve,
         };
       });
+      const frameTypeOptions = supportedFrameTypes({ catalogue, format });
+      log.info("studio.video.catalogue_resolved", {
+        duration: format.durationSeconds,
+        resolution: format.resolution,
+        aspectRatio: format.aspectRatio,
+        supportedDurations,
+        supportedFrameTypes: frameTypeOptions,
+        requestedFrameTypes: frameTypes,
+        availableTiers: tiers.filter((tier) => tier.available).map((tier) => ({
+          tier: tier.tier,
+          model: "model" in tier ? tier.model : undefined,
+          credits: "credits" in tier ? tier.credits : undefined,
+        })),
+      });
       log.finish(200, { outcome: "tiers" });
       return Response.json(
         {
@@ -421,6 +490,8 @@ export async function POST(request: Request) {
           duration: format.durationSeconds,
           resolution: format.resolution,
           aspectRatio: format.aspectRatio,
+          supportedDurations,
+          supportedFrameTypes: frameTypeOptions,
           requestId: log.requestId,
         },
         { headers: log.headers({ "Cache-Control": "no-store" }) },
@@ -562,6 +633,10 @@ export async function POST(request: Request) {
         usage?: { cost?: number };
         unsigned_urls?: string[];
       };
+      const providerError = clean(result.error, 500);
+      const friendlyProviderError = providerError
+        ? videoFailureMessage(providerError)
+        : undefined;
       // The render finished in a later request than the one that reserved the
       // credits, so this is where a video is finally charged or refunded.
       //
@@ -661,8 +736,8 @@ export async function POST(request: Request) {
             jobId: durableJob.id,
             status: providerStatus(result.status),
             actualCostUsd: result.usage?.cost,
-            errorCode: failedTerminal ? "provider_failed" : null,
-            errorMessage: clean(result.error, 500) || null,
+            errorCode: failedTerminal ? videoFailureCode(providerError) : null,
+            errorMessage: failedTerminal ? friendlyProviderError || null : null,
           });
         }
       }
@@ -737,12 +812,15 @@ export async function POST(request: Request) {
       log.info("studio.video.status", {
         status: result.status,
         costUsd: result.usage?.cost,
+        errorCode: failedTerminal ? videoFailureCode(providerError) : undefined,
+        hasOutput: Boolean(durableAssetId),
+        providerJobId: id,
       });
       log.finish(200, { outcome: "status", status: result.status });
       return Response.json(
         {
           status: result.status,
-          error: clean(result.error, 500) || undefined,
+          error: failedTerminal ? friendlyProviderError : undefined,
           costUsd: result.usage?.cost,
           jobId: durableJob?.id,
           assetId: durableAssetId || undefined,
@@ -805,6 +883,45 @@ export async function POST(request: Request) {
       );
     }
 
+    /**
+     * Resolved before any credit is held.
+     *
+     * A reference that cannot be used — missing, too large, a video, two first
+     * frames — makes the whole render impossible, and finding that out after
+     * the hold is placed means reserving someone's credits for work that was
+     * never going to start.
+     */
+    let references = EMPTY_VIDEO_REFERENCES;
+    if (intent.references.length) {
+      if (!requester.context) {
+        log.finish(401, { outcome: "references_require_identity" });
+        return Response.json(
+          {
+            error: "Sign in to use your own images as references.",
+            requestId: log.requestId,
+          },
+          { status: 401, headers: log.headers() },
+        );
+      }
+      try {
+        references = await resolveVideoReferences({
+          context: requester.context,
+          intent,
+        });
+      } catch (error) {
+        if (!(error instanceof VideoReferenceError)) throw error;
+        log.warn("studio.video.reference_rejected", {
+          ...errorDetails(error),
+          referenceCount: intent.references.length,
+        });
+        log.finish(422, { outcome: "reference_rejected" });
+        return Response.json(
+          { error: error.message, requestId: log.requestId },
+          { status: 422, headers: log.headers() },
+        );
+      }
+    }
+
     // The accepted quote is a real provider price, so it decides the hold
     // rather than the published range.
     const credit = await openCreditGate({
@@ -849,11 +966,22 @@ export async function POST(request: Request) {
       tier: intent.qualityTier,
       acceptedCostUsd: quote.costUsd,
       creditsReserved: gate.reserved,
+      callbackConfigured: Boolean(videoCallbackUrl()),
+      frameTypes: references.frameTypes,
+      inputReferenceCount: references.inputReferences.length,
+      referenceBytes: references.totalBytes,
+      // Named rather than silent: the provider ignores input_references once a
+      // frame is present, so this is guidance the person supplied and did not
+      // get. It is the line to look at when someone says their logo is absent.
+      ignoredReferenceRoles: references.ignoredRoles,
     });
+    const callbackUrl = videoCallbackUrl();
     const response = await fetch("https://openrouter.ai/api/v1/videos", {
       method: "POST",
       headers: await providerHeaders(),
-      signal: AbortSignal.timeout(30_000),
+      // References travel inline as data URIs, so a submit carrying a dozen
+      // megabytes of photographs needs longer than a bare prompt.
+      signal: AbortSignal.timeout(references.totalBytes ? 120_000 : 30_000),
       body: JSON.stringify({
         model: quote.model,
         prompt: promptFor(body, intent),
@@ -861,25 +989,34 @@ export async function POST(request: Request) {
         resolution: quote.format.resolution,
         aspect_ratio: quote.format.aspectRatio,
         generate_audio: quote.format.withAudio,
+        ...(references.frameImages.length
+          ? { frame_images: references.frameImages }
+          : {}),
+        ...(references.inputReferences.length
+          ? { input_references: references.inputReferences }
+          : {}),
+        ...(callbackUrl ? { callback_url: callbackUrl } : {}),
       }),
     });
     if (!response.ok) {
       const failure = await providerErrorDetails(response);
-      log.error("studio.video.failed", { model: quote.model, ...failure });
+      const failureCode = videoFailureCode(failure.providerMessage || "");
+      const failureMessage = videoFailureMessage(failure.providerMessage || "");
+      log.error("studio.video.failed", { model: quote.model, failureCode, ...failure });
       await gate.settle("failure");
       if (durable && requester.context) {
         await updateMediaJobResult({
           context: requester.context,
           jobId,
           status: "failed",
-          errorCode: "provider_failed",
-          errorMessage: "The video provider could not start this job.",
+          errorCode: failureCode,
+          errorMessage: failureMessage,
         }).catch(() => undefined);
       }
       log.finish(502, { outcome: "provider_error" });
       return Response.json(
         {
-          error: "The video provider could not start this job.",
+          error: failureMessage,
           providerMessage: failure.providerMessage,
           requestId: log.requestId,
         },

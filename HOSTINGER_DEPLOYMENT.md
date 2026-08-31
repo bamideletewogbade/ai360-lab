@@ -44,7 +44,9 @@ OPENROUTER_SITE_URL=https://ai360.africa
 OPENROUTER_SITE_NAME=AI360
 OPENROUTER_IMAGE_MODEL=openai/gpt-image-1-mini
 OPENROUTER_IMAGE_MODELS=openai/gpt-image-1-mini,google/gemini-3.1-flash-lite-image
-OPENROUTER_VIDEO_MODEL=google/veo-3.1-lite
+MEDIA_JOB_SIGNING_SECRET=<long random application secret>
+OPENROUTER_WEBHOOK_SECRET=<secret configured in the OpenRouter workspace>
+AI360_MEDIA_RECONCILE_SECRET=<long random secret for the video sweep>
 NEXT_PUBLIC_AI360_TEAM_WORKSPACES=false
 DATABASE_URL=<Supabase shared session-pooler URL on port 5432>
 DIRECT_URL=<Supabase direct migration URL or reviewed migration connection>
@@ -122,6 +124,25 @@ AI360 always writes redacted structured server errors to Runtime logs. Setting
 HTTPS monitoring destination. Set `AI360_ERROR_ALERT_WEBHOOK_TOKEN` only when
 that destination requires bearer authentication. Prompts, files, cookies,
 headers and customer identifiers are excluded from this payload.
+
+### Video delivery and reconciliation
+
+Video renders finish on the server, not in the customer's tab. Two things carry
+that, and the second is what makes it safe:
+
+1. Register `https://<your-domain>/api/webhooks/openrouter/video` as the video
+   callback in the OpenRouter workspace and set `OPENROUTER_WEBHOOK_SECRET` to
+   the same signing secret on both sides. The callback URL is only sent to the
+   provider when that secret is present and the app URL is HTTPS.
+2. Schedule an authenticated `POST` to `/api/internal/media/reconcile-video`
+   every five minutes, sending `Authorization: Bearer
+   <AI360_MEDIA_RECONCILE_SECRET>`. This finishes any render the callback did
+   not deliver, refunds renders the provider has lost, and returns credits held
+   for renders that never finished. Without it a single missed callback leaves
+   a customer's credits held for a video they never received.
+
+Apply `database/postgres/0030_video_webhooks.sql` before enabling either — both
+paths record their delivery in `lab_media_webhook_events` to stay idempotent.
 
 ### Read-only browser worker
 

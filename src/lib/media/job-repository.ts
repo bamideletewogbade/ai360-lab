@@ -27,6 +27,8 @@ export type MediaJob = {
 };
 
 type MediaJobRow = {
+  workspace_key: string;
+  owner_id: string;
   id: string;
   project_id: string | null;
   project_asset_id: string | null;
@@ -73,7 +75,7 @@ function mapJob(row: MediaJobRow): MediaJob {
 }
 
 const JOB_SELECT = `
-  select job.id, job.project_id, job.project_asset_id, job.media_type, job.status,
+  select job.workspace_key, job.owner_id, job.id, job.project_id, job.project_asset_id, job.media_type, job.status,
          job.intent, job.provider, job.model, job.provider_job_id, job.reservation_id,
          job.quoted_cost_usd, job.actual_cost_usd, job.error_message,
          output.asset_id as output_asset_id, job.created_at, job.updated_at
@@ -87,6 +89,108 @@ const JOB_SELECT = `
 
 export function isMediaJobStoreConfigured() {
   return isPostgresConfigured();
+}
+
+/**
+ * The workspace a stored job belongs to, rebuilt from the row itself.
+ *
+ * Trusted server paths — the provider callback and the reconciliation worker —
+ * act on jobs with nobody signed in, so there is no session to read a workspace
+ * from. Every write they make is still scoped by `workspace_key`, so the job
+ * decides its own blast radius rather than the caller.
+ */
+function contextForRow(row: MediaJobRow): WorkspaceAuthContext {
+  const isOrganization = row.workspace_key.startsWith("org:");
+  const subjectId = row.workspace_key.slice(row.workspace_key.indexOf(":") + 1);
+  return {
+    userId: row.owner_id,
+    orgId: isOrganization ? subjectId : null,
+    orgRole: null,
+    profile: { email: null, displayName: null, imageUrl: null },
+    workspace: {
+      key: row.workspace_key,
+      type: isOrganization ? "organization" : "user",
+      subjectId,
+    },
+  };
+}
+
+/** Trusted provider callback lookup; never exposed through a customer route. */
+export async function readMediaJobByProviderId(providerJobId: string) {
+  const sql = getPostgres();
+  const rows = await sql.unsafe<MediaJobRow[]>(
+    `${JOB_SELECT}
+    where job.provider = 'openrouter' and job.provider_job_id = $1 limit 1`,
+    [providerJobId.slice(0, 255)],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return { job: mapJob(row), context: contextForRow(row) };
+}
+
+/**
+ * Video jobs the provider has been given but nobody has finished, across every
+ * workspace.
+ *
+ * This is the sweep behind the webhook. A callback can be missed for reasons
+ * entirely outside this system — a deploy mid-flight, a signature rejected, a
+ * provider retry budget exhausted — and the cost of missing one is not a
+ * cosmetic stale row: the customer's credits stay held for a render they never
+ * received. Ordered oldest first so the longest-suffering job is always in the
+ * batch, whatever the limit.
+ *
+ * `staleSeconds` keeps the sweep off jobs the browser is still actively
+ * polling, which would otherwise race it to the same delivery.
+ */
+export async function listStaleVideoJobsForReconciliation(input: {
+  staleSeconds: number;
+  limit: number;
+}) {
+  const sql = getPostgres();
+  const rows = await sql.unsafe<MediaJobRow[]>(
+    `${JOB_SELECT}
+    where job.media_type = 'video' and job.provider = 'openrouter'
+      and job.provider_job_id is not null
+      and job.status in ('queued', 'submitted', 'running')
+      and job.updated_at < now() - make_interval(secs => $1)
+    order by job.updated_at asc limit $2`,
+    [
+      Math.min(86_400, Math.max(60, Math.floor(input.staleSeconds))),
+      Math.min(200, Math.max(1, Math.floor(input.limit))),
+    ],
+  );
+  return rows.map((row) => ({ job: mapJob(row), context: contextForRow(row) }));
+}
+
+export async function claimMediaWebhookEvent(input: {
+  idempotencyKey: string;
+  providerJobId: string;
+  eventType: string;
+}) {
+  const sql = getPostgres();
+  const rows = await sql<{ idempotency_key: string }[]>`
+    insert into public.lab_media_webhook_events
+      (idempotency_key, provider_job_id, event_type, status, attempts)
+    values (${input.idempotencyKey.slice(0, 160)}, ${input.providerJobId.slice(0, 255)},
+            ${input.eventType.slice(0, 80)}, 'processing', 1)
+    on conflict (idempotency_key) do update
+      set status = 'processing', attempts = public.lab_media_webhook_events.attempts + 1,
+          last_error = null, updated_at = now()
+      where public.lab_media_webhook_events.status = 'failed'
+    returning idempotency_key`;
+  return Boolean(rows[0]);
+}
+
+export async function finishMediaWebhookEvent(
+  idempotencyKey: string,
+  error?: string,
+) {
+  const sql = getPostgres();
+  await sql`
+    update public.lab_media_webhook_events
+       set status = ${error ? "failed" : "completed"},
+           last_error = ${error?.slice(0, 1_000) || null}, updated_at = now()
+     where idempotency_key = ${idempotencyKey.slice(0, 160)}`;
 }
 
 export async function createMediaJob(input: {
@@ -168,6 +272,22 @@ export async function listRecentMediaJobs(
     where job.workspace_key = $1 and job.status = 'completed' and output.asset_id is not null
     order by job.created_at desc limit $2`,
     [context.workspace.key, Math.min(50, Math.max(1, limit))],
+  );
+  return rows.map(mapJob);
+}
+
+/** Active video work for this workspace, including projectless Media Studio jobs. */
+export async function listActiveVideoJobs(
+  context: WorkspaceAuthContext,
+  limit = 10,
+) {
+  const sql = getPostgres();
+  const rows = await sql.unsafe<MediaJobRow[]>(
+    `${JOB_SELECT}
+    where job.workspace_key = $1 and job.media_type = 'video'
+      and job.status in ('queued', 'submitted', 'running')
+    order by job.created_at desc limit $2`,
+    [context.workspace.key, Math.min(25, Math.max(1, limit))],
   );
   return rows.map(mapJob);
 }

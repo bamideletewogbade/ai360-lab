@@ -24,6 +24,12 @@ test('image and video constraints cannot be mixed accidentally', () => {
   assert.equal(invalid.success, false)
 })
 
+test('video intent accepts provider-supported longer clips inside the product cap', () => {
+  const base = defaultMediaIntent({ mediaType: 'video', purpose: 'Longer product story' })
+  assert.equal(mediaIntentSchema.safeParse({ ...base, durationSeconds: 15 }).success, true)
+  assert.equal(mediaIntentSchema.safeParse({ ...base, durationSeconds: 31 }).success, false)
+})
+
 test('the summary uses customer language', () => {
   const intent = defaultMediaIntent({ mediaType: 'image', purpose: 'Product post', projectChannels: ['Instagram'] })
   assert.equal(mediaIntentSummary(intent), '1:1 1K image for Instagram post')

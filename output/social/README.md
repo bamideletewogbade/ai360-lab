@@ -1,4 +1,4 @@
-# AI 360 Closed Test Run social campaign
+# AI360 Closed Test Run social campaign
 
 Square campaign artwork generated for Instagram and WhatsApp:
 

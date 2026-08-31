@@ -2152,10 +2152,13 @@ export function StudioWorkspace({
               {executionApproval.kind === 'video' ? (
                 <label>
                   <span>Length</span>
-                  <select value={executionApproval.intent.durationSeconds} onChange={(event) => void updateExecutionIntent({ durationSeconds: Number(event.target.value) as 4 | 6 | 8 })}>
+                  <select value={executionApproval.intent.durationSeconds} onChange={(event) => void updateExecutionIntent({ durationSeconds: Number(event.target.value) })}>
                     <option value="4">4 seconds, quick draft</option>
                     <option value="6">6 seconds</option>
                     <option value="8">8 seconds</option>
+                    <option value="10">10 seconds</option>
+                    <option value="12">12 seconds</option>
+                    <option value="15">15 seconds</option>
                   </select>
                 </label>
               ) : null}

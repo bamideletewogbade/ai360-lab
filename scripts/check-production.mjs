@@ -26,6 +26,20 @@ export function evaluateProductionEnvironment(env = process.env) {
   if (!['staging', 'production'].includes(deployment)) errors.push('AI360_DEPLOYMENT_ENV: must be staging or production')
 
   requireValue('OPENROUTER_API_KEY', 'required for chat, Agent and Studio')
+
+  // Video completion is server-owned through two doors: the provider webhook,
+  // and the sweep that finishes whatever the webhook did not. Without either,
+  // a render only completes while the customer's tab stays open — and a closed
+  // tab leaves their credits held for a video they never received.
+  const reconcileSecret = env.AI360_MEDIA_RECONCILE_SECRET || env.CRON_SECRET || ''
+  if (!reconcileSecret) {
+    warnings.push('AI360_MEDIA_RECONCILE_SECRET is absent. Video reconciliation cannot be scheduled, so a missed webhook leaves credits held until the reservation expires.')
+  } else if (reconcileSecret.length < 24) {
+    errors.push('AI360_MEDIA_RECONCILE_SECRET: use at least 24 random characters')
+  }
+  if (!configured('OPENROUTER_WEBHOOK_SECRET')) {
+    warnings.push('OPENROUTER_WEBHOOK_SECRET is absent. Video renders will not be delivered by callback and will rely entirely on the reconciliation sweep.')
+  }
   requireHttps('NEXT_PUBLIC_APP_URL', 'set the canonical deployment URL')
   if (configured('NEXT_PUBLIC_APP_URL')) {
     try {

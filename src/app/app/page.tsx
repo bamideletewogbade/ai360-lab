@@ -452,8 +452,11 @@ function LabWorkspace({
 
     let tallestViewport = Math.max(window.innerHeight, viewport.height)
     const syncVisibleViewport = () => {
-      const isPhone = window.matchMedia('(max-width: 590px)').matches
-      if (!isPhone) {
+      // Must match the breakpoint where the tab bar appears and the sidebar
+      // becomes a drawer, otherwise the shell mis-sizes on tablets and on
+      // phones held in landscape.
+      const isTouchLayout = window.matchMedia('(max-width: 820px)').matches
+      if (!isTouchLayout) {
         shell.style.removeProperty('--mobile-workspace-height')
         setMobileKeyboardOpen(false)
         tallestViewport = Math.max(window.innerHeight, viewport.height)
@@ -1795,6 +1798,21 @@ function LabWorkspace({
             <span>Media Studio</span>
           </button>
 
+          {/* A catalogue of starting points sits below the work itself:
+              "Examples are secondary" in PRODUCT_EXPERIENCE_ARCHITECTURE.md, and
+              every listing here opens a Project engine, so this is a doorway
+              into Projects rather than a peer above them. */}
+          <button
+            type="button"
+            className={`nav-menu-item${experience === 'market' ? ' active' : ''}`}
+            onClick={() => { selectExperience('market'); setSidebarOpen(false) }}
+          >
+            <span className="nav-menu-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.5"/><path d="M17.25 14v6.5M14 17.25h6.5"/></svg>
+            </span>
+            <span>Tools &amp; Kits</span>
+          </button>
+
           {/* Library nav item hidden for v1 — may bring back later.
           <button
             type="button"
@@ -1807,17 +1825,6 @@ function LabWorkspace({
             <span>Library</span>
           </button>
           */}
-
-          <button
-            type="button"
-            className={`nav-menu-item${experience === 'market' ? ' active' : ''}`}
-            onClick={() => { selectExperience('market'); setSidebarOpen(false) }}
-          >
-            <span className="nav-menu-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.5"/><path d="M17.25 14v6.5M14 17.25h6.5"/></svg>
-            </span>
-            <span>Tools &amp; Kits</span>
-          </button>
         </nav>
 
         <div className="recents-section-head">
@@ -2239,19 +2246,10 @@ function LabWorkspace({
         )}
         <MobileWorkspaceNav
           experience={experience}
-          authEnabled={AUTH_ENABLED}
-          feedbackContext={{
-            sourceSurface: experience === 'chat' ? 'quick' : experience === 'agent' ? 'research' : 'studio',
-            conversationId: active.id,
-            conversationText: messages.slice(-6).map((message) => `${message.role === 'user' ? 'Customer' : 'AI360'}: ${message.content}`).join('\n\n'),
-          }}
-          onOpenSidebar={openWorkspaceSidebar}
-          onOpenGuide={() => setHelpOpen(true)}
           onSelectChats={openChatsHome}
+          onSelectTools={() => selectExperience('market')}
           onSelectProjects={() => { selectExperience('studio'); setProjectsHomeSignal((n) => n + 1) }}
           onSelectMedia={() => selectExperience('media')}
-          onSelectLibrary={() => selectExperience('apps')}
-          onSelectMarket={() => selectExperience('market')}
         />
       </section>
       {helpOpen && (

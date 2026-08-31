@@ -1,5 +1,81 @@
 # Decision and incident log
 
+## 2026-08-31 · Decision · The tab bar and the drawer now arrive together, and "More" is gone
+
+**What was wrong.** The phone tab bar appeared at `max-width: 590px`. The sidebar
+stopped being a column and became an off-canvas drawer at `max-width: 820px`.
+Every width between those two numbers therefore had neither: no tab bar, and no
+visible sidebar. A tablet in portrait (768px) and any large phone held sideways
+reached Chats, Projects, Media Studio and Tools & Kits only by finding the menu
+button first. The same split existed in JavaScript — the visual-viewport handler
+in `src/app/app/page.tsx` tested 590px while the drawer check beside it tested
+820px, so the shell also mis-sized itself across that band.
+
+Both now read 820px. There is no width where a primary destination is unreachable
+without opening something.
+
+**Why the "More" sheet went.** It held search and recents, Tools & Kits, Library,
+Settings, Learn AI360, feedback and account — seven jobs behind one control, with
+an active state that lit for two different experiences so it could not say where
+you were. Its own first row called `onOpenSidebar`: a door to a door. Search,
+recents, settings and help were already in the drawer behind the header's menu
+button, so the sheet was mostly a second route to a surface that already existed.
+Deleting it removed a focus trap, a dialog and about 340 lines across the
+component and the stylesheet.
+
+**The regression it nearly caused.** Only one thing in the sheet was not
+duplicated elsewhere: signing in and out. `.auth-sign-up` — "Save your work" — was
+already `display: none` on every touch layout, and the header's account controls
+were hidden outright below 590px, so the sheet was a guest's only route to either.
+Removing it without noticing would have quietly deleted the guest conversion
+prompt from every phone. Identity moved back into the header instead, and the
+brand wordmark yields the space, since the menu button beside it already says this
+is the workspace.
+
+**Order: Chats · Projects · Media · Tools, on both surfaces.** Tools & Kits was
+first placed second, on the reasoning that a tools module is where the product is
+heading. That was a bet on a module that does not exist yet in its intended form —
+today every listing opens a Project engine rather than doing work itself. It
+contradicted two things already written down: "Examples are secondary" in
+`PRODUCT_EXPERIENCE_ARCHITECTURE.md`, and the 2026-08-20 entry below recording
+that this catalogue is a doorway into Projects. A catalogue of starting points
+does not outrank the work. Tools still gains what it needed — a permanent labelled
+destination one tap away instead of two taps inside an overflow menu.
+
+**Guardrail.** `tests/library-market-ui.test.ts` locks the tab bar and the sidebar
+to the same four destinations in the same order, asserts that commented-out items
+are not counted as destinations (the previous test matched `<span>Library</span>`
+inside a JSX comment and passed while the item was hidden), and asserts that the
+media query enabling the tab bar is the same width at which the sidebar becomes a
+drawer — the specific gap above.
+
+**Revisit if.** A fifth destination earns primary status. The choice then is five
+tabs or a reintroduced overflow menu, and overflow should lose again unless the
+fifth thing is genuinely secondary, because that is what put Tools & Kits two taps
+deep on a mobile-first product in the first place.
+
+## 2026-08-31 · Decision · Library leaves both navigations, superseding the mobile-probe plan
+
+**What.** Library is now absent from the tab bar as well as the side navigation.
+This supersedes the 2026-08-21 entry below, which kept the mobile entry
+deliberately while hiding the desktop one. The `apps` experience, its route
+handling and `Library.tsx` are still untouched, and the desktop button remains
+commented rather than deleted, so restoring it stays cheap.
+
+**Why the previous plan could not have worked.** It kept the mobile entry so that
+usage data could decide whether the desktop entry should return. No such data was
+ever being collected. `FUNNEL_STEPS` in `src/lib/funnel/contract.ts` ends at
+`workspace_entered`, and `selectExperience` records nothing at all, so no event
+anywhere distinguishes someone opening Library from someone opening anything else.
+The condition the decision was waiting on could never be met, which made the
+surviving entry a vestige rather than a probe — and the asymmetry read to anyone
+new as an oversight rather than an intention.
+
+**Revisit if.** A concrete Library use case is defined. If that decision wants
+evidence behind it, destination selection has to be instrumented first: keeping an
+entry alive to watch it is indistinguishable from simply keeping it, until
+something actually records the watching.
+
 ## 2026-08-26 · Incident · The invitation link could not complete a session
 
 **Found by** an operator asking why the console said "Sent, no reply" when the
@@ -447,6 +523,11 @@ default "first section open" turns out wrong against how people actually read
 these documents.
 
 ## 2026-08-21 · Decision · Library stays off the side navigation for now
+
+**Superseded 2026-08-31.** Library left the mobile navigation as well. The
+usage data this entry waited on was never being recorded, so the surviving
+mobile entry could not have answered the question it was kept for. See the
+2026-08-31 entry above.
 
 **What.** The Library entry was removed from the desktop side navigation in
 `src/app/app/page.tsx`. The button is commented out, not deleted, and the

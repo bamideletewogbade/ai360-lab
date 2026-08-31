@@ -103,7 +103,8 @@ approved model catalogue:
 ```text
 OPENROUTER_IMAGE_MODEL=openai/gpt-image-1-mini
 OPENROUTER_IMAGE_MODELS=openai/gpt-image-1-mini,google/gemini-3.1-flash-lite-image
-OPENROUTER_VIDEO_MODEL=google/veo-3.1-lite
+MEDIA_JOB_SIGNING_SECRET=<long random application secret>
+OPENROUTER_WEBHOOK_SECRET=<secret configured in the OpenRouter workspace>
 ```
 
 ### 3. Save and redeploy

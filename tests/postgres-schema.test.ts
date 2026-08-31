@@ -9,6 +9,7 @@ const adminMigrationUrl = new URL('../database/postgres/0023_admin_console.sql',
 const adminFinanceMigrationUrl = new URL('../database/postgres/0024_admin_finance_indexes.sql', import.meta.url)
 const adminProgramMigrationUrl = new URL('../database/postgres/0025_admin_program_operations.sql', import.meta.url)
 const pilotInvitationMigrationUrl = new URL('../database/postgres/0026_pilot_invitations.sql', import.meta.url)
+const videoWebhookMigrationUrl = new URL('../database/postgres/0030_video_webhooks.sql', import.meta.url)
 
 test('the Supabase runtime foundation persists every durable agent boundary', async () => {
   const migration = await readFile(runtimeMigrationUrl, 'utf8')
@@ -36,6 +37,15 @@ test('private assets and agent data are read-only to the authenticated browser r
   assert.match(migration, /revoke all on public\.lab_assets[\s\S]+from anon, authenticated/)
   assert.doesNotMatch(migration, /grant (?:insert|update|delete|all)[^;]+lab_agent_/i)
   assert.match(migration, /values \('ai360-private', 'ai360-private', false, 104857600\)/)
+})
+
+test('video webhook deliveries are durable, private and idempotent', async () => {
+  const migration = await readFile(videoWebhookMigrationUrl, 'utf8')
+  assert.match(migration, /create table if not exists public\.lab_media_webhook_events/)
+  assert.match(migration, /idempotency_key text primary key/)
+  assert.match(migration, /status in \('processing', 'completed', 'failed'\)/)
+  assert.match(migration, /enable row level security/)
+  assert.match(migration, /revoke all on public\.lab_media_webhook_events from anon, authenticated/)
 })
 
 test('workspace onboarding is workspace-scoped, guarded and not writable by the browser role', async () => {

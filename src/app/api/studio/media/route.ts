@@ -3,6 +3,7 @@ import { rateLimit } from "@/lib/guardrails";
 import { errorDetails, requestLogger } from "@/lib/observability";
 import {
   isMediaJobStoreConfigured,
+  listActiveVideoJobs,
   listMediaJobs,
   listRecentMediaJobs,
   readMediaJob,
@@ -75,6 +76,14 @@ export async function GET(request: Request) {
     if (url.searchParams.get("recent") === "1") {
       const jobs = await listRecentMediaJobs(context, 24);
       log.finish(200, { outcome: "recent", count: jobs.length });
+      return Response.json(
+        { jobs },
+        { headers: log.headers({ "Cache-Control": "no-store" }) },
+      );
+    }
+    if (url.searchParams.get("active") === "1") {
+      const jobs = await listActiveVideoJobs(context, 10);
+      log.finish(200, { outcome: "active", count: jobs.length });
       return Response.json(
         { jobs },
         { headers: log.headers({ "Cache-Control": "no-store" }) },

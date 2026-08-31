@@ -26,7 +26,10 @@ export const mediaIntentSchema = z.object({
   channel: mediaChannelSchema.default('auto'),
   aspectRatio: z.enum(['1:1', '2:3', '9:16', '16:9']),
   resolution: z.enum(['1K', '2K', '720p', '1080p']).default('1K'),
-  durationSeconds: z.union([z.literal(4), z.literal(6), z.literal(8)]).optional(),
+  // Video engines expose their supported lengths through the live catalogue.
+  // Keep the intent broad enough to carry those capabilities while retaining
+  // a hard product boundary against accidental or abusive long-running jobs.
+  durationSeconds: z.number().int().min(3).max(30).optional(),
   qualityTier: mediaQualitySchema.default('standard'),
   audio: z.enum(['off', 'ambient', 'voice']).default('off'),
   motion: z.enum(['calm', 'balanced', 'dynamic']).default('balanced'),
