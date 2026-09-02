@@ -538,6 +538,23 @@
   border: 1px solid #d6d4cc; border-radius: 7px; background: var(--panel);
   color: var(--ink); font-size: 12px; font-weight: 700; outline: 0; cursor: pointer;
 }
+.inviteSearch { display: inline-flex; align-items: center; }
+.inviteSearch input {
+  width: min(260px, 34vw); height: 31px; padding: 0 10px;
+  border: 1px solid #d6d4cc; border-radius: 7px; background: var(--panel);
+  color: var(--ink); font-size: 12px; outline: 0;
+}
+.inviteSearch input:focus { border-color: #8e8a7e; box-shadow: 0 0 0 2px rgba(48, 47, 43, .08); }
+.invitePagination {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 10px 12px; border-top: 1px solid var(--line); background: #f7f5ef;
+}
+.invitePagination span { color: var(--muted); font-size: 10px; font-weight: 700; }
+.invitePagination button {
+  min-height: 29px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--panel); color: var(--ink); cursor: pointer; font-size: 10px; font-weight: 800;
+}
+.invitePagination button:disabled { cursor: default; opacity: .45; }
 .accountPicker > header span:first-child {
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px;
 }

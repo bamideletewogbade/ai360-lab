@@ -5,6 +5,7 @@ import {
   isMissingAdminInvitationTables,
   readAdminInvitations,
   revokeAdminInvitations,
+  restoreAdminInvitations,
 } from '@/lib/admin/invitations'
 import { isPostgresConfigured } from '@/lib/postgres'
 import { errorDetails, requestLogger } from '@/lib/observability'
@@ -35,8 +36,8 @@ export async function GET(request: Request) {
   }
 }
 
-const RevokeRequest = z.object({
-  action: z.literal('revoke'),
+const InvitationLifecycleRequest = z.object({
+  action: z.enum(['revoke', 'restore']),
   invitationIds: z.array(z.string().min(2).max(160).regex(/^[A-Za-z0-9._:-]+$/)).min(1).max(500),
   programKey: z.string().trim().min(2).max(80).regex(/^[A-Za-z0-9._:-]+$/).default('pilot'),
   reason: z.string().trim().min(3).max(240),
@@ -52,27 +53,35 @@ export async function POST(request: Request) {
     if (!canManageAdminPrograms(operator)) return Response.json({ error: 'Program-manager access is required.' }, { status: 403, headers: log.headers() })
     if (!isPostgresConfigured()) return Response.json({ error: 'Admin operations are not connected yet.' }, { status: 503, headers: log.headers() })
 
-    const parsed = RevokeRequest.safeParse(await request.json().catch(() => null))
+    const parsed = InvitationLifecycleRequest.safeParse(await request.json().catch(() => null))
     if (!parsed.success) return Response.json({ error: 'Review the selected invitations.' }, { status: 400, headers: log.headers() })
 
-    const revoked = await revokeAdminInvitations({
+    const lifecycle = {
       ids: [...new Set(parsed.data.invitationIds)],
       programKey: parsed.data.programKey,
       actorId: operator.userId,
       reason: parsed.data.reason,
       idempotencyKey: parsed.data.idempotencyKey,
-    })
-    log.finish(200, { outcome: 'success', revoked: revoked.length })
-    return Response.json({ revoked: revoked.length, invitationIds: revoked }, {
+    }
+    const invitationIds = parsed.data.action === 'restore'
+      ? await restoreAdminInvitations(lifecycle)
+      : await revokeAdminInvitations(lifecycle)
+    log.finish(200, { outcome: 'success', action: parsed.data.action, changed: invitationIds.length })
+    return Response.json({
+      action: parsed.data.action,
+      changed: invitationIds.length,
+      ...(parsed.data.action === 'restore' ? { restored: invitationIds.length } : { revoked: invitationIds.length }),
+      invitationIds,
+    }, {
       headers: log.headers({ 'Cache-Control': 'private, no-store' }),
     })
   } catch (error) {
-    log.error('admin.invitation_revoke_failed', errorDetails(error))
+    log.error('admin.invitation_lifecycle_failed', errorDetails(error))
     if (isMissingAdminInvitationTables(error)) {
       log.finish(503, { outcome: 'invitation_migration_required' })
       return Response.json({ error: 'Participant invitations are unavailable until migration 0026 is applied.' }, { status: 503, headers: log.headers() })
     }
-    log.finish(500, { outcome: 'revoke_failed' })
-    return Response.json({ error: 'The invitations could not be revoked.' }, { status: 500, headers: log.headers() })
+    log.finish(500, { outcome: 'lifecycle_failed' })
+    return Response.json({ error: 'The invitations could not be updated.' }, { status: 500, headers: log.headers() })
   }
 }

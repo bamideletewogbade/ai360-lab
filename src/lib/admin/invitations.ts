@@ -98,7 +98,7 @@ export async function readAdminInvitations(programKey = 'pilot') {
 }
 
 const DISPOSITIONS: AdminImportDisposition[] = [
-  'new', 'name_update', 'already_invited', 'already_a_user', 'invalid_email', 'duplicate_in_file', 'missing_email',
+  'new', 'name_update', 'already_invited', 'previously_cancelled', 'already_a_user', 'invalid_email', 'duplicate_in_file', 'missing_email',
 ]
 
 function emptyCounts() {
@@ -129,17 +129,16 @@ export async function classifyImportRows(
         select distinct lower(email) as email
           from public.lab_users
          where deleted_at is null and lower(email) = any(${emails})`,
-      sql<Array<{ email: string; display_name: string | null }>>`
-        select email, display_name
+      sql<Array<{ email: string; display_name: string | null; invite_status: AdminInviteStatus }>>`
+        select email, display_name, invite_status
           from public.lab_admin_invitations
          where program_key = ${programKey}
-           and email = any(${emails})
-           and invite_status <> 'revoked'`,
+           and email = any(${emails})`,
     ])
     : [[], []]
 
   const users = new Set(existingUsers.map((row) => row.email))
-  const invited = new Map(existingInvitations.map((row) => [row.email, row.display_name]))
+  const invited = new Map(existingInvitations.map((row) => [row.email, row]))
 
   const ready: AdminImportPreviewRow[] = []
   const updates: AdminImportPreviewRow[] = []
@@ -149,10 +148,13 @@ export async function classifyImportRows(
   for (const row of parse.rows) {
     // "Already a user" outranks "already invited": if the person has an account
     // the operator wants the existing pilot-onboard flow, not another invite.
+    const existingInvitation = invited.get(row.email)
     const disposition: AdminImportDisposition = users.has(row.email)
       ? 'already_a_user'
-      : invited.has(row.email)
-        ? (!invited.get(row.email)?.trim() && row.displayName?.trim() ? 'name_update' : 'already_invited')
+      : existingInvitation?.invite_status === 'revoked'
+        ? 'previously_cancelled'
+      : existingInvitation
+        ? (!existingInvitation.display_name?.trim() && row.displayName?.trim() ? 'name_update' : 'already_invited')
         : 'new'
     const entry: AdminImportPreviewRow = { ...row, disposition }
     counts[disposition] += 1
@@ -367,6 +369,43 @@ export async function revokeAdminInvitations(input: {
     }
   })
   return revoked
+}
+
+/**
+ * Reopens a cancelled invitation without destroying its delivery history.
+ *
+ * `(program_key, email)` is intentionally unique, so a second row is neither
+ * possible nor desirable. Restoring the existing row makes the lifecycle
+ * explicit and lets the next send mint a fresh authentication link.
+ */
+export async function restoreAdminInvitations(input: {
+  ids: string[]
+  programKey: string
+  actorId: string
+  reason: string
+  idempotencyKey: string
+}) {
+  const sql = getPostgres()
+  const restored: string[] = []
+  await sql.begin(async (tx) => {
+    for (const id of input.ids) {
+      const [row] = await tx<{ id: string }[]>`
+        update public.lab_admin_invitations
+           set invite_status = 'pending', updated_at = now()
+         where id = ${id} and program_key = ${input.programKey}
+           and invite_status = 'revoked'
+         returning id`
+      if (!row) continue
+      restored.push(row.id)
+      await tx`
+        insert into public.lab_admin_invitation_events
+          (id, invitation_id, actor_id, action, reason, idempotency_key)
+        values (${`invitation_event_${crypto.randomUUID()}`}, ${row.id}, ${input.actorId},
+                'restored', ${input.reason.slice(0, 240)}, ${`${input.idempotencyKey}:${row.id}`})
+        on conflict (idempotency_key) do nothing`
+    }
+  })
+  return restored
 }
 
 /**

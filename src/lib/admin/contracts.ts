@@ -13,12 +13,14 @@ export type AdminInviteStatus = 'pending' | 'sent' | 'accepted' | 'bounced' | 'r
 /**
  * Why an imported address will or will not change invitation storage. `new`
  * creates an invitation, while `name_update` repairs a blank name on an
- * existing invitation. The operator sees both before anything is written.
+ * existing invitation. A cancelled record must be restored from the console,
+ * not presented as new when its unique email key cannot be inserted again.
  */
 export type AdminImportDisposition =
   | 'new'
   | 'name_update'
   | 'already_invited'
+  | 'previously_cancelled'
   | 'already_a_user'
   | 'invalid_email'
   | 'duplicate_in_file'

@@ -59,7 +59,7 @@ export function PilotWelcome({ next }: { next: string }) {
         ) : !configured || !user ? (
           <div className={styles.status}>
             <h1 id="welcome-title">This link needs a fresh sign-in</h1>
-            <p>Open the private link in your invitation again. If it has expired, sign in with your email to continue.</p>
+            <p>This private link has probably expired. Use the newest invitation email you received. If you do not have a newer one, ask the pilot administrator to send you a fresh link.</p>
             <Link href="/sign-in">Go to sign in</Link>
           </div>
         ) : (

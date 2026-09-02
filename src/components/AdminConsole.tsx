@@ -13,6 +13,12 @@ import type {
   AdminUser,
   AdminUserDetail,
 } from '@/lib/admin/contracts'
+import {
+  ADMIN_INVITATIONS_PER_PAGE,
+  filterAdminInvitations,
+  invitationPageCount,
+  paginateAdminInvitations,
+} from '@/lib/admin/invitation-list'
 import { PILOT_FEEDBACK_REWARD_CREDITS, PILOT_INITIAL_CREDITS } from '@/lib/billing/pilot-policy'
 import styles from './AdminConsole.module.css'
 
@@ -58,6 +64,7 @@ const IMPORT_REASONS: Record<string, string> = {
   already_a_user: 'Already has an account — add them from “Add pilot users”',
   name_update: 'Existing invitation — missing name will be repaired',
   already_invited: 'Already invited',
+  previously_cancelled: 'Previously cancelled — restore it from Invitations to invite again',
   invalid_email: 'Not a usable email address',
   duplicate_in_file: 'Repeated in this list',
   missing_email: 'Row has no email address',
@@ -277,6 +284,8 @@ export function AdminConsole() {
   const [invitationRefresh, setInvitationRefresh] = useState<AdminInvitation[] | null>(null)
   const [invitationIds, setInvitationIds] = useState<Set<string>>(new Set())
   const [invitationFilter, setInvitationFilter] = useState('open')
+  const [invitationQuery, setInvitationQuery] = useState('')
+  const [invitationPage, setInvitationPage] = useState(1)
   const [inviteSendWorking, setInviteSendWorking] = useState(false)
   const [inviteNotice, setInviteNotice] = useState('')
 
@@ -339,11 +348,23 @@ export function AdminConsole() {
     if (response.ok) setInvitationRefresh((data.invitations || []) as AdminInvitation[])
   }, [])
 
-  const visibleInvitations = useMemo(() => invitations.filter((item) => (
-    invitationFilter === 'all'
-      || (invitationFilter === 'open' && (item.inviteStatus === 'pending' || item.inviteStatus === 'sent'))
-      || item.inviteStatus === invitationFilter
-  )), [invitationFilter, invitations])
+  const visibleInvitations = useMemo(() => filterAdminInvitations(invitations, {
+    status: invitationFilter,
+    query: invitationQuery,
+  }), [invitationFilter, invitationQuery, invitations])
+  const invitationPages = invitationPageCount(visibleInvitations.length)
+  const effectiveInvitationPage = Math.min(invitationPage, invitationPages)
+  const pageInvitations = useMemo(
+    () => paginateAdminInvitations(visibleInvitations, effectiveInvitationPage),
+    [effectiveInvitationPage, visibleInvitations],
+  )
+  const invitationPageStart = visibleInvitations.length
+    ? (effectiveInvitationPage - 1) * ADMIN_INVITATIONS_PER_PAGE + 1
+    : 0
+  const invitationPageEnd = Math.min(
+    invitationPageStart + ADMIN_INVITATIONS_PER_PAGE - 1,
+    visibleInvitations.length,
+  )
 
   /**
    * How many invitations sit in each state, so the counts live inside the
@@ -375,6 +396,12 @@ export function AdminConsole() {
     () => selectedInvitations.filter((item) => item.inviteStatus === 'pending' || item.inviteStatus === 'sent'),
     [selectedInvitations],
   )
+  const restorableInvitations = useMemo(
+    () => selectedInvitations.filter((item) => item.inviteStatus === 'revoked'),
+    [selectedInvitations],
+  )
+  const allPageInvitationsSelected = pageInvitations.length > 0
+    && pageInvitations.every((item) => invitationIds.has(item.id))
 
   const closeInvite = useCallback(() => {
     if (inviteWorking) return
@@ -567,6 +594,34 @@ export function AdminConsole() {
       setInviteSendWorking(false)
     }
   }, [actionableInvitations, refreshInvitations])
+
+  const restoreInvitations = useCallback(async () => {
+    if (!restorableInvitations.length) return
+    setInviteSendWorking(true)
+    setError('')
+    try {
+      const response = await fetch('/api/admin/participants', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'restore', programKey: 'pilot',
+          invitationIds: restorableInvitations.map((item) => item.id),
+          reason: 'Restored by operator to send a fresh invitation link',
+          idempotencyKey: `restore_${crypto.randomUUID()}`,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'The invitations could not be restored.')
+      setInviteNotice(`${data.restored} invitation${data.restored === 1 ? '' : 's'} restored. Select ${data.restored === 1 ? 'it' : 'them'} again to send a fresh link.`)
+      setInvitationIds(new Set())
+      setInvitationFilter('open')
+      setInvitationPage(1)
+      await refreshInvitations()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The invitations could not be restored.')
+    } finally {
+      setInviteSendWorking(false)
+    }
+  }, [refreshInvitations, restorableInvitations])
 
   const allCohorts = useMemo(() => dashboard?.cohorts.map((item) => item.cohort) || [], [dashboard])
   const managementSignals = useMemo(() => {
@@ -999,7 +1054,7 @@ export function AdminConsole() {
                       <span>
                         <label className={styles.inviteScope}>
                           <span className={styles.srOnly}>Show invitations</span>
-                          <select value={invitationFilter} onChange={(event) => setInvitationFilter(event.target.value)}>
+                          <select value={invitationFilter} onChange={(event) => { setInvitationFilter(event.target.value); setInvitationPage(1) }}>
                             <option value="open">Awaiting sign-up ({invitationCounts.open})</option>
                             <option value="accepted">Signed up ({invitationCounts.accepted})</option>
                             <option value="bounced">Email bounced ({invitationCounts.bounced})</option>
@@ -1007,25 +1062,37 @@ export function AdminConsole() {
                             <option value="all">All ({invitationCounts.all})</option>
                           </select>
                         </label>
+                        <label className={styles.inviteSearch}>
+                          <span className={styles.srOnly}>Search invitations</span>
+                          <input
+                            type="search"
+                            value={invitationQuery}
+                            onChange={(event) => { setInvitationQuery(event.target.value); setInvitationPage(1) }}
+                            placeholder="Search name or email"
+                          />
+                        </label>
+                        <small>{visibleInvitations.length ? `Showing ${invitationPageStart}–${invitationPageEnd} of ${visibleInvitations.length}` : 'No matches'}</small>
                         {selectedInvitations.length ? <b>{selectedInvitations.length} selected</b> : null}
                         {/* Shown only when it differs, rather than restating the
                             selected count in a second and third place. */}
-                        {selectedInvitations.length > actionableInvitations.length ? (
+                        {restorableInvitations.length ? (
+                          <small>{restorableInvitations.length} cancelled — restore {restorableInvitations.length === 1 ? 'it' : 'them'} before sending</small>
+                        ) : selectedInvitations.length > actionableInvitations.length ? (
                           <small>{selectedInvitations.length - actionableInvitations.length} already handled — they will be skipped</small>
                         ) : null}
                       </span>
                       <span>
-                        <button type="button" onClick={() => setInvitationIds((current) => {
+                        <button type="button" disabled={!pageInvitations.length} onClick={() => setInvitationIds((current) => {
                           const next = new Set(current)
-                          const all = visibleInvitations.every((item) => next.has(item.id))
-                          visibleInvitations.forEach((item) => { if (all) next.delete(item.id); else next.add(item.id) })
+                          pageInvitations.forEach((item) => { if (allPageInvitationsSelected) next.delete(item.id); else next.add(item.id) })
                           return next
-                        })}>{visibleInvitations.length && visibleInvitations.every((item) => invitationIds.has(item.id)) ? 'Clear' : 'Select all'}</button>
+                        })}>{allPageInvitationsSelected ? 'Clear page' : 'Select page'}</button>
                         {/* Opens the message rather than sending it. A bulk
                             send is not undoable, and this button used to be the
                             only thing between a selection and sixty-three
                             inboxes. */}
-                        {dashboard.capabilities.sendInvitations ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void openCompose()}>{`Review & send${actionableInvitations.length ? ` ${actionableInvitations.length}` : ''}`}</button> : null}
+                        {dashboard.capabilities.sendInvitations ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void openCompose()}>{`${actionableInvitations.some((item) => item.sendAttempts > 0) ? 'Review & send fresh links' : 'Review & send'}${actionableInvitations.length ? ` ${actionableInvitations.length}` : ''}`}</button> : null}
+                        {dashboard.capabilities.importParticipants ? <button type="button" disabled={inviteSendWorking || !restorableInvitations.length} onClick={() => void restoreInvitations()}>Restore</button> : null}
                         {dashboard.capabilities.importParticipants ? <button type="button" disabled={inviteSendWorking || !actionableInvitations.length} onClick={() => void revokeInvitations()}>Cancel</button> : null}
                       </span>
                     </header>
@@ -1039,7 +1106,7 @@ export function AdminConsole() {
                       </p>
                     ) : null}
                     <div>
-                      {visibleInvitations.slice(0, 100).map((invitation) => (
+                      {pageInvitations.map((invitation) => (
                         <label key={invitation.id} data-selected={invitationIds.has(invitation.id) || undefined}>
                           <input
                             type="checkbox"
@@ -1066,8 +1133,12 @@ export function AdminConsole() {
                         </label>
                       ))}
                     </div>
-                    {!visibleInvitations.length ? <p>Nothing in this state. Try another from the list above.</p> : null}
-                    {visibleInvitations.length > 100 ? <p>Showing the first 100 invitations.</p> : null}
+                    {!visibleInvitations.length ? <p>Nothing in this state. Try another status or search.</p> : null}
+                    {visibleInvitations.length ? <nav className={styles.invitePagination} aria-label="Invitation pages">
+                      <button type="button" disabled={effectiveInvitationPage <= 1} onClick={() => setInvitationPage(Math.max(1, effectiveInvitationPage - 1))}>Previous</button>
+                      <span>Page {effectiveInvitationPage} of {invitationPages} · {ADMIN_INVITATIONS_PER_PAGE} per page</span>
+                      <button type="button" disabled={effectiveInvitationPage >= invitationPages} onClick={() => setInvitationPage(Math.min(invitationPages, effectiveInvitationPage + 1))}>Next</button>
+                    </nav> : null}
                     {!dashboard.capabilities.sendInvitations ? <p>Sending is unavailable until the email provider and the Supabase service role key are both configured.</p> : null}
                   </section>
                 ) : null}
@@ -1390,7 +1461,7 @@ export function AdminConsole() {
           <div>
             <span className={styles.eyebrow}>Invitation · {actionableInvitations.length} recipient{actionableInvitations.length === 1 ? '' : 's'}</span>
             <h2>Review before sending</h2>
-            <p>Edits apply to this send only and are not saved as the default. Each person still gets their own name and their own single-use link.</p>
+            <p>Edits apply to this send only and are not saved as the default. Each person gets their own name and a newly generated single-use link.</p>
           </div>
           <button type="button" onClick={closeCompose}>×</button>
         </header>
@@ -1481,7 +1552,7 @@ export function AdminConsole() {
             disabled={inviteSendWorking || composeLoading || !composePreview || !actionableInvitations.length}
             onClick={() => void sendInvitations()}
           >
-            {inviteSendWorking ? 'Sending…' : `Send to ${actionableInvitations.length}`}
+            {inviteSendWorking ? 'Sending…' : `${actionableInvitations.some((item) => item.sendAttempts > 0) ? 'Send fresh links to' : 'Send to'} ${actionableInvitations.length}`}
           </button>
         </footer>
       </section></div> : null}
