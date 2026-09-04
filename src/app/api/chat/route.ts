@@ -28,6 +28,7 @@ import { policyForConversation, prepareConversationContext, type ContextMessage 
 import {
   looksLikeLeakedReasoning, providerContentText, servedModel, stripThinkingBlocks, wasTruncated,
 } from '@/lib/provider-content'
+import { chatProviderFailure, pdfParserFallback, type PdfParserEngine } from '@/lib/chat-provider-failure'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -334,6 +335,8 @@ export async function POST(req: NextRequest) {
         // across passes rather than being read from the last one.
         let totalCostUsd = 0
         let passes = 0
+        let providerAttempts = 0
+        let pdfParserFallbacks = 0
         const producedFiles: Array<{ filename: string; format: string; byteSize: number }> = []
 
         const appendLiveSources = () => {
@@ -353,54 +356,93 @@ export async function POST(req: NextRequest) {
           passMessages: unknown[],
         ): Promise<{ failed: boolean; toolCalls: StreamedToolCall[] }> => {
           passes += 1
-          const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            signal: AbortSignal.timeout(90_000),
-            headers: {
-              Authorization: `Bearer ${key}`,
-              'Content-Type': 'application/json',
-              'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://ai360.africa',
-              'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
-            },
-            body: JSON.stringify({
-              model,
-              models,
-              ...(sessionId ? { session_id: sessionId } : {}),
-              messages: passMessages,
-              ...(providerTools.length ? { tools: providerTools } : {}),
-              provider: providerPreferences('chat', { withTools: providerTools.length > 0 }),
-              // A thinking model otherwise spends the whole budget reasoning and
-              // streams back an empty answer.
-              reasoning: REASONING_BUDGET,
-              stream: true,
-              max_tokens: 2_000,
-              ...(policy.hasPdf
-                ? { plugins: [{ id: 'file-parser', pdf: { engine: 'cloudflare-ai' } }] }
-                : {}),
-            }),
-          })
+          const fetchProvider = (pdfEngine: PdfParserEngine = 'cloudflare-ai') => {
+            providerAttempts += 1
+            return fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              signal: AbortSignal.timeout(90_000),
+              headers: {
+                Authorization: `Bearer ${key}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://ai360.africa',
+                'X-Title': process.env.OPENROUTER_SITE_NAME || 'AI360',
+              },
+              body: JSON.stringify({
+                model,
+                models,
+                ...(sessionId ? { session_id: sessionId } : {}),
+                messages: passMessages,
+                ...(providerTools.length ? { tools: providerTools } : {}),
+                provider: providerPreferences('chat', { withTools: providerTools.length > 0 }),
+                // A thinking model otherwise spends the whole budget reasoning and
+                // streams back an empty answer.
+                reasoning: REASONING_BUDGET,
+                stream: true,
+                max_tokens: 2_000,
+                ...(policy.hasPdf
+                  ? { plugins: [{ id: 'file-parser', pdf: { engine: pdfEngine } }] }
+                  : {}),
+              }),
+            })
+          }
+
+          let pdfEngine: PdfParserEngine = 'cloudflare-ai'
+          let res = await fetchProvider(pdfEngine)
+          const fallbackEngine = pdfParserFallback({ hasPdf: policy.hasPdf, status: res.status, engine: pdfEngine })
+          if (fallbackEngine) {
+            const firstFailure = await providerErrorDetails(res)
+            pdfParserFallbacks += 1
+            log.warn('provider.pdf.retrying', {
+              provider: 'openrouter', model, pass: passes,
+              fromEngine: pdfEngine, toEngine: fallbackEngine,
+              durationMs: Math.round(performance.now() - providerStartedAt),
+              ...firstFailure,
+            })
+            pdfEngine = fallbackEngine
+            res = await fetchProvider(pdfEngine)
+          }
 
           if (!res.ok || !res.body) {
             const failure = await providerErrorDetails(res)
+            const clientFailure = chatProviderFailure({
+              status: res.status,
+              hasAttachments: policy.hasAttachments,
+              hasPdf: policy.hasPdf,
+            })
             log.error('provider.request.failed', {
               provider: 'openrouter',
               model,
               pass: passes,
+              providerAttempts,
+              pdfParserEngine: policy.hasPdf ? pdfEngine : undefined,
+              pdfParserFallbacks,
               durationMs: Math.round(performance.now() - providerStartedAt),
               ...failure,
             })
-            log.finish(502, { outcome: 'provider_error', providerStatus: res.status })
+            log.finish(502, { outcome: clientFailure.outcome, providerStatus: res.status })
             await recordUsageEventSafe({
               requestId: log.requestId, route: '/api/chat', feature: 'chat', provider: 'openrouter', model,
-              latencyMs: Math.round(performance.now() - providerStartedAt), outcome: 'provider_error',
-              metadata: { providerStatus: res.status, mode, attachmentCount: attachments.length },
+              latencyMs: Math.round(performance.now() - providerStartedAt), outcome: clientFailure.outcome,
+              metadata: {
+                providerStatus: res.status,
+                providerCode: failure.providerCode,
+                providerMessage: failure.providerMessage,
+                providerRequestId: failure.providerRequestId,
+                mode,
+                attachmentCount: attachments.length,
+                attachmentKinds: attachments.map((attachment) => attachment.kind),
+                providerAttempts,
+                pdfParserEngine: policy.hasPdf ? pdfEngine : undefined,
+                pdfParserFallbacks,
+                errorCode: clientFailure.code,
+              },
             })
             await gate?.settle('failure')
             send({
               type: 'error',
-              code: 'provider_unavailable',
-              message: 'AI360 could not reach the AI service.',
-              retryable: true,
+              code: clientFailure.code,
+              message: clientFailure.message,
+              retryable: clientFailure.retryable,
               creditNotice: 'No credits were used for this attempt.',
               requestId: log.requestId,
             })
@@ -608,6 +650,8 @@ export async function POST(req: NextRequest) {
             requestedModel: model, finishReason: finishReason ?? null,
             truncated, leakedReasoning: leaked,
             providerPasses: passes,
+            providerAttempts,
+            pdfParserFallbacks,
             documentsCreated: producedFiles.length,
             documentFormats: producedFiles.map((file) => file.format),
           },
