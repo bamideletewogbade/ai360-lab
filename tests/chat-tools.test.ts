@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  accumulateToolCalls, CREATE_DOCUMENT_TOOL, guestDocumentSignInMessage, parseToolCall, shouldOfferDocumentTool,
+  accumulateToolCalls, CREATE_DOCUMENT_TOOL, guestDocumentSignInMessage,
+  MAX_STREAMED_TOOL_ARGUMENTS_CHARS, parseToolCall, shouldOfferDocumentTool,
   type StreamedToolCall,
 } from '../src/lib/chat-tools.ts'
 
@@ -63,6 +64,35 @@ test('malformed arguments are reported, never thrown', () => {
   const broken = parseToolCall({ index: 0, id: 'c', name: 'create_document', argumentsText: '{"title":' })
   assert.equal(broken.ok, false)
   if (!broken.ok) assert.match(broken.reason, /not valid JSON/)
+})
+
+test('streamed arguments are capped before an oversized call can grow without bound', () => {
+  const oversized = 'x'.repeat(MAX_STREAMED_TOOL_ARGUMENTS_CHARS + 1)
+  const [call] = replay([[{
+    index: 0,
+    id: 'large',
+    function: { name: 'create_document', arguments: oversized },
+  }]])
+  assert.equal(call.argumentsText.length, MAX_STREAMED_TOOL_ARGUMENTS_CHARS)
+  assert.equal(call.argumentsTruncated, true)
+  const parsed = parseToolCall(call)
+  assert.equal(parsed.ok, false)
+  if (!parsed.ok) assert.match(parsed.reason, /safety limit/)
+})
+
+test('all schema problems are returned so the model can repair them in one pass', () => {
+  const bad = parseToolCall({
+    index: 0,
+    id: 'c',
+    name: 'create_document',
+    argumentsText: JSON.stringify({ title: '', format: 'txt', content: '' }),
+  })
+  assert.equal(bad.ok, false)
+  if (!bad.ok) {
+    assert.match(bad.reason, /title/)
+    assert.match(bad.reason, /format/)
+    assert.match(bad.reason, /content/)
+  }
 })
 
 test('an unsupported format is refused with a usable reason', () => {

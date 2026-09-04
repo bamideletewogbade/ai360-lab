@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { freshnessForPrompt, policyForConversation, prepareConversationContext } from '../src/lib/context-engineering.ts'
-import { LIVE_INFORMATION_TOOLS } from '../src/lib/live-tools.ts'
+import { citationSources, LIVE_INFORMATION_TOOLS, RESEARCH_TOOLS } from '../src/lib/live-tools.ts'
 
 test('client supplied system messages never reach provider context', () => {
   const prepared = prepareConversationContext([
@@ -68,4 +68,29 @@ test('live search is localized for AI360 users in Ghana', () => {
   assert.equal(search.parameters.user_location.country, 'GH')
   assert.equal(search.parameters.user_location.city, 'Accra')
   assert.equal(search.parameters.user_location.timezone, 'Africa/Accra')
+})
+
+test('information and research presets share localization but keep distinct budgets', () => {
+  const information = LIVE_INFORMATION_TOOLS[0].parameters
+  const research = RESEARCH_TOOLS[0].parameters
+  assert.deepEqual(information.user_location, research.user_location)
+  assert.equal(information.max_total_results, 5)
+  assert.equal(information.search_context_size, 'low')
+  assert.equal(research.max_total_results, 8)
+  assert.equal(research.search_context_size, 'medium')
+})
+
+test('citation sources normalize tracking URLs before deduplication', () => {
+  const sources = citationSources([
+    {
+      type: 'url_citation',
+      url_citation: { url: 'https://Example.com/report/?utm_source=chat&b=2&a=1#summary', title: 'Report' },
+    },
+    {
+      type: 'url_citation',
+      url_citation: { url: 'https://example.com/report?a=1&b=2&fbclid=tracking', title: 'Duplicate' },
+    },
+    { type: 'url_citation', url_citation: { url: 'javascript:alert(1)', title: 'Unsafe' } },
+  ])
+  assert.deepEqual(sources, [{ url: 'https://example.com/report?a=1&b=2', title: 'Report' }])
 })

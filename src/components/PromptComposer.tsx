@@ -34,7 +34,7 @@ type PromptComposerProps = {
   onFile: (file?: File) => void
   onRemoveAttachment: () => void
   onToggleRecording: () => void
-  onTranscribeRecording: () => void
+  onRetryTranscription: () => void
   onDiscardRecording: () => void
   onLanguageChange: (language: LanguageCode) => void
   onResearchDepthChange: (depth: ComposerResearchDepth) => void
@@ -72,7 +72,7 @@ export function PromptComposer({
   onFile,
   onRemoveAttachment,
   onToggleRecording,
-  onTranscribeRecording,
+  onRetryTranscription,
   onDiscardRecording,
   onLanguageChange,
   onResearchDepthChange,
@@ -97,6 +97,13 @@ export function PromptComposer({
       document.removeEventListener('keydown', closeOnEscape)
     }
   }, [openPanel])
+
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.style.height = 'auto'
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`
+  }, [input, textareaRef])
 
   const grow = () => {
     const textarea = textareaRef.current
@@ -126,15 +133,22 @@ export function PromptComposer({
                 <div className="voice-bars" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /></div>
                 <button type="button" className="voice-stop" onClick={onToggleRecording}>Stop</button>
               </>
+            ) : recordingState === 'transcribing' ? (
+              <>
+                <span className="recording-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9Z" /><path d="M8 12h2l1.2-3 2 6 1.2-3H17" /></svg></span>
+                <span className="voice-state" role="status" aria-live="polite"><b>Transcribing voice…</b><small>Your words will appear below</small></span>
+                <div className="voice-bars" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /></div>
+                <button type="button" className="voice-delete" onClick={onDiscardRecording} aria-label="Cancel transcription">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+                </button>
+              </>
             ) : (
               <>
                 <span className="recording-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9Z" /><path d="M9 12h6" /></svg></span>
                 <audio src={recordingUrl} controls preload="metadata" aria-label="Voice recording preview" />
-                <span className="voice-state"><b>{recordingState === 'transcribing' ? 'Transcribing…' : 'Voice note ready'}</b><small>{formatDuration(recordingSeconds)}</small></span>
-                <button type="button" className="voice-transcribe" onClick={onTranscribeRecording} disabled={recordingState === 'transcribing'}>
-                  {recordingState === 'transcribing' ? 'Working…' : 'Use transcript'}
-                </button>
-                <button type="button" className="voice-delete" onClick={onDiscardRecording} disabled={recordingState === 'transcribing'} aria-label="Delete recording">
+                <span className="voice-state"><b>Could not transcribe</b><small>{formatDuration(recordingSeconds)}</small></span>
+                <button type="button" className="voice-transcribe" onClick={onRetryTranscription}>Retry</button>
+                <button type="button" className="voice-delete" onClick={onDiscardRecording} aria-label="Delete recording">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
                 </button>
               </>
@@ -166,6 +180,8 @@ export function PromptComposer({
           rows={1}
           placeholder={recordingState === 'recording'
             ? 'Recording your voice…'
+            : recordingState === 'transcribing'
+              ? 'Turning your voice into text…'
             : experience === 'agent'
               ? 'Describe the outcome you want…'
               : 'Ask anything, or describe what you need…'}
@@ -190,7 +206,7 @@ export function PromptComposer({
           <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach an image, video or document" aria-label="Attach file">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
           </button>
-          <button type="button" className={recordingState === 'recording' ? 'active' : ''} onClick={onToggleRecording} title="Record your voice" aria-label="Record voice">
+          <button type="button" className={recordingState === 'recording' ? 'active' : ''} onClick={onToggleRecording} disabled={recordingState === 'transcribing'} title="Record your voice" aria-label="Record voice">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="4" width="6" height="11" rx="3" /><path d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3M9 20h6" /></svg>
           </button>
 

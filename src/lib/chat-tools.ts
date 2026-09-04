@@ -70,7 +70,11 @@ export type StreamedToolCall = {
   id: string
   name: string
   argumentsText: string
+  /** True when provider output exceeded the pre-parse memory safety limit. */
+  argumentsTruncated?: boolean
 }
+
+export const MAX_STREAMED_TOOL_ARGUMENTS_CHARS = 150_000
 
 type ToolCallDelta = {
   index?: number
@@ -94,11 +98,14 @@ export function accumulateToolCalls(
     if (!raw || typeof raw !== 'object') continue
     const index = typeof raw.index === 'number' ? raw.index : 0
     const existing = calls.get(index) ?? { index, id: '', name: '', argumentsText: '' }
+    const addition = raw.function?.arguments ?? ''
+    const remaining = Math.max(0, MAX_STREAMED_TOOL_ARGUMENTS_CHARS - existing.argumentsText.length)
     calls.set(index, {
       index,
       id: raw.id || existing.id,
       name: raw.function?.name || existing.name,
-      argumentsText: existing.argumentsText + (raw.function?.arguments ?? ''),
+      argumentsText: existing.argumentsText + addition.slice(0, remaining),
+      argumentsTruncated: existing.argumentsTruncated || addition.length > remaining,
     })
   }
   return calls
@@ -113,6 +120,14 @@ export function parseToolCall(call: StreamedToolCall): ParsedToolCall {
   if (call.name !== CREATE_DOCUMENT_TOOL.function.name) {
     return { ok: false, id: call.id, name: call.name, reason: `Unknown tool "${call.name}".` }
   }
+  if (call.argumentsTruncated) {
+    return {
+      ok: false,
+      id: call.id,
+      name: call.name,
+      reason: `The tool arguments exceeded the ${MAX_STREAMED_TOOL_ARGUMENTS_CHARS.toLocaleString('en')} character safety limit.`,
+    }
+  }
   let raw: unknown
   try {
     raw = JSON.parse(call.argumentsText || '{}')
@@ -121,10 +136,13 @@ export function parseToolCall(call: StreamedToolCall): ParsedToolCall {
   }
   const parsed = createDocumentArgumentsSchema.safeParse(raw)
   if (!parsed.success) {
-    const issue = parsed.error.issues[0]
+    const issues = parsed.error.issues.map((issue) => {
+      const path = issue.path.length ? issue.path.join('.') : 'arguments'
+      return `${path}: ${issue.message}`
+    })
     return {
       ok: false, id: call.id, name: call.name,
-      reason: `Invalid ${issue?.path.join('.') || 'arguments'}: ${issue?.message || 'does not match the expected shape'}.`,
+      reason: `Invalid tool arguments: ${issues.join('; ')}.`,
     }
   }
   return { ok: true, id: call.id, name: call.name, arguments: parsed.data }

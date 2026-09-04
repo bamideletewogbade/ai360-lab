@@ -25,7 +25,7 @@ export default function PrivacyPage() {
             <ul>
               <li>Conversation history is saved in your browser on your current device.</li>
               <li>Prompts and supported attachments are sent through our server to the configured AI provider.</li>
-              <li>Voice recordings stay in your browser until you select Use transcript. The recording is then sent to the configured transcription provider and AI360 does not save a copy of the raw audio.</li>
+              <li>When you stop a voice recording, it is sent automatically to the configured transcription provider so the words can be added to your message. AI360 does not save a copy of the raw audio.</li>
               <li>The transcript is placed in the message box for you to review before it can become an instruction.</li>
               <li>Studio projects and approval progress are saved in your browser on your current device.</li>
               <li>When you approve media production, the approved brand direction is sent to the configured image or video provider. Generated video is temporarily retained by the provider so it can be processed and downloaded.</li>

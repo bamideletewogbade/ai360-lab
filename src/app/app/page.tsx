@@ -442,6 +442,10 @@ function LabWorkspace({
   const sidebarOpenButtonRef = useRef<HTMLButtonElement>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recordingStreamRef = useRef<MediaStream | null>(null)
+  const recordingUrlRef = useRef('')
+  const recordingStartedAtRef = useRef(0)
+  const recordingGenerationRef = useRef(0)
+  const transcriptionAbortRef = useRef<AbortController | null>(null)
   const loadedWorkspaceRef = useRef('')
   const cloudWorkspaceRef = useRef('')
 
@@ -847,19 +851,22 @@ function LabWorkspace({
     if (recordingState !== 'recording') return
     const timer = window.setInterval(() => {
       setRecordingSeconds((seconds) => {
-        if (seconds >= 299) recorderRef.current?.stop()
+        const recorder = recorderRef.current
+        if (seconds >= 299 && recorder?.state !== 'inactive') recorder?.stop()
         return Math.min(300, seconds + 1)
       })
     }, 1000)
     return () => window.clearInterval(timer)
   }, [recordingState])
 
-  useEffect(() => {
-    return () => {
-      if (recordingUrl) URL.revokeObjectURL(recordingUrl)
-      recordingStreamRef.current?.getTracks().forEach((track) => track.stop())
-    }
-  }, [recordingUrl])
+  useEffect(() => () => {
+    transcriptionAbortRef.current?.abort()
+    const recorder = recorderRef.current
+    recorderRef.current = null
+    if (recorder && recorder.state !== 'inactive') recorder.stop()
+    if (recordingUrlRef.current) URL.revokeObjectURL(recordingUrlRef.current)
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop())
+  }, [])
 
 
   const visibleConversations = useMemo(() => {
@@ -889,6 +896,7 @@ function LabWorkspace({
 
   function deleteChat(id: string) {
     if (!window.confirm('Delete this conversation?')) return
+    if (activeId === id) discardRecording()
     const remaining = conversations.filter((conversation) => conversation.id !== id)
     if (remaining.length) {
       setConversations(remaining)
@@ -946,10 +954,17 @@ function LabWorkspace({
   }
 
   function discardRecording() {
-    if (recordingUrl) URL.revokeObjectURL(recordingUrl)
+    recordingGenerationRef.current += 1
+    transcriptionAbortRef.current?.abort()
+    transcriptionAbortRef.current = null
+    const recorder = recorderRef.current
+    recorderRef.current = null
+    if (recorder && recorder.state !== 'inactive') recorder.stop()
+    if (recordingUrlRef.current) URL.revokeObjectURL(recordingUrlRef.current)
+    recordingUrlRef.current = ''
     recordingStreamRef.current?.getTracks().forEach((track) => track.stop())
     recordingStreamRef.current = null
-    recorderRef.current = null
+    recordingStartedAtRef.current = 0
     setRecordingUrl('')
     setRecordingBlob(null)
     setRecordingSeconds(0)
@@ -960,14 +975,17 @@ function LabWorkspace({
     setFileError('')
     setVoiceNotice('')
     if (recordingState === 'recording') {
-      recorderRef.current?.stop()
+      const recorder = recorderRef.current
+      if (recorder?.state !== 'inactive') recorder?.stop()
       return
     }
+    if (recordingState === 'transcribing') return
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       setFileError('Voice recording is not supported in this browser.')
       return
     }
     discardRecording()
+    const recordingGeneration = recordingGenerationRef.current
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -978,6 +996,10 @@ function LabWorkspace({
           autoGainControl: { ideal: true },
         },
       })
+      if (recordingGenerationRef.current !== recordingGeneration) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
       recordingStreamRef.current = stream
       const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
         .find((type) => MediaRecorder.isTypeSupported(type))
@@ -991,48 +1013,82 @@ function LabWorkspace({
         discardRecording()
       }
       recorder.onstop = () => {
+        if (recorderRef.current !== recorder) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
+        recorderRef.current = null
         const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
+        const duration = Math.min(300, Math.max(
+          0,
+          Math.round((Date.now() - recordingStartedAtRef.current) / 1000),
+        ))
+        if (!blob.size) {
+          stream.getTracks().forEach((track) => track.stop())
+          recordingStreamRef.current = null
+          recordingStartedAtRef.current = 0
+          setRecordingState('idle')
+          setFileError('No audio was captured. Check your microphone and try again.')
+          return
+        }
         const url = URL.createObjectURL(blob)
+        recordingUrlRef.current = url
         setRecordingBlob(blob)
         setRecordingUrl(url)
-        setRecordingState('recorded')
+        setRecordingSeconds(duration)
+        setRecordingState('transcribing')
+        recordingStartedAtRef.current = 0
         stream.getTracks().forEach((track) => track.stop())
+        recordingStreamRef.current = null
+        void transcribeRecording(blob, duration)
       }
       recorderRef.current = recorder
+      recordingStartedAtRef.current = Date.now()
       setRecordingSeconds(0)
       setRecordingState('recording')
       recorder.start(250)
     } catch {
+      if (recordingGenerationRef.current !== recordingGeneration) return
       setFileError('Microphone access was not available. Check your browser permission and try again.')
       discardRecording()
     }
   }
 
-  async function transcribeRecording() {
-    if (!recordingBlob) return
+  async function transcribeRecording(
+    audio: Blob | null = recordingBlob,
+    durationSeconds = recordingSeconds,
+  ) {
+    if (!audio) return
+    transcriptionAbortRef.current?.abort()
+    const controller = new AbortController()
+    transcriptionAbortRef.current = controller
     setRecordingState('transcribing')
     setFileError('')
     try {
       const requestId = crypto.randomUUID()
       const form = new FormData()
-      form.set('audio', recordingBlob, 'voice-note')
+      form.set('audio', audio, 'voice-note')
       form.set('inputLanguage', speechInputLanguage)
-      form.set('durationSeconds', String(recordingSeconds))
+      form.set('durationSeconds', String(durationSeconds))
       const response = await fetch('/api/transcribe', {
         method: 'POST',
         headers: { 'X-Request-Id': requestId, 'Idempotency-Key': requestId },
         body: form,
+        signal: controller.signal,
       })
       const result = await response.json()
+      if (transcriptionAbortRef.current !== controller) return
       if (!response.ok || typeof result.text !== 'string') {
         const reference = result.requestId || response.headers.get('X-Request-Id') || requestId
         throw new Error(`${result.error || 'Transcription failed'} Reference: ${reference}`)
       }
       setInput((current) => [current.trim(), result.text.trim()].filter(Boolean).join(' '))
+      transcriptionAbortRef.current = null
       discardRecording()
-      setVoiceNotice('Transcript added. Read it before you send.')
+      setVoiceNotice('Voice added. Review it, then send when ready.')
       taRef.current?.focus()
     } catch (error) {
+      if (controller.signal.aborted || transcriptionAbortRef.current !== controller) return
       console.error('[AI360] Transcription failed', error)
       setRecordingState('recorded')
       setFileError(
@@ -1040,6 +1096,8 @@ function LabWorkspace({
           ? error.message
           : 'I could not transcribe that recording. You can retry or record it again.',
       )
+    } finally {
+      if (transcriptionAbortRef.current === controller) transcriptionAbortRef.current = null
     }
   }
 
@@ -1649,6 +1707,7 @@ function LabWorkspace({
    * being left is very often exactly that.
    */
   function openProjectWorkspace(projectId: string) {
+    discardRecording()
     setOpenProjectRequest((current) => ({ id: projectId, signal: current.signal + 1 }))
     const studio = conversations.find((conversation) => conversation.experience === 'studio')
     if (studio) {
@@ -1852,7 +1911,7 @@ function LabWorkspace({
               <div className="history-group" key={group.id}>
                 {items.map((conversation) => (
                   <div className={`history-item${conversation.id === active.id ? ' active' : ''}${conversationMenuId === conversation.id ? ' menu-open' : ''}`} key={conversation.id}>
-                    <button className="history-main" onClick={() => { setConversationMenuId(''); setActiveId(conversation.id); setSidebarOpen(false) }}>
+                    <button className="history-main" onClick={() => { setConversationMenuId(''); discardRecording(); setActiveId(conversation.id); setSidebarOpen(false) }}>
                       <span>{displayConversationTitle(conversation.title)}</span>
                     </button>
                     <div className="history-actions">
@@ -2236,7 +2295,7 @@ function LabWorkspace({
             onFile={(file) => void handleFile(file)}
             onRemoveAttachment={() => setAttachment(null)}
             onToggleRecording={() => void toggleRecording()}
-            onTranscribeRecording={() => void transcribeRecording()}
+            onRetryTranscription={() => void transcribeRecording()}
             onDiscardRecording={discardRecording}
             onLanguageChange={setResponseLanguage}
             onResearchDepthChange={setAgentDepth}
