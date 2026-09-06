@@ -10,7 +10,7 @@
   "dependencies": {
     "@browserbasehq/sdk-functions": "latest",
     "playwright-core": "latest",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^22.19.9",
